@@ -47,19 +47,20 @@ func runWorkflows(cmd *cobra.Command, args []string) error {
 
 	graph := workflow.Infer(result.Operations)
 	scores := workflow.ScoreGraph(graph, result.Operations, result.Issues)
+	chainScores := workflow.ScoreChains(graph, result.Operations, result.Issues)
 
 	switch workflowFormat {
 	case "json":
-		jsonStr, err := workflow.FormatJSON(result.SpecFile, len(result.Operations), graph, scores)
+		jsonStr, err := workflow.FormatJSON(result.SpecFile, len(result.Operations), graph, scores, chainScores)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting JSON: %v\n", err)
 			return err
 		}
 		fmt.Println(jsonStr)
 	case "markdown":
-		fmt.Print(workflow.FormatMarkdown(result.SpecFile, len(result.Operations), graph, scores))
+		fmt.Print(workflow.FormatMarkdown(result.SpecFile, len(result.Operations), graph, scores, chainScores))
 	default:
-		fmt.Print(workflow.FormatText(result.SpecFile, len(result.Operations), graph, scores, workflowVerbose))
+		fmt.Print(workflow.FormatText(result.SpecFile, len(result.Operations), graph, scores, chainScores, workflowVerbose))
 	}
 	return nil
 }

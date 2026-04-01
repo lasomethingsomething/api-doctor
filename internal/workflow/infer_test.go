@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -91,7 +92,7 @@ func TestFormatText_DefaultGroupsWorkflowKinds(t *testing.T) {
 		},
 	}}
 
-	out := FormatText("spec.json", 25, graph, nil, false)
+	out := FormatText("spec.json", 25, graph, nil, nil, false)
 	if !strings.Contains(out, "Create To Detail (4)") {
 		t.Fatalf("expected create-to-detail count, got: %s", out)
 	}
@@ -143,7 +144,7 @@ func TestFormatText_VerboseKeepsFullWorkflowDetails(t *testing.T) {
 		},
 	}}
 
-	out := FormatText("spec.json", 10, graph, nil, true)
+	out := FormatText("spec.json", 10, graph, nil, nil, true)
 	if strings.Contains(out, "Representative workflows") {
 		t.Fatalf("expected verbose output to avoid grouped summary wording, got: %s", out)
 	}
@@ -174,7 +175,7 @@ func TestFormatJSON_IncludesFullWorkflowEdges(t *testing.T) {
 		},
 	}}
 
-	out, err := FormatJSON("spec.json", 12, graph, nil)
+	out, err := FormatJSON("spec.json", 12, graph, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -437,7 +438,10 @@ func TestFormatText_MultiStepChainsAreDistinct(t *testing.T) {
 		},
 	}
 
-	out := FormatText("spec.json", 3, graph, nil, true)
+	chainScores := map[string]*ChainScore{
+		"0": {UIIndependence: 4, SchemaCompleteness: 5, ClientGenerationQuality: 5, Explanation: "Worst step 4/5/5 at create -> detail; no continuity penalty"},
+	}
+	out := FormatText("spec.json", 3, graph, nil, chainScores, true)
 	if !strings.Contains(out, "Multi-step chains") {
 		t.Fatalf("expected chain section in text output, got: %s", out)
 	}
@@ -481,7 +485,11 @@ func TestFormatText_DefaultShowsOnlyStrongChains(t *testing.T) {
 		},
 	}
 
-	out := FormatText("spec.json", 5, graph, nil, false)
+	chainScores := map[string]*ChainScore{
+		"0": {UIIndependence: 4, SchemaCompleteness: 5, ClientGenerationQuality: 5, Explanation: "crud"},
+		"1": {UIIndependence: 3, SchemaCompleteness: 4, ClientGenerationQuality: 5, Explanation: "strong"},
+	}
+	out := FormatText("spec.json", 5, graph, nil, chainScores, false)
 	if !strings.Contains(out, "No high-confidence pairwise workflows inferred.") {
 		t.Fatalf("expected pairwise no-workflow message in chain-only graph, got: %s", out)
 	}
@@ -493,5 +501,82 @@ func TestFormatText_DefaultShowsOnlyStrongChains(t *testing.T) {
 	}
 	if !strings.Contains(out, "Order Detail To Action") {
 		t.Fatalf("expected strong chain kind in default text output, got: %s", out)
+	}
+	if !strings.Contains(out, "Signal: avg score") {
+		t.Fatalf("expected concise signal summary for strong chain kind, got: %s", out)
+	}
+}
+
+func TestScoreChains_WorstStepPlusContinuityPenalty(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/workflow-chain-list-detail-update.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	graph := Infer(result.Operations)
+	chainScores := ScoreChains(graph, result.Operations, []*model.Issue{})
+	if len(chainScores) == 0 {
+		t.Fatalf("expected chain scores")
+	}
+
+	found := false
+	for idx, chain := range graph.Chains {
+		if chain.Kind != "list-to-detail-to-update" {
+			continue
+		}
+		score, ok := chainScores[strconv.Itoa(idx)]
+		if !ok {
+			t.Fatalf("missing score for chain index %d", idx)
+		}
+		found = true
+		if score.UIIndependence != 3 {
+			t.Fatalf("expected UI score 3 due to worst-step plus list continuity penalty, got %d", score.UIIndependence)
+		}
+		if score.SchemaCompleteness != 5 || score.ClientGenerationQuality != 5 {
+			t.Fatalf("expected schema/client to stay at worst-step value 5/5, got %d/%d", score.SchemaCompleteness, score.ClientGenerationQuality)
+		}
+		if score.ContinuityPenalty != 1 {
+			t.Fatalf("expected continuity penalty 1, got %d", score.ContinuityPenalty)
+		}
+		if !strings.Contains(score.Explanation, "Worst step") {
+			t.Fatalf("expected explanation to include worst-step wording, got %s", score.Explanation)
+		}
+	}
+	if !found {
+		t.Fatalf("expected list-to-detail-to-update chain")
+	}
+}
+
+func TestFormatJSON_IncludesChainScores(t *testing.T) {
+	graph := &Graph{
+		Chains: []Chain{
+			{
+				Kind: "order-detail-to-action",
+				Steps: []ChainStep{
+					{Role: "search", Node: Node{Method: "get", Path: "/order"}},
+					{Role: "detail", Node: Node{Method: "get", Path: "/order/{id}"}},
+					{Role: "action", Node: Node{Method: "post", Path: "/_action/order/{orderId}/state/{transition}"}},
+				},
+				Reason: "strong",
+			},
+		},
+	}
+	chainScores := map[string]*ChainScore{
+		"0": {UIIndependence: 3, SchemaCompleteness: 4, ClientGenerationQuality: 5, ContinuityPenalty: 2, Explanation: "Worst step 4/5/5 at detail -> action; continuity penalty: ..."},
+	}
+
+	out, err := FormatJSON("spec.json", 10, graph, nil, chainScores)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(out, "\"chain_score_summary\"") {
+		t.Fatalf("expected chain score summary in JSON output, got: %s", out)
+	}
+	if !strings.Contains(out, "\"continuity_penalty\": 2") {
+		t.Fatalf("expected continuity penalty in chain JSON output, got: %s", out)
+	}
+	if !strings.Contains(out, "\"score_explanation\"") {
+		t.Fatalf("expected chain score explanation in JSON output, got: %s", out)
 	}
 }

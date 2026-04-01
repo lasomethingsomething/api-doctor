@@ -72,7 +72,7 @@ Real-spec proof points (Shopware admin API, 1036 operations):
 
 ### workflows
 
-Infers pairwise workflow patterns from path and response-shape signals.
+Infers deterministic workflow relationships from path and response-shape signals, including pairwise edges and selected multi-step chains.
 
 ```sh
 # text (default)
@@ -90,10 +90,25 @@ go run . workflows --spec ./adminapi.json --format json
 
 Unified output flag: `--format text|markdown|json`.
 
+Output behavior:
+- Default text and Markdown keep pairwise workflows as the primary section.
+- Default text and Markdown show only stronger chain signals and hide noisier CRUD-heavy chain lists.
+- `--verbose` expands chain detail in text output.
+- JSON remains complete and includes all chains with summaries and scores.
+
 Workflow scoring dimensions (1-5):
 - UI Independence
 - Schema Completeness
 - Client Generation Quality
+
+Chain scoring dimensions (1-5):
+- UI Independence
+- Schema Completeness
+- Client Generation Quality
+
+Chain score model:
+- deterministic "worst-step plus continuity penalty"
+- chain explanation includes worst-step context and continuity penalty reason(s)
 
 Inferred workflow types:
 - Create To Detail
@@ -104,6 +119,9 @@ Inferred workflow types:
 Real-spec proof points:
 - 277 workflows inferred: 137 create to detail, 137 list to detail, 3 action to detail
 - Common score pattern: 4/4/5
+- 139 multi-step chains inferred after tightening (instead of near-universal extension)
+- chain score summary on real spec: list-detail-update ~3/4/5, stronger action/media chains surfaced in default output
+- dominant weakness remains self-describing linkage clarity (`weak-follow-up-linkage`)
 
 ---
 
@@ -147,11 +165,16 @@ Real-spec proof point:
 - Unified output format on all commands: `--format text|markdown|json`
 - Endpoint scoring integrated into analyze
 - Workflow scoring integrated into workflows
+- Multi-step chain inference integrated into workflows (additive to pairwise workflows)
 - CI-friendly non-zero exits for analyze (errors) and diff (breaking changes)
 
 ## Current Limitations
 
 - No `$ref` resolution, so coverage is partial on component-heavy specs
-- Workflow inference is pairwise (no richer multi-step chain inference yet)
+- Multi-step chain inference is intentionally conservative and currently limited to a small set of deterministic chain families
 - Analysis currently focuses on JSON media type schemas
 - YAML parsing is not currently supported
+
+## Next Milestone
+
+- TUI phase: interactive navigation of findings, workflow/chain signals, and score summaries without changing deterministic inference logic.

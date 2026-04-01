@@ -47,6 +47,15 @@ type WorkflowScore struct {
 	Explanation            string // brief explanation of scores
 }
 
+// ChainScore rates a multi-step chain using worst-step composition and continuity penalties.
+type ChainScore struct {
+	UIIndependence          int    `json:"ui_independence"`
+	SchemaCompleteness      int    `json:"schema_completeness"`
+	ClientGenerationQuality int    `json:"client_generation_quality"`
+	ContinuityPenalty       int    `json:"continuity_penalty"`
+	Explanation             string `json:"score_explanation"`
+}
+
 const workflowSampleLimit = 3
 
 func Infer(operations []*model.Operation) *Graph {
@@ -268,6 +277,121 @@ func ScoreGraph(graph *Graph, operations []*model.Operation, issues []*model.Iss
 	return scores
 }
 
+// ScoreChains scores all inferred chains deterministically using worst-step composition.
+func ScoreChains(graph *Graph, operations []*model.Operation, issues []*model.Issue) map[string]*ChainScore {
+	opMap := make(map[string]*model.Operation)
+	for _, op := range operations {
+		key := strings.Join([]string{op.Method, op.Path}, "|")
+		opMap[key] = op
+	}
+
+	scores := make(map[string]*ChainScore)
+	for i, chain := range graph.Chains {
+		score, ok := scoreChain(chain, opMap, issues)
+		if !ok {
+			continue
+		}
+		scores[fmt.Sprintf("%d", i)] = score
+	}
+
+	return scores
+}
+
+func scoreChain(chain Chain, opMap map[string]*model.Operation, issues []*model.Issue) (*ChainScore, bool) {
+	if len(chain.Steps) < 2 {
+		return nil, false
+	}
+
+	stepScores := make([]*WorkflowScore, 0, len(chain.Steps)-1)
+	stepLabels := make([]string, 0, len(chain.Steps)-1)
+
+	for i := 0; i < len(chain.Steps)-1; i++ {
+		from := chain.Steps[i].Node
+		to := chain.Steps[i+1].Node
+		fromOp, fromOk := opMap[strings.Join([]string{from.Method, from.Path}, "|")]
+		toOp, toOk := opMap[strings.Join([]string{to.Method, to.Path}, "|")]
+		if !fromOk || !toOk {
+			continue
+		}
+		edge := &Edge{Kind: "chain-step", From: from, To: to}
+		stepScores = append(stepScores, ScoreWorkflow(edge, fromOp, toOp, issues))
+		stepLabels = append(stepLabels, fmt.Sprintf("%s -> %s", chain.Steps[i].Role, chain.Steps[i+1].Role))
+	}
+
+	if len(stepScores) == 0 {
+		return nil, false
+	}
+
+	worstUI := 5
+	worstSchema := 5
+	worstClient := 5
+	worstStep := ""
+
+	for i, s := range stepScores {
+		if s.UIIndependence < worstUI {
+			worstUI = s.UIIndependence
+			worstStep = stepLabels[i]
+		}
+		if s.SchemaCompleteness < worstSchema {
+			worstSchema = s.SchemaCompleteness
+			if worstStep == "" {
+				worstStep = stepLabels[i]
+			}
+		}
+		if s.ClientGenerationQuality < worstClient {
+			worstClient = s.ClientGenerationQuality
+			if worstStep == "" {
+				worstStep = stepLabels[i]
+			}
+		}
+	}
+
+	uiPenalty, schemaPenalty, penaltyReasons := chainContinuityPenalty(chain)
+
+	score := &ChainScore{
+		UIIndependence:          clampScore(worstUI - uiPenalty),
+		SchemaCompleteness:      clampScore(worstSchema - schemaPenalty),
+		ClientGenerationQuality: clampScore(worstClient),
+		ContinuityPenalty:       uiPenalty + schemaPenalty,
+	}
+
+	if len(penaltyReasons) == 0 {
+		score.Explanation = fmt.Sprintf("Worst step %s at %s; no continuity penalty", formatTriplet(worstUI, worstSchema, worstClient), worstStep)
+	} else {
+		score.Explanation = fmt.Sprintf("Worst step %s at %s; continuity penalty: %s", formatTriplet(worstUI, worstSchema, worstClient), worstStep, strings.Join(penaltyReasons, "; "))
+	}
+
+	return score, true
+}
+
+func chainContinuityPenalty(chain Chain) (int, int, []string) {
+	uiPenalty := 0
+	schemaPenalty := 0
+	reasons := make([]string, 0)
+
+	if len(chain.Steps) > 0 {
+		startRole := strings.ToLower(chain.Steps[0].Role)
+		if startRole == "list" || startRole == "search" {
+			uiPenalty += 1
+			reasons = append(reasons, "-1 UI (selection step before follow-up)")
+		}
+	}
+
+	if len(chain.Steps) > 0 {
+		lastRole := strings.ToLower(chain.Steps[len(chain.Steps)-1].Role)
+		if lastRole == "action" {
+			schemaPenalty += 1
+			reasons = append(reasons, "-1 Schema (action follow-up contract ambiguity)")
+		}
+	}
+
+	return uiPenalty, schemaPenalty, reasons
+}
+
+func formatTriplet(ui, schema, client int) string {
+	return fmt.Sprintf("%d/%d/%d", ui, schema, client)
+}
+
 // Helper functions
 
 func buildIssueMapByPathCode(issues []*model.Issue) map[string]map[string]int {
@@ -385,7 +509,7 @@ func buildScoreExplanation(score *WorkflowScore, fromOp *model.Operation, fromIs
 	return strings.Join(parts, " | ")
 }
 
-func FormatText(specFile string, operationCount int, graph *Graph, scores map[string]*WorkflowScore, verbose bool) string {
+func FormatText(specFile string, operationCount int, graph *Graph, scores map[string]*WorkflowScore, chainScores map[string]*ChainScore, verbose bool) string {
 	out := "API Doctor Workflow Report\n"
 	out += "==========================\n\n"
 	out += fmt.Sprintf("Spec: %s\n", specFile)
@@ -459,12 +583,12 @@ func FormatText(specFile string, operationCount int, graph *Graph, scores map[st
 		}
 	}
 
-	out += formatChainTextSection(graph.Chains, verbose)
+	out += formatChainTextSection(graph.Chains, chainScores, verbose)
 
 	return out
 }
 
-func FormatJSON(specFile string, operationCount int, graph *Graph, scores map[string]*WorkflowScore) (string, error) {
+func FormatJSON(specFile string, operationCount int, graph *Graph, scores map[string]*WorkflowScore, chainScores map[string]*ChainScore) (string, error) {
 	summary := map[string]int{}
 	for _, edge := range graph.Edges {
 		summary[edge.Kind]++
@@ -500,6 +624,34 @@ func FormatJSON(specFile string, operationCount int, graph *Graph, scores map[st
 		scoredEdges = append(scoredEdges, scoredEdge)
 	}
 
+	type ScoredChain struct {
+		Kind                    string      `json:"kind"`
+		Steps                   []ChainStep `json:"steps"`
+		Reason                  string      `json:"reason"`
+		UIIndependence          int         `json:"ui_independence"`
+		SchemaCompleteness      int         `json:"schema_completeness"`
+		ClientGenerationQuality int         `json:"client_generation_quality"`
+		ContinuityPenalty       int         `json:"continuity_penalty"`
+		ScoreExplanation        string      `json:"score_explanation"`
+	}
+
+	scoredChains := make([]ScoredChain, 0, len(graph.Chains))
+	for i, chain := range graph.Chains {
+		sc := ScoredChain{
+			Kind:   chain.Kind,
+			Steps:  chain.Steps,
+			Reason: chain.Reason,
+		}
+		if score, ok := chainScores[fmt.Sprintf("%d", i)]; ok {
+			sc.UIIndependence = score.UIIndependence
+			sc.SchemaCompleteness = score.SchemaCompleteness
+			sc.ClientGenerationQuality = score.ClientGenerationQuality
+			sc.ContinuityPenalty = score.ContinuityPenalty
+			sc.ScoreExplanation = score.Explanation
+		}
+		scoredChains = append(scoredChains, sc)
+	}
+
 	payload := map[string]interface{}{
 		"spec":               specFile,
 		"operations":         operationCount,
@@ -507,8 +659,9 @@ func FormatJSON(specFile string, operationCount int, graph *Graph, scores map[st
 		"inferred_chains":    len(graph.Chains),
 		"summary":            summary,
 		"chain_summary":      summarizeChains(graph.Chains),
+		"chain_score_summary": summarizeChainScores(graph.Chains, chainScores),
 		"edges":              scoredEdges,
-		"chains":             graph.Chains,
+		"chains":             scoredChains,
 	}
 
 	b, err := json.MarshalIndent(payload, "", "  ")
@@ -976,7 +1129,7 @@ func minInt(a, b int) int {
 	return b
 }
 
-func FormatMarkdown(specFile string, operationCount int, graph *Graph, scores map[string]*WorkflowScore) string {
+func FormatMarkdown(specFile string, operationCount int, graph *Graph, scores map[string]*WorkflowScore, chainScores map[string]*ChainScore) string {
 	out := "# API Workflows Report\n\n"
 	out += fmt.Sprintf("**Spec:** %s | **Operations:** %d | **Inferred:** %d\n\n", specFile, operationCount, len(graph.Edges))
 
@@ -1032,12 +1185,12 @@ func FormatMarkdown(specFile string, operationCount int, graph *Graph, scores ma
 		}
 	}
 
-	out += formatChainMarkdownSection(graph.Chains)
+	out += formatChainMarkdownSection(graph.Chains, chainScores)
 
 	return out
 }
 
-func formatChainTextSection(chains []Chain, verbose bool) string {
+func formatChainTextSection(chains []Chain, chainScores map[string]*ChainScore, verbose bool) string {
 	if len(chains) == 0 {
 		return ""
 	}
@@ -1075,18 +1228,30 @@ func formatChainTextSection(chains []Chain, verbose bool) string {
 
 	for _, kind := range visibleKinds {
 		entries := groups[kind]
+		avgUI, avgSchema, avgClient := averageChainScores(entries, chains, chainScores)
 		out += fmt.Sprintf("%s (%d)\n", title(kind), len(entries))
 		out += "---\n"
-		show := len(entries)
+		out += fmt.Sprintf("  Signal: avg score %s\n", formatTriplet(avgUI, avgSchema, avgClient))
+		out += fmt.Sprintf("  Why it matters: %s\n", chainImpactMessage(kind))
 		if !verbose {
-			show = minInt(len(entries), workflowSampleLimit)
+			out += fmt.Sprintf("  Representative pattern: %s\n", chainRepresentativePattern(kind))
+		} else {
+			representatives := selectRepresentativeChains(entries, len(entries))
+			for _, chain := range representatives {
+				chainIdx := findChainIndex(chains, &chain)
+				scoreSuffix := ""
+				if score, ok := chainScores[fmt.Sprintf("%d", chainIdx)]; ok {
+					scoreSuffix = fmt.Sprintf(" [Score: %s]", formatTriplet(score.UIIndependence, score.SchemaCompleteness, score.ClientGenerationQuality))
+				}
+				out += fmt.Sprintf("  CHAIN: %s%s\n", chainToText(chain), scoreSuffix)
+				out += fmt.Sprintf("      Why: %s\n", chain.Reason)
+				if score, ok := chainScores[fmt.Sprintf("%d", chainIdx)]; ok {
+					out += fmt.Sprintf("      Scoring: %s\n", score.Explanation)
+				}
+			}
 		}
-		for _, chain := range entries[:show] {
-			out += fmt.Sprintf("  CHAIN: %s\n", chainToText(chain))
-			out += fmt.Sprintf("      Why: %s\n", chain.Reason)
-		}
-		if !verbose && len(entries) > workflowSampleLimit {
-			out += fmt.Sprintf("  More chains: %d more hidden here; use --verbose or --json for the full list.\n", len(entries)-workflowSampleLimit)
+		if !verbose && len(entries) > 1 {
+			out += fmt.Sprintf("  More chains: %d more hidden here; use --verbose or --json for the full list.\n", len(entries)-1)
 		}
 		out += "\n"
 	}
@@ -1110,7 +1275,7 @@ func summarizeChains(chains []Chain) map[string]int {
 	return summary
 }
 
-func formatChainMarkdownSection(chains []Chain) string {
+func formatChainMarkdownSection(chains []Chain, chainScores map[string]*ChainScore) string {
 	if len(chains) == 0 {
 		return ""
 	}
@@ -1150,13 +1315,13 @@ func formatChainMarkdownSection(chains []Chain) string {
 
 	for _, kind := range visibleKinds {
 		entries := groups[kind]
+		avgUI, avgSchema, avgClient := averageChainScores(entries, chains, chainScores)
 		out += fmt.Sprintf("### %s (%d)\n\n", title(kind), len(entries))
-		for _, chain := range limitChains(entries, workflowSampleLimit) {
-			out += fmt.Sprintf("- `%s`\n", chainToText(chain))
-			out += fmt.Sprintf("  - %s\n", chain.Reason)
-		}
-		if len(entries) > workflowSampleLimit {
-			out += fmt.Sprintf("\n_(Use `--json` or `--verbose` for all %d chains)_\n", len(entries))
+		out += fmt.Sprintf("- **Signal:** avg score %s\n", formatTriplet(avgUI, avgSchema, avgClient))
+		out += fmt.Sprintf("- **Why it matters:** %s\n", chainImpactMessage(kind))
+		out += fmt.Sprintf("- **Representative pattern:** `%s`\n", chainRepresentativePattern(kind))
+		if len(entries) > 1 {
+			out += fmt.Sprintf("\n_(Use `--json` or `--verbose` for all %d chains in this type)_\n", len(entries))
 		}
 		out += "\n"
 	}
@@ -1168,11 +1333,138 @@ func isStrongChainKind(kind string) bool {
 	return kind == "order-detail-to-action" || kind == "media-detail-to-follow-up-action"
 }
 
+func chainImpactMessage(kind string) string {
+	switch kind {
+	case "order-detail-to-action":
+		return "captures order verification and transition flows where follow-up action clarity affects automation reliability"
+	case "media-detail-to-follow-up-action":
+		return "captures media post-processing flows where follow-up actions determine asset usability"
+	case "list-to-detail-to-update":
+		return "captures list-driven edit flows that often require user or caller item selection"
+	case "create-to-detail-to-update":
+		return "captures CRUD refinement flows where created entities are immediately modified"
+	default:
+		return "captures a deterministic multi-step API interaction"
+	}
+}
+
+func findChainIndex(chains []Chain, target *Chain) int {
+	for i, chain := range chains {
+		if chain.Kind != target.Kind || len(chain.Steps) != len(target.Steps) {
+			continue
+		}
+		match := true
+		for j := range chain.Steps {
+			if chain.Steps[j].Role != target.Steps[j].Role || chain.Steps[j].Node != target.Steps[j].Node {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}
+
+func averageChainScores(entries []Chain, allChains []Chain, chainScores map[string]*ChainScore) (int, int, int) {
+	if len(entries) == 0 {
+		return 0, 0, 0
+	}
+	uiTotal := 0
+	schemaTotal := 0
+	clientTotal := 0
+	count := 0
+	for _, chain := range entries {
+		idx := findChainIndex(allChains, &chain)
+		if score, ok := chainScores[fmt.Sprintf("%d", idx)]; ok {
+			uiTotal += score.UIIndependence
+			schemaTotal += score.SchemaCompleteness
+			clientTotal += score.ClientGenerationQuality
+			count++
+		}
+	}
+	if count == 0 {
+		return 0, 0, 0
+	}
+	return uiTotal / count, schemaTotal / count, clientTotal / count
+}
+
+func summarizeChainScores(chains []Chain, chainScores map[string]*ChainScore) map[string]map[string]int {
+	counts := map[string]int{}
+	uiTotal := map[string]int{}
+	schemaTotal := map[string]int{}
+	clientTotal := map[string]int{}
+	for i, chain := range chains {
+		score, ok := chainScores[fmt.Sprintf("%d", i)]
+		if !ok {
+			continue
+		}
+		counts[chain.Kind]++
+		uiTotal[chain.Kind] += score.UIIndependence
+		schemaTotal[chain.Kind] += score.SchemaCompleteness
+		clientTotal[chain.Kind] += score.ClientGenerationQuality
+	}
+	out := map[string]map[string]int{}
+	for kind, count := range counts {
+		if count == 0 {
+			continue
+		}
+		out[kind] = map[string]int{
+			"avg_ui_independence":           uiTotal[kind] / count,
+			"avg_schema_completeness":       schemaTotal[kind] / count,
+			"avg_client_generation_quality": clientTotal[kind] / count,
+		}
+	}
+	return out
+}
+
 func limitChains(chains []Chain, limit int) []Chain {
 	if len(chains) <= limit {
 		return chains
 	}
 	return chains[:limit]
+}
+
+func selectRepresentativeChains(chains []Chain, limit int) []Chain {
+	if len(chains) == 0 || limit <= 0 {
+		return []Chain{}
+	}
+	ordered := make([]Chain, len(chains))
+	copy(ordered, chains)
+	sort.Slice(ordered, func(i, j int) bool {
+		left := chainRepresentativeKey(ordered[i])
+		right := chainRepresentativeKey(ordered[j])
+		return left < right
+	})
+	if len(ordered) <= limit {
+		return ordered
+	}
+	return ordered[:limit]
+}
+
+func chainRepresentativeKey(chain Chain) string {
+	parts := []string{chain.Kind}
+	for _, step := range chain.Steps {
+		parts = append(parts, step.Role, strings.ToUpper(step.Node.Method), step.Node.Path)
+	}
+	parts = append(parts, chain.Reason)
+	return strings.Join(parts, "|")
+}
+
+func chainRepresentativePattern(kind string) string {
+	switch kind {
+	case "order-detail-to-action":
+		return "order search/list => order detail => order action"
+	case "media-detail-to-follow-up-action":
+		return "media create => media detail => media follow-up action"
+	case "list-to-detail-to-update":
+		return "resource list/search => resource detail => resource update"
+	case "create-to-detail-to-update":
+		return "resource create => resource detail => resource update"
+	default:
+		return "deterministic multi-step chain"
+	}
 }
 
 func findEdgeIndex(edges []Edge, target *Edge) int {

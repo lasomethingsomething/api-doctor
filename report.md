@@ -2,7 +2,7 @@
 
 Spec: Shopware Admin API (`adminapi.json`)
 Operations analyzed: 1036
-Scope: stable tool state with validated endpoint scoring, validated workflow scoring, and diff validation
+Scope: stable tool state with validated endpoint scoring, validated pairwise workflow scoring, validated multi-step chain scoring, and diff validation
 Date: April 2026
 
 ---
@@ -26,13 +26,24 @@ Interpretation:
 
 ## Workflow Scoring Summary
 
-Workflow scoring is validated and stable.
+Workflow inference and scoring are validated and stable.
+
+Workflow output behavior (current):
+- Pairwise workflows remain and are still reported/scored as the baseline signal.
+- Multi-step chains are inferred additively from deterministic continuity rules.
+- Chain scoring is deterministic and explainable: worst-step plus continuity penalty.
+- Default text/Markdown output surfaces stronger chains and hides noisier CRUD-heavy chain families by default.
+- JSON keeps the full inferred chain set (with chain summaries and score details) for complete downstream analysis.
 
 Inferred workflows:
 - 277 total
 - 137 Create To Detail
 - 137 List To Detail
 - 3 Action To Detail
+
+Inferred multi-step chains:
+- 139 total after tightening (down from near-universal extension)
+- dominant chain family still list-detail-update, but surfaced output prioritizes stronger action/media chain signals
 
 Observed scoring profile:
 - Most workflows score 4/4/5 (UI Independence / Schema Completeness / Client Generation Quality)
@@ -48,6 +59,7 @@ Why it matters:
 - Many responses do not clearly expose the identifier needed for the next obvious detail call
 - SDK and automation flows must rely on conventions or external docs rather than schema-declared linkage
 - This directly explains why schema-related scoring often does not reach 5/5 in inferred workflows
+- This remains the dominant weakness even after adding multi-step chains and chain scoring
 
 ---
 
@@ -78,13 +90,13 @@ Why this matters:
 ## Current Constraints
 
 - No `$ref` resolution yet, so referenced component schemas are not fully analyzed in scoring/rule checks
-- Workflow inference is pairwise, not full multi-step chaining
+- Multi-step chain inference remains intentionally conservative and limited to small deterministic families
 
 ---
 
-## Next Likely Milestone
+## Next Planned Phase
 
-Richer multi-step workflow inference:
-- Extend beyond pairwise A -> B inference
-- Support chains such as create -> list -> detail -> patch -> delete
-- Improve end-to-end workflow quality signals for generated clients and automation
+TUI phase:
+- add an interactive view for findings, pairwise workflows, chain signals, and score summaries
+- keep current deterministic analyzers/inference unchanged
+- prioritize navigation, triage speed, and developer ergonomics over new inference complexity
