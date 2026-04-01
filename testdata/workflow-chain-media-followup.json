@@ -1,0 +1,30 @@
+{
+  "openapi": "3.0.0",
+  "info": {"title": "Media Chain", "version": "1.0.0"},
+  "paths": {
+    "/media": {
+      "post": {
+        "operationId": "createMedia",
+        "responses": {
+          "201": {
+            "description": "created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"id": {"type": "string"}}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/media/{id}": {
+      "get": {"operationId": "getMedia", "responses": {"200": {"description": "detail"}}}
+    },
+    "/media/{id}/attach": {
+      "post": {"operationId": "attachMedia", "responses": {"200": {"description": "attached"}}}
+    }
+  }
+}

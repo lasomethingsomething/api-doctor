@@ -1,0 +1,38 @@
+{
+  "openapi": "3.0.0",
+  "info": {"title": "Order Chain", "version": "1.0.0"},
+  "paths": {
+    "/orders/search": {
+      "post": {
+        "operationId": "searchOrders",
+        "responses": {
+          "200": {
+            "description": "search",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {"id": {"type": "string"}}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {"operationId": "getOrder", "responses": {"200": {"description": "detail"}}}
+    },
+    "/_action/order/{orderId}/document/{documentTypeName}": {
+      "post": {"operationId": "createOrderDocument", "responses": {"200": {"description": "action"}}}
+    }
+  }
+}

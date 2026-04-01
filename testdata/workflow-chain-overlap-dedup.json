@@ -1,0 +1,53 @@
+{
+  "openapi": "3.0.0",
+  "info": {"title": "Chain Overlap Dedup", "version": "1.0.0"},
+  "paths": {
+    "/products": {
+      "post": {
+        "operationId": "createProduct",
+        "responses": {
+          "201": {
+            "description": "created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"id": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "listProducts",
+        "responses": {
+          "200": {
+            "description": "list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {"id": {"type": "string"}}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{id}": {
+      "get": {"operationId": "getProduct", "responses": {"200": {"description": "detail"}}},
+      "patch": {"operationId": "patchProduct", "responses": {"200": {"description": "updated"}}}
+    }
+  }
+}

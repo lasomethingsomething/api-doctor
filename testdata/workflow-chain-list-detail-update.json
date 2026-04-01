@@ -1,0 +1,38 @@
+{
+  "openapi": "3.0.0",
+  "info": {"title": "List Detail Update Chain", "version": "1.0.0"},
+  "paths": {
+    "/products/search": {
+      "post": {
+        "operationId": "searchProducts",
+        "responses": {
+          "200": {
+            "description": "search",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {"type": "string"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{id}": {
+      "get": {"operationId": "getProduct", "responses": {"200": {"description": "detail"}}},
+      "patch": {"operationId": "patchProduct", "responses": {"200": {"description": "updated"}}}
+    }
+  }
+}

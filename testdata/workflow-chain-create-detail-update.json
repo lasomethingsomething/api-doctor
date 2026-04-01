@@ -1,0 +1,28 @@
+{
+  "openapi": "3.0.0",
+  "info": {"title": "Create Detail Update Chain", "version": "1.0.0"},
+  "paths": {
+    "/customers": {
+      "post": {
+        "operationId": "createCustomer",
+        "responses": {
+          "201": {
+            "description": "created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"id": {"type": "string"}}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{id}": {
+      "get": {"operationId": "getCustomer", "responses": {"200": {"description": "detail"}}},
+      "put": {"operationId": "putCustomer", "responses": {"200": {"description": "updated"}}}
+    }
+  }
+}

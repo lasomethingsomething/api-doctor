@@ -335,3 +335,163 @@ func TestScoreWorkflow_WeakLinkagePenalty(t *testing.T) {
 		t.Fatalf("expected Schema Completeness < 5 due to weak linkage, got %d", score.SchemaCompleteness)
 	}
 }
+
+func TestInfer_ListDetailUpdateChain(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/workflow-chain-list-detail-update.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	graph := Infer(result.Operations)
+	if len(graph.Chains) == 0 {
+		t.Fatalf("expected multi-step chain inference, got none")
+	}
+
+	found := false
+	for _, chain := range graph.Chains {
+		if chain.Kind == "list-to-detail-to-update" {
+			found = true
+			if len(chain.Steps) != 3 {
+				t.Fatalf("expected exactly 3 steps, got %+v", chain)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected list-to-detail-to-update chain, got %+v", graph.Chains)
+	}
+}
+
+func TestInfer_CreateDetailUpdateChain(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/workflow-chain-create-detail-update.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	graph := Infer(result.Operations)
+	found := false
+	for _, chain := range graph.Chains {
+		if chain.Kind == "create-to-detail-to-update" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected create-to-detail-to-update chain, got %+v", graph.Chains)
+	}
+}
+
+func TestInfer_OrderDetailActionChain(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/workflow-chain-order-action.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	graph := Infer(result.Operations)
+	found := false
+	for _, chain := range graph.Chains {
+		if chain.Kind == "order-detail-to-action" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected order-detail-to-action chain, got %+v", graph.Chains)
+	}
+}
+
+func TestInfer_MediaDetailFollowUpChain(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/workflow-chain-media-followup.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	graph := Infer(result.Operations)
+	found := false
+	for _, chain := range graph.Chains {
+		if chain.Kind == "media-detail-to-follow-up-action" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected media-detail-to-follow-up-action chain, got %+v", graph.Chains)
+	}
+}
+
+func TestFormatText_MultiStepChainsAreDistinct(t *testing.T) {
+	graph := &Graph{
+		Edges: []Edge{
+			{Kind: "create-to-detail", From: Node{Method: "post", Path: "/customers"}, To: Node{Method: "get", Path: "/customers/{id}"}, Reason: "edge"},
+		},
+		Chains: []Chain{
+			{
+				Kind: "create-to-detail-to-update",
+				Steps: []ChainStep{
+					{Role: "create", Node: Node{Method: "post", Path: "/customers"}},
+					{Role: "detail", Node: Node{Method: "get", Path: "/customers/{id}"}},
+					{Role: "update", Node: Node{Method: "put", Path: "/customers/{id}"}},
+				},
+				Reason: "chain",
+			},
+		},
+	}
+
+	out := FormatText("spec.json", 3, graph, nil, true)
+	if !strings.Contains(out, "Multi-step chains") {
+		t.Fatalf("expected chain section in text output, got: %s", out)
+	}
+	if !strings.Contains(out, "CHAIN:") {
+		t.Fatalf("expected distinct chain marker, got: %s", out)
+	}
+}
+
+func TestInfer_CrudChainDedupPrefersListPerResource(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/workflow-chain-overlap-dedup.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	graph := Infer(result.Operations)
+	createCount := 0
+	listCount := 0
+	for _, chain := range graph.Chains {
+		if chain.Kind == "create-to-detail-to-update" {
+			createCount++
+		}
+		if chain.Kind == "list-to-detail-to-update" {
+			listCount++
+		}
+	}
+	if createCount != 0 {
+		t.Fatalf("expected create CRUD chain to be suppressed when list chain exists, got %d", createCount)
+	}
+	if listCount != 1 {
+		t.Fatalf("expected exactly one list CRUD chain, got %d", listCount)
+	}
+}
+
+func TestFormatText_DefaultShowsOnlyStrongChains(t *testing.T) {
+	graph := &Graph{
+		Edges: []Edge{},
+		Chains: []Chain{
+			{Kind: "create-to-detail-to-update", Steps: []ChainStep{{Role: "create", Node: Node{Method: "post", Path: "/a"}}, {Role: "detail", Node: Node{Method: "get", Path: "/a/{id}"}}, {Role: "update", Node: Node{Method: "patch", Path: "/a/{id}"}}}, Reason: "crud"},
+			{Kind: "order-detail-to-action", Steps: []ChainStep{{Role: "search", Node: Node{Method: "post", Path: "/orders/search"}}, {Role: "detail", Node: Node{Method: "get", Path: "/orders/{id}"}}, {Role: "action", Node: Node{Method: "post", Path: "/_action/order/{orderId}/state/{transition}"}}}, Reason: "strong"},
+		},
+	}
+
+	out := FormatText("spec.json", 5, graph, nil, false)
+	if !strings.Contains(out, "No high-confidence pairwise workflows inferred.") {
+		t.Fatalf("expected pairwise no-workflow message in chain-only graph, got: %s", out)
+	}
+	if !strings.Contains(out, "Showing stronger chains only in default output") {
+		t.Fatalf("expected stronger-chain-only note, got: %s", out)
+	}
+	if strings.Contains(out, "Create To Detail To Update") {
+		t.Fatalf("did not expect CRUD chain kind in default text output, got: %s", out)
+	}
+	if !strings.Contains(out, "Order Detail To Action") {
+		t.Fatalf("expected strong chain kind in default text output, got: %s", out)
+	}
+}

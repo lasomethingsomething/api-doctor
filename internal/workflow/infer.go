@@ -22,9 +22,21 @@ type Edge struct {
 	Reason string
 }
 
+type ChainStep struct {
+	Role string `json:"role"`
+	Node Node   `json:"node"`
+}
+
+type Chain struct {
+	Kind   string      `json:"kind"`
+	Steps  []ChainStep `json:"steps"`
+	Reason string      `json:"reason"`
+}
+
 type Graph struct {
 	Nodes []Node
 	Edges []Edge
+	Chains []Chain
 }
 
 // WorkflowScore rates a workflow across three dimensions (1-5)
@@ -41,6 +53,7 @@ func Infer(operations []*model.Operation) *Graph {
 	graph := &Graph{
 		Nodes: make([]Node, 0, len(operations)),
 		Edges: make([]Edge, 0),
+		Chains: make([]Chain, 0),
 	}
 
 	for _, op := range operations {
@@ -69,6 +82,8 @@ func Infer(operations []*model.Operation) *Graph {
 		}
 	}
 
+	inferChains(graph, operations)
+
 	sort.Slice(graph.Edges, func(i, j int) bool {
 		if graph.Edges[i].Kind != graph.Edges[j].Kind {
 			return graph.Edges[i].Kind < graph.Edges[j].Kind
@@ -80,6 +95,102 @@ func Infer(operations []*model.Operation) *Graph {
 	})
 
 	return graph
+}
+
+func inferChains(graph *Graph, operations []*model.Operation) {
+	opIndex := buildOperationIndex(operations)
+	seen := map[string]bool{}
+	listByBase := map[string][]Chain{}
+	createByBase := map[string][]Chain{}
+
+	for _, edge := range graph.Edges {
+		switch edge.Kind {
+		case "list-to-detail":
+			if chain, ok := inferListDetailUpdateChain(edge, opIndex); ok {
+				if base, _, ok := detailPathBaseAndParam(edge.To.Path); ok {
+					listByBase[base] = append(listByBase[base], chain)
+				}
+			}
+			if chain, ok := inferOrderDetailActionChain(edge, operations); ok {
+				appendChain(graph, seen, chain)
+			}
+		case "create-to-detail":
+			if chain, ok := inferCreateDetailUpdateChain(edge, opIndex); ok {
+				if base, _, ok := detailPathBaseAndParam(edge.To.Path); ok {
+					createByBase[base] = append(createByBase[base], chain)
+				}
+			}
+			if chain, ok := inferMediaDetailFollowUpChain(edge, operations); ok {
+				appendChain(graph, seen, chain)
+			}
+		}
+	}
+
+	bases := make([]string, 0, len(listByBase)+len(createByBase))
+	baseSeen := map[string]bool{}
+	for base := range listByBase {
+		bases = append(bases, base)
+		baseSeen[base] = true
+	}
+	for base := range createByBase {
+		if !baseSeen[base] {
+			bases = append(bases, base)
+		}
+	}
+	sort.Strings(bases)
+
+	for _, base := range bases {
+		if chains := listByBase[base]; len(chains) > 0 {
+			appendChain(graph, seen, pickBestListCRUDChain(chains))
+			continue
+		}
+		if chains := createByBase[base]; len(chains) > 0 {
+			appendChain(graph, seen, pickFirstChain(chains))
+		}
+	}
+
+	sort.Slice(graph.Chains, func(i, j int) bool {
+		if graph.Chains[i].Kind != graph.Chains[j].Kind {
+			return graph.Chains[i].Kind < graph.Chains[j].Kind
+		}
+		if len(graph.Chains[i].Steps) == 0 || len(graph.Chains[j].Steps) == 0 {
+			return len(graph.Chains[i].Steps) < len(graph.Chains[j].Steps)
+		}
+		left := graph.Chains[i].Steps[0].Node.Path
+		right := graph.Chains[j].Steps[0].Node.Path
+		if left != right {
+			return left < right
+		}
+		return graph.Chains[i].Reason < graph.Chains[j].Reason
+	})
+}
+
+func pickFirstChain(chains []Chain) Chain {
+	sort.Slice(chains, func(i, j int) bool {
+		if len(chains[i].Steps) == 0 || len(chains[j].Steps) == 0 {
+			return len(chains[i].Steps) < len(chains[j].Steps)
+		}
+		left := chains[i].Steps[0].Node.Path
+		right := chains[j].Steps[0].Node.Path
+		if left != right {
+			return left < right
+		}
+		return chains[i].Reason < chains[j].Reason
+	})
+	return chains[0]
+}
+
+func pickBestListCRUDChain(chains []Chain) Chain {
+	preferred := make([]Chain, 0)
+	for _, chain := range chains {
+		if len(chain.Steps) > 0 && strings.ToUpper(chain.Steps[0].Node.Method) == "POST" && strings.HasSuffix(chain.Steps[0].Node.Path, "/search") {
+			preferred = append(preferred, chain)
+		}
+	}
+	if len(preferred) > 0 {
+		return pickFirstChain(preferred)
+	}
+	return pickFirstChain(chains)
 }
 
 // ScoreWorkflow rates a single workflow based on analysis findings
@@ -281,21 +392,26 @@ func FormatText(specFile string, operationCount int, graph *Graph, scores map[st
 	out += fmt.Sprintf("Operations analyzed: %d\n", operationCount)
 	out += fmt.Sprintf("Inferred workflows: %d\n\n", len(graph.Edges))
 
-	if len(graph.Edges) == 0 {
+	if len(graph.Edges) == 0 && len(graph.Chains) == 0 {
 		out += "No high-confidence workflows inferred.\n"
 		return out
 	}
 
-	groups := map[string][]Edge{}
-	for _, edge := range graph.Edges {
-		groups[edge.Kind] = append(groups[edge.Kind], edge)
+	if len(graph.Edges) == 0 {
+		out += "No high-confidence pairwise workflows inferred.\n"
 	}
 
-	for _, kind := range []string{"action-to-detail", "create-to-detail", "list-to-detail"} {
-		edges := groups[kind]
-		if len(edges) == 0 {
-			continue
+	if len(graph.Edges) > 0 {
+		groups := map[string][]Edge{}
+		for _, edge := range graph.Edges {
+			groups[edge.Kind] = append(groups[edge.Kind], edge)
 		}
+
+		for _, kind := range []string{"action-to-detail", "create-to-detail", "list-to-detail"} {
+			edges := groups[kind]
+			if len(edges) == 0 {
+				continue
+			}
 
 		out += fmt.Sprintf("%s (%d)\n", title(kind), len(edges))
 		out += "---\n"
@@ -336,11 +452,14 @@ func FormatText(specFile string, operationCount int, graph *Graph, scores map[st
 			_ = i
 		}
 		out += "\n"
+		}
+
+		if !verbose {
+			out += "Tip: use --verbose or --json for the full inferred workflow list.\n"
+		}
 	}
 
-	if !verbose {
-		out += "Tip: use --verbose or --json for the full inferred workflow list.\n"
-	}
+	out += formatChainTextSection(graph.Chains, verbose)
 
 	return out
 }
@@ -385,8 +504,11 @@ func FormatJSON(specFile string, operationCount int, graph *Graph, scores map[st
 		"spec":               specFile,
 		"operations":         operationCount,
 		"inferred_workflows": len(graph.Edges),
+		"inferred_chains":    len(graph.Chains),
 		"summary":            summary,
+		"chain_summary":      summarizeChains(graph.Chains),
 		"edges":              scoredEdges,
+		"chains":             graph.Chains,
 	}
 
 	b, err := json.MarshalIndent(payload, "", "  ")
@@ -450,6 +572,156 @@ func appendEdge(graph *Graph, seen map[string]bool, from *model.Operation, to *m
 	}
 	seen[key] = true
 	graph.Edges = append(graph.Edges, edge)
+}
+
+func appendChain(graph *Graph, seen map[string]bool, chain Chain) {
+	if len(chain.Steps) < 3 {
+		return
+	}
+	parts := []string{chain.Kind}
+	for _, step := range chain.Steps {
+		parts = append(parts, step.Role, strings.ToUpper(step.Node.Method), step.Node.Path)
+	}
+	key := strings.Join(parts, "|")
+	if seen[key] {
+		return
+	}
+	seen[key] = true
+	graph.Chains = append(graph.Chains, chain)
+}
+
+func buildOperationIndex(operations []*model.Operation) map[string][]*model.Operation {
+	idx := make(map[string][]*model.Operation)
+	for _, op := range operations {
+		idx[op.Path] = append(idx[op.Path], op)
+	}
+	return idx
+}
+
+func inferListDetailUpdateChain(edge Edge, opIndex map[string][]*model.Operation) (Chain, bool) {
+	if edge.Kind != "list-to-detail" {
+		return Chain{}, false
+	}
+	updateOp, ok := findUpdateOnDetailPath(edge.To.Path, opIndex)
+	if !ok {
+		return Chain{}, false
+	}
+	return Chain{
+		Kind: "list-to-detail-to-update",
+		Steps: []ChainStep{
+			{Role: "list", Node: edge.From},
+			{Role: "detail", Node: edge.To},
+			{Role: "update", Node: nodeFromOperation(updateOp)},
+		},
+		Reason: "list/search endpoint links to detail and detail path has a matching update operation",
+	}, true
+}
+
+func inferCreateDetailUpdateChain(edge Edge, opIndex map[string][]*model.Operation) (Chain, bool) {
+	if edge.Kind != "create-to-detail" {
+		return Chain{}, false
+	}
+	updateOp, ok := findUpdateOnDetailPath(edge.To.Path, opIndex)
+	if !ok {
+		return Chain{}, false
+	}
+	return Chain{
+		Kind: "create-to-detail-to-update",
+		Steps: []ChainStep{
+			{Role: "create", Node: edge.From},
+			{Role: "detail", Node: edge.To},
+			{Role: "update", Node: nodeFromOperation(updateOp)},
+		},
+		Reason: "create endpoint links to detail and detail path has a matching update operation",
+	}, true
+}
+
+func inferOrderDetailActionChain(edge Edge, operations []*model.Operation) (Chain, bool) {
+	if edge.Kind != "list-to-detail" {
+		return Chain{}, false
+	}
+	if !isOrderDetailPath(edge.To.Path) {
+		return Chain{}, false
+	}
+	actionOp, ok := findOrderActionOp(operations)
+	if !ok {
+		return Chain{}, false
+	}
+	return Chain{
+		Kind: "order-detail-to-action",
+		Steps: []ChainStep{
+			{Role: "search", Node: edge.From},
+			{Role: "detail", Node: edge.To},
+			{Role: "action", Node: nodeFromOperation(actionOp)},
+		},
+		Reason: "order detail endpoint and order action endpoint share explicit order identifier continuity",
+	}, true
+}
+
+func inferMediaDetailFollowUpChain(edge Edge, operations []*model.Operation) (Chain, bool) {
+	if edge.Kind != "create-to-detail" {
+		return Chain{}, false
+	}
+	if !isMediaDetailPath(edge.To.Path) {
+		return Chain{}, false
+	}
+	followUpOp, ok := findMediaFollowUpOp(operations)
+	if !ok {
+		return Chain{}, false
+	}
+	return Chain{
+		Kind: "media-detail-to-follow-up-action",
+		Steps: []ChainStep{
+			{Role: "create", Node: edge.From},
+			{Role: "detail", Node: edge.To},
+			{Role: "action", Node: nodeFromOperation(followUpOp)},
+		},
+		Reason: "media detail endpoint and follow-up action share explicit media identifier continuity",
+	}, true
+}
+
+func findUpdateOnDetailPath(detailPath string, opIndex map[string][]*model.Operation) (*model.Operation, bool) {
+	ops := opIndex[detailPath]
+	for _, op := range ops {
+		switch strings.ToUpper(op.Method) {
+		case "PUT", "PATCH":
+			return op, true
+		}
+	}
+	return nil, false
+}
+
+func isOrderDetailPath(path string) bool {
+	return path == "/order/{id}" || path == "/orders/{id}"
+}
+
+func findOrderActionOp(operations []*model.Operation) (*model.Operation, bool) {
+	for _, op := range operations {
+		if strings.ToUpper(op.Method) != "POST" {
+			continue
+		}
+		if strings.HasPrefix(op.Path, "/_action/order/{orderId}/") {
+			return op, true
+		}
+	}
+	return nil, false
+}
+
+func isMediaDetailPath(path string) bool {
+	return path == "/media/{id}"
+}
+
+func findMediaFollowUpOp(operations []*model.Operation) (*model.Operation, bool) {
+	for _, op := range operations {
+		method := strings.ToUpper(op.Method)
+		if method != "POST" && method != "PATCH" {
+			continue
+		}
+		if strings.HasPrefix(op.Path, "/_action/media/{mediaId}/") || strings.HasPrefix(op.Path, "/media/{id}/") {
+			return op, true
+		}
+	}
+	return nil, false
 }
 
 func inferCreateEdge(op *model.Operation, detailByBase map[string]*model.Operation) (*model.Operation, Edge, bool) {
@@ -760,7 +1032,147 @@ func FormatMarkdown(specFile string, operationCount int, graph *Graph, scores ma
 		}
 	}
 
+	out += formatChainMarkdownSection(graph.Chains)
+
 	return out
+}
+
+func formatChainTextSection(chains []Chain, verbose bool) string {
+	if len(chains) == 0 {
+		return ""
+	}
+
+	groups := make(map[string][]Chain)
+	for _, chain := range chains {
+		groups[chain.Kind] = append(groups[chain.Kind], chain)
+	}
+
+	kinds := make([]string, 0, len(groups))
+	for kind := range groups {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+
+	visibleKinds := kinds
+	hiddenChainCount := 0
+	if !verbose {
+		visibleKinds = make([]string, 0)
+		for _, kind := range kinds {
+			if isStrongChainKind(kind) {
+				visibleKinds = append(visibleKinds, kind)
+			} else {
+				hiddenChainCount += len(groups[kind])
+			}
+		}
+	}
+
+	out := "\nMulti-step chains\n"
+	out += "-----------------\n"
+	out += fmt.Sprintf("Inferred chains: %d\n\n", len(chains))
+	if !verbose && hiddenChainCount > 0 {
+		out += fmt.Sprintf("Showing stronger chains only in default output (%d chains hidden; use --verbose or --json for full list).\n\n", hiddenChainCount)
+	}
+
+	for _, kind := range visibleKinds {
+		entries := groups[kind]
+		out += fmt.Sprintf("%s (%d)\n", title(kind), len(entries))
+		out += "---\n"
+		show := len(entries)
+		if !verbose {
+			show = minInt(len(entries), workflowSampleLimit)
+		}
+		for _, chain := range entries[:show] {
+			out += fmt.Sprintf("  CHAIN: %s\n", chainToText(chain))
+			out += fmt.Sprintf("      Why: %s\n", chain.Reason)
+		}
+		if !verbose && len(entries) > workflowSampleLimit {
+			out += fmt.Sprintf("  More chains: %d more hidden here; use --verbose or --json for the full list.\n", len(entries)-workflowSampleLimit)
+		}
+		out += "\n"
+	}
+
+	return out
+}
+
+func chainToText(chain Chain) string {
+	parts := make([]string, 0, len(chain.Steps))
+	for _, step := range chain.Steps {
+		parts = append(parts, fmt.Sprintf("%s %s %s", strings.ToUpper(step.Node.Method), step.Node.Path, step.Role))
+	}
+	return strings.Join(parts, " => ")
+}
+
+func summarizeChains(chains []Chain) map[string]int {
+	summary := map[string]int{}
+	for _, chain := range chains {
+		summary[chain.Kind]++
+	}
+	return summary
+}
+
+func formatChainMarkdownSection(chains []Chain) string {
+	if len(chains) == 0 {
+		return ""
+	}
+
+	groups := make(map[string][]Chain)
+	for _, chain := range chains {
+		groups[chain.Kind] = append(groups[chain.Kind], chain)
+	}
+
+	kinds := make([]string, 0, len(groups))
+	for kind := range groups {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+
+	visibleKinds := make([]string, 0)
+	hiddenChainCount := 0
+	for _, kind := range kinds {
+		if isStrongChainKind(kind) {
+			visibleKinds = append(visibleKinds, kind)
+		} else {
+			hiddenChainCount += len(groups[kind])
+		}
+	}
+
+	out := "## Multi-step Chains\n\n"
+	out += fmt.Sprintf("**Inferred chains:** %d\n\n", len(chains))
+	out += "| Type | Count |\n"
+	out += "|---|---|\n"
+	for _, kind := range kinds {
+		out += fmt.Sprintf("| %s | %d |\n", title(kind), len(groups[kind]))
+	}
+	out += "\n"
+	if hiddenChainCount > 0 {
+		out += fmt.Sprintf("_Showing stronger chains only below; %d chains hidden here. Use JSON output for the full chain list._\n\n", hiddenChainCount)
+	}
+
+	for _, kind := range visibleKinds {
+		entries := groups[kind]
+		out += fmt.Sprintf("### %s (%d)\n\n", title(kind), len(entries))
+		for _, chain := range limitChains(entries, workflowSampleLimit) {
+			out += fmt.Sprintf("- `%s`\n", chainToText(chain))
+			out += fmt.Sprintf("  - %s\n", chain.Reason)
+		}
+		if len(entries) > workflowSampleLimit {
+			out += fmt.Sprintf("\n_(Use `--json` or `--verbose` for all %d chains)_\n", len(entries))
+		}
+		out += "\n"
+	}
+
+	return out
+}
+
+func isStrongChainKind(kind string) bool {
+	return kind == "order-detail-to-action" || kind == "media-detail-to-follow-up-action"
+}
+
+func limitChains(chains []Chain, limit int) []Chain {
+	if len(chains) <= limit {
+		return chains
+	}
+	return chains[:limit]
 }
 
 func findEdgeIndex(edges []Edge, target *Edge) int {
