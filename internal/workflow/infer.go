@@ -218,19 +218,19 @@ func buildScoreExplanation(score *WorkflowScore, fromOp *model.Operation, fromIs
 	if score.UIIndependence < 5 {
 		reasons := []string{}
 		if fromIssuesCount["weak-accepted-tracking-linkage"] > 0 {
-			reasons = append(reasons, "202 without tracking ID")
+			reasons = append(reasons, "impossible to track completion")
 		}
 		if fromIssuesCount["weak-action-follow-up-linkage"] > 0 {
-			reasons = append(reasons, "no state exposed")
+			reasons = append(reasons, "resulting state not clearly exposed")
 		}
 		if fromIssuesCount["weak-follow-up-linkage"] > 0 {
-			reasons = append(reasons, "unclear next step")
+			reasons = append(reasons, "next-step identifier not clearly exposed")
 		}
 		if !exposesIdentifier(fromOp) && strings.ToUpper(fromOp.Method) == "GET" {
-			reasons = append(reasons, "identifier not exposed")
+			reasons = append(reasons, "identifier not exposed in response")
 		}
 		if len(reasons) == 0 {
-			reasons = append(reasons, "self-description gap")
+			reasons = append(reasons, "linkage contract gap")
 		}
 		parts = append(parts, fmt.Sprintf("UI %d/5: %s", score.UIIndependence, strings.Join(reasons, "; ")))
 	} else {
@@ -241,16 +241,16 @@ func buildScoreExplanation(score *WorkflowScore, fromOp *model.Operation, fromIs
 	if score.SchemaCompleteness < 5 {
 		reasons := []string{}
 		if fromIssuesCount["generic-object-request"] > 0 || fromIssuesCount["generic-object-response"] > 0 || toIssuesCount["generic-object-response"] > 0 {
-			reasons = append(reasons, "generic objects")
+			reasons = append(reasons, "generic objects in schema")
 		}
 		if fromIssuesCount["weak-accepted-tracking-linkage"] > 0 {
-			reasons = append(reasons, "missing tracking contract")
+			reasons = append(reasons, "202 Accepted lacks tracking ID")
 		}
 		if fromIssuesCount["weak-action-follow-up-linkage"] > 0 {
-			reasons = append(reasons, "missing state contract")
+			reasons = append(reasons, "no state exposed in action response")
 		}
 		if fromIssuesCount["weak-follow-up-linkage"] > 0 {
-			reasons = append(reasons, "missing tracking contract")
+			reasons = append(reasons, "next-step identifier not exposed")
 		}
 		parts = append(parts, fmt.Sprintf("Schema %d/5: %s", score.SchemaCompleteness, strings.Join(reasons, "; ")))
 	} else {
