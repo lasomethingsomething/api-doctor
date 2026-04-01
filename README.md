@@ -1,8 +1,18 @@
 # api-doctor
 
-Static analysis CLI for OpenAPI 3 specs. Parses specs locally, runs deterministic rules, and reports findings in text, Markdown, or JSON. No network calls, no AI.
+Static analysis CLI for Shopware Admin API OpenAPI 3 specs. Parses specs locally, runs deterministic rules, and reports findings in text, Markdown, or JSON. No network calls, no AI.
 
-## Build and Run
+## Prerequisites
+
+- Go 1.21+
+- A local Shopware Admin API OpenAPI spec file (JSON)
+
+Current validated scope:
+- Primary target today: Shopware Admin API OpenAPI spec
+- Included in that scope: Admin API action routes and Sync-related routes present in that spec
+- Broader API support should not be implied unless validated in this repository
+
+## Install
 
 ```sh
 go mod tidy
@@ -10,9 +20,43 @@ go build ./...
 go test ./...
 ```
 
+Optional local install:
+
 ```sh
-# run directly without installing
-go run . <command> [flags]
+go install .
+```
+
+## Quickstart
+
+```sh
+# analyze a Shopware Admin API spec
+go run . analyze --spec ./adminapi.json
+
+# workflows summary for the same spec
+go run . workflows --spec ./adminapi.json
+
+# compare two Shopware Admin API spec versions
+go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json
+```
+
+## Common commands
+
+```sh
+# analyze (text default)
+go run . analyze --spec ./adminapi.json
+
+# analyze (markdown/json)
+go run . analyze --spec ./adminapi.json --format markdown
+go run . analyze --spec ./adminapi.json --format json
+
+# workflows (text default)
+go run . workflows --spec ./adminapi.json
+
+# workflows (verbose)
+go run . workflows --spec ./adminapi.json --verbose
+
+# diff between two Admin API spec versions
+go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json
 ```
 
 ---

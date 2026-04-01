@@ -24,6 +24,13 @@ const (
 type Model struct {
 	active screen
 
+	findingsBucketIndex int
+	findingsDetailOpen  bool
+
+	workflowSection     int // 0=pairwise, 1=chain
+	workflowBucketIndex int
+	workflowDetailOpen  bool
+
 	analysis       *model.AnalysisResult
 	endpointScores map[string]*endpoint.EndpointScore
 
@@ -58,6 +65,53 @@ func (m Model) Init() tea.Cmd { return nil }
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.active == screenFindings {
+			switch msg.String() {
+			case "up", "k":
+				m.findingsMove(-1)
+				return m, nil
+			case "down", "j":
+				m.findingsMove(1)
+				return m, nil
+			case "enter":
+				if len(m.findingCodeBuckets()) > 0 {
+					m.findingsDetailOpen = !m.findingsDetailOpen
+				}
+				return m, nil
+			case "esc":
+				m.findingsDetailOpen = false
+				return m, nil
+			}
+		}
+
+		if m.active == screenWorkflows {
+			switch msg.String() {
+			case "up", "k":
+				m.workflowMove(-1)
+				return m, nil
+			case "down", "j":
+				m.workflowMove(1)
+				return m, nil
+			case "w":
+				if m.workflowSection == 0 {
+					m.workflowSection = 1
+				} else {
+					m.workflowSection = 0
+				}
+				m.workflowBucketIndex = 0
+				m.workflowDetailOpen = false
+				return m, nil
+			case "enter":
+				if len(m.workflowActiveBuckets()) > 0 {
+					m.workflowDetailOpen = !m.workflowDetailOpen
+				}
+				return m, nil
+			case "esc":
+				m.workflowDetailOpen = false
+				return m, nil
+			}
+		}
+
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -77,8 +131,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.active = screenOverview
 		case "2":
 			m.active = screenFindings
+			m.findingsDetailOpen = false
 		case "3":
 			m.active = screenWorkflows
+			m.workflowDetailOpen = false
 		case "4":
 			m.active = screenDiff
 		}
@@ -87,7 +143,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	header := "api-doctor TUI | 1 Overview 2 Findings 3 Workflows 4 Diff | left/right/tab switch, q quit\n"
+	header := "api-doctor TUI | 1 Overview 2 Findings 3 Workflows 4 Diff\n"
+	header += "Global keys: left/right/tab switch screens, q quit\n"
+	header += m.screenHints() + "\n"
 	header += strings.Repeat("=", 90) + "\n\n"
 
 	switch m.active {
@@ -101,6 +159,17 @@ func (m Model) View() string {
 		return header + m.viewDiff()
 	default:
 		return header + "Unknown screen\n"
+	}
+}
+
+func (m Model) screenHints() string {
+	switch m.active {
+	case screenFindings:
+		return "Findings keys: up/down move bucket, enter details, esc back"
+	case screenWorkflows:
+		return "Workflows keys: up/down move bucket, w toggle pairwise/chain, enter details, esc back"
+	default:
+		return ""
 	}
 }
 
@@ -124,28 +193,35 @@ func (m Model) viewOverview() string {
 		diffChanges = fmt.Sprintf("%d", len(m.diffResult.Changes))
 	}
 
-	out := "Overview\n\n"
-	out += fmt.Sprintf("Operations analyzed: %d\n", ops)
-	out += fmt.Sprintf("Analysis findings:   %d\n", issues)
-	out += fmt.Sprintf("Workflow edges:      %d\n", edges)
-	out += fmt.Sprintf("Workflow chains:     %d\n", chains)
-	out += fmt.Sprintf("Diff changes:        %s\n", diffChanges)
+	out := "Overview Summary\n\n"
+	out += fmt.Sprintf("Total operations:      %d\n", ops)
+	out += fmt.Sprintf("Total findings:        %d\n", issues)
+	out += fmt.Sprintf("Total workflow edges:  %d\n", edges)
+	out += fmt.Sprintf("Total workflow chains: %d\n", chains)
+	out += fmt.Sprintf("Total diff changes:    %s\n", diffChanges)
 	if m.analysis != nil {
-		out += "\nHealth signal\n"
+		out += "\nSeverity Summary\n"
 		out += fmt.Sprintf("- Errors:   %d\n", countSeverity(m.analysis.Issues, "error"))
 		out += fmt.Sprintf("- Warnings: %d\n", countSeverity(m.analysis.Issues, "warning"))
+		out += fmt.Sprintf("- Info:     %d\n", countSeverity(m.analysis.Issues, "info"))
+	} else {
+		out += "\nNo analysis data loaded for this run.\n"
 	}
 	return out
 }
 
 func (m Model) viewFindings() string {
 	if m.analysis == nil {
-		return "Findings Summary\n\nNo analysis result available.\n"
+		return "Findings Summary\n\nNo findings data available for this run. Provide --spec to populate this screen.\n"
 	}
 
 	out := "Findings Summary\n\n"
 	out += fmt.Sprintf("Spec: %s\n", m.analysis.SpecFile)
 	out += fmt.Sprintf("Total findings: %d\n\n", len(m.analysis.Issues))
+	if len(m.analysis.Issues) == 0 {
+		out += "No findings detected in this run.\n"
+		return out
+	}
 
 	summary := map[string]int{}
 	codes := map[string]int{}
@@ -157,13 +233,26 @@ func (m Model) viewFindings() string {
 	out += fmt.Sprintf("Warnings: %d\n", summary["warning"])
 	out += fmt.Sprintf("Info: %d\n", summary["info"])
 
-	out += "\nTop finding signals\n"
-	for _, item := range topCounts(codes, 5) {
-		out += fmt.Sprintf("- %s: %d\n", item.key, item.count)
+	out += "\nTop finding code buckets\n"
+	buckets := m.findingCodeBuckets()
+	for i, item := range buckets {
+		prefix := " "
+		if i == m.findingsBucketIndex {
+			prefix = ">"
+		}
+		out += fmt.Sprintf("%s %s: %d\n", prefix, item.key, item.count)
+	}
+
+	if m.findingsDetailOpen && len(buckets) > 0 {
+		selected := buckets[m.findingsBucketIndex].key
+		out += fmt.Sprintf("\nDetails for %s (up to 5)\n", selected)
+		for _, line := range m.findingDetails(selected, 5) {
+			out += fmt.Sprintf("- %s\n", line)
+		}
 	}
 
 	if len(m.endpointScores) > 0 {
-		out += "\nEndpoint score distribution\n"
+		out += "\nEndpoint score summary\n"
 		out += fmt.Sprintf("- Schema: %s\n", endpointDist(m.endpointScores, "schema"))
 		out += fmt.Sprintf("- Client: %s\n", endpointDist(m.endpointScores, "client"))
 		out += fmt.Sprintf("- Versioning: %s\n", endpointDist(m.endpointScores, "versioning"))
@@ -174,12 +263,16 @@ func (m Model) viewFindings() string {
 
 func (m Model) viewWorkflows() string {
 	if m.workflowGraph == nil {
-		return "Workflow Summary\n\nNo workflow graph available.\n"
+		return "Workflows Summary\n\nNo workflow data available for this run.\n"
 	}
 
-	out := "Workflow Summary\n\n"
-	out += fmt.Sprintf("Pairwise workflows: %d\n", len(m.workflowGraph.Edges))
-	out += fmt.Sprintf("Multi-step chains:  %d\n", len(m.workflowGraph.Chains))
+	out := "Workflows Summary\n\n"
+	out += fmt.Sprintf("Total pairwise workflows: %d\n", len(m.workflowGraph.Edges))
+	out += fmt.Sprintf("Total multi-step chains:  %d\n", len(m.workflowGraph.Chains))
+	if len(m.workflowGraph.Edges) == 0 && len(m.workflowGraph.Chains) == 0 {
+		out += "\nNo workflows detected in this run.\n"
+		return out
+	}
 
 	edgeKinds := map[string]int{}
 	for _, edge := range m.workflowGraph.Edges {
@@ -190,19 +283,45 @@ func (m Model) viewWorkflows() string {
 		chainKinds[chain.Kind]++
 	}
 
-	out += "\nPairwise breakdown\n"
-	for _, item := range topCounts(edgeKinds, 6) {
-		out += fmt.Sprintf("- %s: %d\n", item.key, item.count)
+	out += "\nPairwise kind buckets\n"
+	for i, item := range topCounts(edgeKinds, 6) {
+		prefix := " "
+		if m.workflowSection == 0 && i == m.workflowBucketIndex {
+			prefix = ">"
+		}
+		out += fmt.Sprintf("%s %s: %d\n", prefix, item.key, item.count)
 	}
 
-	out += "\nChain breakdown\n"
-	for _, item := range topCounts(chainKinds, 6) {
-		out += fmt.Sprintf("- %s: %d\n", item.key, item.count)
+	out += "\nChain kind buckets\n"
+	for i, item := range topCounts(chainKinds, 6) {
+		prefix := " "
+		if m.workflowSection == 1 && i == m.workflowBucketIndex {
+			prefix = ">"
+		}
+		out += fmt.Sprintf("%s %s: %d\n", prefix, item.key, item.count)
+	}
+
+	if m.workflowDetailOpen {
+		active := m.workflowActiveBuckets()
+		if len(active) > 0 {
+			selected := active[m.workflowBucketIndex].key
+			if m.workflowSection == 0 {
+				out += fmt.Sprintf("\nPairwise details for %s (up to 5)\n", selected)
+				for _, line := range m.workflowEdgeDetails(selected, 5) {
+					out += fmt.Sprintf("- %s\n", line)
+				}
+			} else {
+				out += fmt.Sprintf("\nChain details for %s (up to 5)\n", selected)
+				for _, line := range m.workflowChainDetails(selected, 5) {
+					out += fmt.Sprintf("- %s\n", line)
+				}
+			}
+		}
 	}
 
 	if len(m.chainScores) > 0 {
 		avg := averageChainScoresByKind(m.workflowGraph.Chains, m.chainScores)
-		out += "\nChain score signals\n"
+		out += "\nChain score summary\n"
 		for _, item := range topCounts(chainKinds, 4) {
 			a, ok := avg[item.key]
 			if !ok {
@@ -218,7 +337,7 @@ func (m Model) viewWorkflows() string {
 func (m Model) viewDiff() string {
 	out := "Diff Summary\n\n"
 	if m.diffResult == nil {
-		out += "No diff result available. Run with --old and --new to populate this view.\n"
+		out += "No diff data available for this run. Use --old and --new to populate this screen.\n"
 		return out
 	}
 
@@ -234,7 +353,7 @@ func (m Model) viewDiff() string {
 	}
 	out += fmt.Sprintf("Errors: %d\n", sev["error"])
 	out += fmt.Sprintf("Warnings: %d\n", sev["warning"])
-	out += "\nTop diff signals\n"
+	out += "\nTop diff code buckets\n"
 	for _, item := range topCounts(codes, 6) {
 		out += fmt.Sprintf("- %s: %d\n", item.key, item.count)
 	}
@@ -333,4 +452,143 @@ func averageChainScoresByKind(chains []workflow.Chain, chainScores map[string]*w
 	}
 
 	return avg
+}
+
+func (m *Model) findingsMove(delta int) {
+	buckets := m.findingCodeBuckets()
+	if len(buckets) == 0 {
+		m.findingsBucketIndex = 0
+		m.findingsDetailOpen = false
+		return
+	}
+	m.findingsBucketIndex = wrapIndex(m.findingsBucketIndex+delta, len(buckets))
+	m.findingsDetailOpen = false
+}
+
+func (m Model) findingCodeBuckets() []kvCount {
+	if m.analysis == nil {
+		return nil
+	}
+	codes := map[string]int{}
+	for _, issue := range m.analysis.Issues {
+		codes[issue.Code]++
+	}
+	return topCounts(codes, 6)
+}
+
+func (m Model) findingDetails(code string, limit int) []string {
+	if m.analysis == nil {
+		return nil
+	}
+	lines := make([]string, 0)
+	for _, issue := range m.analysis.Issues {
+		if issue.Code != code {
+			continue
+		}
+		label := strings.TrimSpace(strings.Join([]string{issue.Operation, issue.Path}, " "))
+		if label == "" {
+			label = "(no operation context)"
+		}
+		msg := strings.TrimSpace(issue.Message)
+		if msg == "" {
+			msg = "no message"
+		}
+		lines = append(lines, fmt.Sprintf("%s: %s", label, msg))
+		if len(lines) >= limit {
+			break
+		}
+	}
+	if len(lines) == 0 {
+		return []string{"No issue details available."}
+	}
+	return lines
+}
+
+func (m *Model) workflowMove(delta int) {
+	buckets := m.workflowActiveBuckets()
+	if len(buckets) == 0 {
+		m.workflowBucketIndex = 0
+		m.workflowDetailOpen = false
+		return
+	}
+	m.workflowBucketIndex = wrapIndex(m.workflowBucketIndex+delta, len(buckets))
+	m.workflowDetailOpen = false
+}
+
+func (m Model) workflowActiveBuckets() []kvCount {
+	if m.workflowSection == 0 {
+		kinds := map[string]int{}
+		if m.workflowGraph != nil {
+			for _, edge := range m.workflowGraph.Edges {
+				kinds[edge.Kind]++
+			}
+		}
+		return topCounts(kinds, 6)
+	}
+	kinds := map[string]int{}
+	if m.workflowGraph != nil {
+		for _, chain := range m.workflowGraph.Chains {
+			kinds[chain.Kind]++
+		}
+	}
+	return topCounts(kinds, 6)
+}
+
+func (m Model) workflowEdgeDetails(kind string, limit int) []string {
+	if m.workflowGraph == nil {
+		return nil
+	}
+	lines := make([]string, 0)
+	for _, edge := range m.workflowGraph.Edges {
+		if edge.Kind != kind {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%s %s -> %s %s", edge.From.Method, edge.From.Path, edge.To.Method, edge.To.Path))
+		if len(lines) >= limit {
+			break
+		}
+	}
+	if len(lines) == 0 {
+		return []string{"No workflow edge details available."}
+	}
+	return lines
+}
+
+func (m Model) workflowChainDetails(kind string, limit int) []string {
+	if m.workflowGraph == nil {
+		return nil
+	}
+	lines := make([]string, 0)
+	for _, chain := range m.workflowGraph.Chains {
+		if chain.Kind != kind {
+			continue
+		}
+		if len(chain.Steps) == 0 {
+			lines = append(lines, "(empty chain)")
+		} else {
+			first := chain.Steps[0].Node
+			last := chain.Steps[len(chain.Steps)-1].Node
+			lines = append(lines, fmt.Sprintf("%s steps: %s %s -> %s %s", fmt.Sprintf("%d", len(chain.Steps)), first.Method, first.Path, last.Method, last.Path))
+		}
+		if len(lines) >= limit {
+			break
+		}
+	}
+	if len(lines) == 0 {
+		return []string{"No workflow chain details available."}
+	}
+	return lines
+}
+
+func wrapIndex(v, size int) int {
+	if size <= 0 {
+		return 0
+	}
+	if v < 0 {
+		return size - 1
+	}
+	if v >= size {
+		return 0
+	}
+	return v
 }
