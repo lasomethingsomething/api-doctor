@@ -1,0 +1,32 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "run-api-doctor-text",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/adminapi.json"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "run-api-doctor-json",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/adminapi.json",
+				"--json"
+			],
+			"isBackground": false
+		}
+	]
+}
