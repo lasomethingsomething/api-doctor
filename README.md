@@ -1,6 +1,6 @@
 # api-doctor
 
-Static analysis CLI for OpenAPI 3 specs. Parses specs locally, runs deterministic rules, and reports issues in human-readable or JSON format. No network calls, no AI.
+Static analysis CLI for OpenAPI 3 specs. Parses specs locally, runs deterministic rules, and reports findings in text, Markdown, or JSON. No network calls, no AI.
 
 ## Build and Run
 
@@ -19,30 +19,35 @@ go run . <command> [flags]
 
 ## Commands
 
-### `analyze`
+### analyze
 
-Runs quality rules against a spec and reports issues grouped by severity.
+Runs deterministic quality checks against a spec and reports findings grouped by severity. Also computes endpoint quality scores.
 
 ```sh
-# default output — one line per finding + summary
+# text (default)
 go run . analyze --spec ./adminapi.json
 
-# verbose — adds technical detail to each finding
+# text with technical detail
 go run . analyze --spec ./adminapi.json --verbose
 
-# machine-readable JSON for CI
-go run . analyze --spec ./adminapi.json --json
+# markdown
+go run . analyze --spec ./adminapi.json --format markdown
+
+# json
+go run . analyze --spec ./adminapi.json --format json
 ```
 
-**Output modes:**
+Unified output flag: `--format text|markdown|json`.
 
-| Mode | What you get |
-|---|---|
-| default | severity, rule code, endpoint, one-line "Why it matters" explanation |
-| `--verbose` | everything above plus the exact detection message per finding |
-| `--json` | structured JSON with all fields, suitable for piping or artifact storage |
+Endpoint scoring dimensions (1-5):
 
-**Rules:**
+| Dimension | Measures | Typical Penalties |
+|---|---|---|
+| Schema Completeness | request/response shape clarity | generic objects, weak linkage |
+| Client Generation Quality | strong typing for generated clients | likely-missing-enum, generic objects |
+| Versioning Safety | safe evolution risk | deprecated operations |
+
+Rules:
 
 | Rule | Kind | Severity |
 |---|---|---|
@@ -58,73 +63,95 @@ go run . analyze --spec ./adminapi.json --json
 | `weak-accepted-tracking-linkage` | cross-op | warning |
 | `weak-action-follow-up-linkage` | cross-op | warning |
 
-**Real-spec result (Shopware admin API, 1036 operations):** 153 warnings — including `generic-object-request` on `/_action/system-config`, `weak-action-follow-up-linkage` on three order state transition endpoints, and dozens of `likely-missing-enum` hits across the spec.
+Real-spec proof points (Shopware admin API, 1036 operations):
+- 153 warnings, 0 errors
+- Dominant signal: `weak-follow-up-linkage` (137)
+- Endpoint quality summary: Schema Completeness 50% excellent / 50% good; Client Generation Quality 100% excellent; Versioning Safety 99% excellent (1 deprecated)
 
 ---
 
-### `workflows`
+### workflows
 
-Infers multi-step call sequences by pattern-matching paths and response shapes. Groups results by workflow category.
+Infers pairwise workflow patterns from path and response-shape signals.
 
 ```sh
-# default output — 3 representative examples per category
+# text (default)
 go run . workflows --spec ./adminapi.json
 
-# verbose — all inferred workflows
+# verbose
 go run . workflows --spec ./adminapi.json --verbose
 
-# JSON
-go run . workflows --spec ./adminapi.json --json
+# markdown
+go run . workflows --spec ./adminapi.json --format markdown
+
+# json
+go run . workflows --spec ./adminapi.json --format json
 ```
 
-Default output shows up to 3 representative examples per category with a count of hidden extras; `--verbose` shows all of them.
+Unified output flag: `--format text|markdown|json`.
 
-**Inferred workflow types:** `Create To Detail`, `List To Detail`, `Action To Detail`, `Accepted To Tracking`.
+Workflow scoring dimensions (1-5):
+- UI Independence
+- Schema Completeness
+- Client Generation Quality
 
-**Real-spec result (Shopware admin API, 1036 operations):** 277 workflows inferred — 137 create→detail, 137 list→detail, 3 action→detail (all three on order/delivery/transaction state transitions).
+Inferred workflow types:
+- Create To Detail
+- List To Detail
+- Action To Detail
+- Accepted To Tracking
+
+Real-spec proof points:
+- 277 workflows inferred: 137 create to detail, 137 list to detail, 3 action to detail
+- Common score pattern: 4/4/5
 
 ---
 
-### `diff`
+### diff
 
-Compares two spec versions and flags deterministic breaking changes. Exits non-zero if any changes are found, making it usable in CI.
+Compares two specs and reports deterministic breaking changes. Exits non-zero when breaking changes are found.
 
 ```sh
+# text (default)
 go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json
 
-# JSON output
-go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json --json
+# markdown
+go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json --format markdown
+
+# json
+go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json --format json
 ```
 
-**Checks:**
+Unified output flag: `--format text|markdown|json`.
+
+Checks:
 
 | Check | What it detects |
 |---|---|
-| `removed-path` | an entire path was removed |
-| `removed-operation` | an HTTP method was removed from a path |
-| `removed-response-status-code` | a documented response code no longer appears |
-| `removed-response-field` | a field was removed from a response schema |
-| `removed-request-field` | a field was removed from a request body schema |
+| `removed-path` | a path was removed |
+| `removed-operation` | a method was removed from a path |
+| `removed-response-status-code` | a documented response code was removed |
+| `removed-response-field` | a response field was removed |
+| `removed-request-field` | a request field was removed |
 | `field-became-required` | an optional response field became required |
-| `enum-value-removed` | a valid enum value was removed |
+| `enum-value-removed` | an enum value was removed |
 
-**Real-spec result (Shopware admin API, two consecutive releases):** 1 breaking change — `POST /_action/sync` dropped `request[].filter` from its request body schema. Clients that pass `filter` in bulk sync calls can no longer rely on the field being accepted.
+Real-spec proof point:
+- 1 breaking change detected: `POST /_action/sync` removed `request[].filter`
 
 ---
 
 ## Current Capabilities
 
-- Parses OpenAPI 3 JSON specs with no external dependencies
-- Runs 11 analysis rules (7 per-op, 4 cross-op) deterministically
-- Infers workflow sequences from path and response shape patterns
-- Detects 7 categories of breaking change across two spec versions
-- All three commands support `--json` for CI or downstream tooling
-- `analyze` and `diff` exit non-zero when issues are found
+- Deterministic analysis, workflow inference, and spec diffing
+- Unified output format on all commands: `--format text|markdown|json`
+- Endpoint scoring integrated into analyze
+- Workflow scoring integrated into workflows
+- CI-friendly non-zero exits for analyze (errors) and diff (breaking changes)
 
 ## Current Limitations
 
-- **No `$ref` resolution** — schemas behind `$ref` are skipped by all rules and diff checks; most production specs use components heavily, so effective coverage is partial
-- **JSON content type only** — only `application/json` request/response bodies are inspected
-- **No path-parameter or header diff** — removed path parameters, renamed parameters, and required-header changes are not detected
-- **No severity filter flag** — no `--level error` to suppress warnings in CI; all findings are always emitted
-- **YAML not supported** — only JSON spec files are parsed
+- No `$ref` resolution, so coverage is partial on component-heavy specs
+- Workflow inference is pairwise (no richer multi-step chain inference yet)
+- Analysis currently focuses on JSON media type schemas
+- YAML parsing is not currently supported
