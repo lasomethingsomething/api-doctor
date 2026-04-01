@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lasomethingsomething/api-doctor/internal/model"
 	"github.com/lasomethingsomething/api-doctor/internal/openapi"
 )
 
@@ -90,7 +91,7 @@ func TestFormatText_DefaultGroupsWorkflowKinds(t *testing.T) {
 		},
 	}}
 
-	out := FormatText("spec.json", 25, graph, false)
+	out := FormatText("spec.json", 25, graph, nil, false)
 	if !strings.Contains(out, "Create To Detail (4)") {
 		t.Fatalf("expected create-to-detail count, got: %s", out)
 	}
@@ -142,7 +143,7 @@ func TestFormatText_VerboseKeepsFullWorkflowDetails(t *testing.T) {
 		},
 	}}
 
-	out := FormatText("spec.json", 10, graph, true)
+	out := FormatText("spec.json", 10, graph, nil, true)
 	if strings.Contains(out, "Representative workflows") {
 		t.Fatalf("expected verbose output to avoid grouped summary wording, got: %s", out)
 	}
@@ -173,7 +174,7 @@ func TestFormatJSON_IncludesFullWorkflowEdges(t *testing.T) {
 		},
 	}}
 
-	out, err := FormatJSON("spec.json", 12, graph)
+	out, err := FormatJSON("spec.json", 12, graph, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -185,5 +186,152 @@ func TestFormatJSON_IncludesFullWorkflowEdges(t *testing.T) {
 	}
 	if !strings.Contains(out, "\"inferred_workflows\": 1") {
 		t.Fatalf("expected inferred workflow count in JSON output, got: %s", out)
+	}
+}
+
+func TestScoreWorkflow_PerfectScoreWithNoIssues(t *testing.T) {
+	edge := &Edge{
+		Kind:   "create-to-detail",
+		From:   Node{Method: "post", Path: "/products"},
+		To:     Node{Method: "get", Path: "/products/{id}"},
+		Reason: "create response visibly exposes an id and a matching detail endpoint exists",
+	}
+	fromOp := &model.Operation{
+		Path:   "/products",
+		Method: "post",
+		Responses: map[string]*model.Response{
+			"201": {
+				Content: map[string]*model.MediaType{
+					"application/json": {
+						Schema: &model.Schema{
+							Type: "object",
+							Properties: map[string]*model.Schema{
+								"id": {Type: "string"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	toOp := &model.Operation{
+		Path:   "/products/{id}",
+		Method: "get",
+	}
+
+	score := ScoreWorkflow(edge, fromOp, toOp, []*model.Issue{})
+
+	if score.UIIndependence != 5 {
+		t.Fatalf("expected UI Independence 5, got %d", score.UIIndependence)
+	}
+	if score.SchemaCompleteness != 5 {
+		t.Fatalf("expected Schema Completeness 5, got %d", score.SchemaCompleteness)
+	}
+	if score.ClientGenerationQuality != 5 {
+		t.Fatalf("expected Client Generation Quality 5, got %d", score.ClientGenerationQuality)
+	}
+}
+
+func TestScoreWorkflow_PenalizeForGenericObjects(t *testing.T) {
+	edge := &Edge{
+		Kind:   "create-to-detail",
+		From:   Node{Method: "post", Path: "/products", OperationID: "createProduct"},
+		To:     Node{Method: "get", Path: "/products/{id}", OperationID: "getProduct"},
+		Reason: "create response visibly exposes an id and a matching detail endpoint exists",
+	}
+	fromOp := &model.Operation{
+		Path:        "/products",
+		Method:      "post",
+		OperationID: "createProduct",
+	}
+	toOp := &model.Operation{
+		Path:        "/products/{id}",
+		Method:      "get",
+		OperationID: "getProduct",
+	}
+	issues := []*model.Issue{
+		{
+			Code:      "generic-object-request",
+			Path:      "/products",
+			Operation: "post createProduct",
+		},
+		{
+			Code:      "generic-object-response",
+			Path:      "/products/{id}",
+			Operation: "get getProduct (200)",
+		},
+	}
+
+	score := ScoreWorkflow(edge, fromOp, toOp, issues)
+
+	if score.SchemaCompleteness == 5 {
+		t.Fatalf("expected Schema Completeness < 5 due to generic objects, got %d", score.SchemaCompleteness)
+	}
+	if score.ClientGenerationQuality == 5 {
+		t.Fatalf("expected Client Generation Quality < 5 due to generic objects, got %d", score.ClientGenerationQuality)
+	}
+}
+
+func TestScoreWorkflow_PenalizeForMissingEnums(t *testing.T) {
+	edge := &Edge{
+		Kind:   "list-to-detail",
+		From:   Node{Method: "get", Path: "/products", OperationID: "listProducts"},
+		To:     Node{Method: "get", Path: "/products/{id}", OperationID: "getProduct"},
+		Reason: "list response visibly exposes item ids and a matching detail endpoint exists",
+	}
+	fromOp := &model.Operation{
+		Path:        "/products",
+		Method:      "get",
+		OperationID: "listProducts",
+	}
+	toOp := &model.Operation{
+		Path:        "/products/{id}",
+		Method:      "get",
+		OperationID: "getProduct",
+	}
+	issues := []*model.Issue{
+		{
+			Code:      "likely-missing-enum",
+			Path:      "/products",
+			Operation: "get listProducts (200)",
+		},
+	}
+
+	score := ScoreWorkflow(edge, fromOp, toOp, issues)
+
+	if score.ClientGenerationQuality == 5 {
+		t.Fatalf("expected Client Generation Quality < 5 due to missing enum, got %d", score.ClientGenerationQuality)
+	}
+}
+
+func TestScoreWorkflow_WeakLinkagePenalty(t *testing.T) {
+	edge := &Edge{
+		Kind:   "action-to-detail",
+		From:   Node{Method: "post", Path: "/_action/order/{orderId}/state/{transition}", OperationID: "orderStateTransition"},
+		To:     Node{Method: "get", Path: "/order/{id}", OperationID: "getOrder"},
+		Reason: "action path already carries the resource id and a matching detail endpoint exists for follow-up verification",
+	}
+	fromOp := &model.Operation{
+		Path:        "/_action/order/{orderId}/state/{transition}",
+		Method:      "post",
+		OperationID: "orderStateTransition",
+	}
+	toOp := &model.Operation{
+		Path:        "/order/{id}",
+		Method:      "get",
+		OperationID: "getOrder",
+	}
+	issues := []*model.Issue{
+		{
+			Code:      "weak-action-follow-up-linkage",
+			Path:      "/_action/order/{orderId}/state/{transition}",
+			Operation: "post orderStateTransition (200)",
+		},
+	}
+
+	score := ScoreWorkflow(edge, fromOp, toOp, issues)
+
+	if score.SchemaCompleteness == 5 {
+		t.Fatalf("expected Schema Completeness < 5 due to weak linkage, got %d", score.SchemaCompleteness)
 	}
 }

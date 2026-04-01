@@ -371,3 +371,78 @@ func title(s string) string {
 	}
 	return s
 }
+
+func FormatMarkdown(result *Result) string {
+	out := "# API Diff Report\n\n"
+	out += fmt.Sprintf("**Old:** %s | **New:** %s\n\n", result.OldSpec, result.NewSpec)
+
+	if len(result.Changes) == 0 {
+		out += "No breaking changes detected in the current diff scope.\n"
+		return out
+	}
+
+	// Summary table
+	groups := map[string][]*Change{}
+	for _, change := range result.Changes {
+		groups[change.Severity] = append(groups[change.Severity], change)
+	}
+
+	out += "## Summary\n\n"
+	out += "| Severity | Finding | Count |\n"
+	out += "|---|---|---|\n"
+	for _, severity := range []string{"error", "warning"} {
+		changes := groups[severity]
+		if len(changes) == 0 {
+			continue
+		}
+
+		codeGroups := map[string]int{}
+		for _, change := range changes {
+			codeGroups[change.Code]++
+		}
+
+		for code, count := range codeGroups {
+			out += fmt.Sprintf("| %s | %s | %d |\n", title(severity), code, count)
+		}
+	}
+	out += "\n"
+
+	// Changes grouped by severity
+	out += "## Changes\n\n"
+	for _, severity := range []string{"error", "warning"} {
+		changes := groups[severity]
+		if len(changes) == 0 {
+			continue
+		}
+
+		codeGroups := map[string][]*Change{}
+		for _, change := range changes {
+			codeGroups[change.Code] = append(codeGroups[change.Code], change)
+		}
+
+		codes := make([]string, 0, len(codeGroups))
+		for code := range codeGroups {
+			codes = append(codes, code)
+		}
+		sort.Strings(codes)
+
+		for _, code := range codes {
+			codeChanges := codeGroups[code]
+			out += fmt.Sprintf("### `%s` (%d)\n\n", code, len(codeChanges))
+			for _, change := range codeChanges {
+				out += fmt.Sprintf("- **Path:** `%s`\n", change.Path)
+				if change.Operation != "" {
+					out += fmt.Sprintf("  **Operation:** `%s`\n", change.Operation)
+				}
+				if change.Location != "" {
+					out += fmt.Sprintf("  **Location:** `%s`\n", change.Location)
+				}
+				out += fmt.Sprintf("  **Impact:** %s\n", change.Description)
+				out += fmt.Sprintf("  **Details:** %s\n", change.Message)
+				out += "\n"
+			}
+		}
+	}
+
+	return out
+}

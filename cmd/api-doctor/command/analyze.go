@@ -24,13 +24,13 @@ Example:
 
 var (
 	specFile string
-	jsonOut  bool
+	format   string
 	verbose  bool
 )
 
 func init() {
 	analyzeCmd.Flags().StringVarP(&specFile, "spec", "s", "", "Path to OpenAPI spec file (JSON or YAML)")
-	analyzeCmd.Flags().BoolVar(&jsonOut, "json", false, "Output results as JSON")
+	analyzeCmd.Flags().StringVar(&format, "format", "text", "Output format: text, markdown, or json")
 	analyzeCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show deeper technical detail in text output")
 	analyzeCmd.MarkFlagRequired("spec")
 }
@@ -52,14 +52,17 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	result.Issues = checker.CheckAll(result.Operations)
 
 	// Format and print output
-	if jsonOut {
+	switch format {
+	case "json":
 		jsonStr, err := report.FormatJSON(result)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting JSON: %v\n", err)
 			return err
 		}
 		fmt.Println(jsonStr)
-	} else {
+	case "markdown":
+		fmt.Print(report.FormatAnalysisMarkdown(result))
+	default:
 		fmt.Print(report.FormatText(result, verbose))
 	}
 

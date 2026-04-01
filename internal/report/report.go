@@ -359,3 +359,75 @@ func limitStrings(values []string, limit int) []string {
 	}
 	return values[:limit]
 }
+
+func FormatAnalysisMarkdown(result *model.AnalysisResult) string {
+	out := "# API Analysis Report\n\n"
+	out += fmt.Sprintf("**Spec:** %s | **Operations:** %d\n\n", result.SpecFile, len(result.Operations))
+
+	if len(result.Issues) == 0 {
+		out += "No issues found.\n"
+		return out
+	}
+
+	// Summary table
+	summary := map[string]int{}
+	for _, issue := range result.Issues {
+		summary[issue.Severity]++
+	}
+
+	out += "## Summary\n\n"
+	out += "| Severity | Count |\n"
+	out += "|---|---|\n"
+	for _, sev := range []string{"error", "warning", "info"} {
+		if count, ok := summary[sev]; ok {
+			out += fmt.Sprintf("| %s | %d |\n", strings.ToTitle(sev), count)
+		}
+	}
+	out += "\n"
+
+	// Issues grouped by severity
+	groups := map[string][]*model.Issue{}
+	for _, issue := range result.Issues {
+		groups[issue.Severity] = append(groups[issue.Severity], issue)
+	}
+
+	for _, sev := range []string{"error", "warning", "info"} {
+		issues := groups[sev]
+		if len(issues) == 0 {
+			continue
+		}
+
+		sort.Slice(issues, func(i, j int) bool {
+			if issues[i].Path != issues[j].Path {
+				return issues[i].Path < issues[j].Path
+			}
+			return issues[i].Operation < issues[j].Operation
+		})
+
+		out += fmt.Sprintf("## %s (%d)\n\n", strings.ToTitle(sev), len(issues))
+
+		codeGroups := map[string][]*model.Issue{}
+		for _, issue := range issues {
+			codeGroups[issue.Code] = append(codeGroups[issue.Code], issue)
+		}
+
+		codes := make([]string, 0, len(codeGroups))
+		for code := range codeGroups {
+			codes = append(codes, code)
+		}
+		sort.Strings(codes)
+
+		for _, code := range codes {
+			codeIssues := codeGroups[code]
+			out += fmt.Sprintf("### `%s`\n\n", code)
+			for _, issue := range codeIssues {
+				out += fmt.Sprintf("- **Endpoint:** `%s %s`\n", issue.Operation, issue.Path)
+				out += fmt.Sprintf("  **Impact:** %s\n", issue.Description)
+				out += fmt.Sprintf("  **Details:** %s\n", issue.Message)
+				out += "\n"
+			}
+		}
+	}
+
+	return out
+}

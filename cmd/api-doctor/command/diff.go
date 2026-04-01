@@ -12,7 +12,7 @@ import (
 var (
 	diffOldSpec string
 	diffNewSpec string
-	diffJSONOut bool
+	diffFormat  string
 )
 
 var diffCmd = &cobra.Command{
@@ -22,14 +22,14 @@ var diffCmd = &cobra.Command{
 
 Example:
   api-doctor diff --old ./old.json --new ./new.json
-  api-doctor diff --old ./old.json --new ./new.json --json`,
+  api-doctor diff --old ./old.json --new ./new.json --format markdown`,
 	RunE: runDiff,
 }
 
 func init() {
 	diffCmd.Flags().StringVar(&diffOldSpec, "old", "", "Path to the old OpenAPI spec")
 	diffCmd.Flags().StringVar(&diffNewSpec, "new", "", "Path to the new OpenAPI spec")
-	diffCmd.Flags().BoolVar(&diffJSONOut, "json", false, "Output diff results as JSON")
+	diffCmd.Flags().StringVar(&diffFormat, "format", "text", "Output format: text, markdown, or json")
 	diffCmd.MarkFlagRequired("old")
 	diffCmd.MarkFlagRequired("new")
 }
@@ -50,14 +50,17 @@ func runDiff(cmd *cobra.Command, args []string) error {
 	}
 
 	result := intdiff.Compare(oldResult.SpecFile, newResult.SpecFile, oldResult.Operations, newResult.Operations)
-	if diffJSONOut {
+	switch diffFormat {
+	case "json":
 		jsonStr, err := intdiff.FormatJSON(result)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting JSON: %v\n", err)
 			return err
 		}
 		fmt.Println(jsonStr)
-	} else {
+	case "markdown":
+		fmt.Print(intdiff.FormatMarkdown(result))
+	default:
 		fmt.Print(intdiff.FormatText(result))
 	}
 

@@ -27,6 +27,14 @@ type Graph struct {
 	Edges []Edge
 }
 
+// WorkflowScore rates a workflow across three dimensions (1-5)
+type WorkflowScore struct {
+	UIIndependence         int    // 1-5: can it be automated without user intervention?
+	SchemaCompleteness     int    // 1-5: how well-defined are request/response schemas?
+	ClientGenerationQuality int    // 1-5: can generators create clean APIs?
+	Explanation            string // brief explanation of scores
+}
+
 const workflowSampleLimit = 3
 
 func Infer(operations []*model.Operation) *Graph {
@@ -74,7 +82,199 @@ func Infer(operations []*model.Operation) *Graph {
 	return graph
 }
 
-func FormatText(specFile string, operationCount int, graph *Graph, verbose bool) string {
+// ScoreWorkflow rates a single workflow based on analysis findings
+func ScoreWorkflow(edge *Edge, fromOp, toOp *model.Operation, issues []*model.Issue) *WorkflowScore {
+	issuesByPathCode := buildIssueMapByPathCode(issues)
+
+	// Count issues by code affecting FROM and TO endpoints
+	fromIssuesCount := countIssuesByCode(issuesByPathCode, fromOp.Path)
+	toIssuesCount := countIssuesByCode(issuesByPathCode, toOp.Path)
+
+	score := &WorkflowScore{
+		UIIndependence:          5,
+		SchemaCompleteness:      5,
+		ClientGenerationQuality: 5,
+	}
+
+	// Client Generation Quality: penalize for missing enums and generic objects
+	score.ClientGenerationQuality -= fromIssuesCount["likely-missing-enum"]
+	score.ClientGenerationQuality -= fromIssuesCount["generic-object-request"]
+	score.ClientGenerationQuality -= fromIssuesCount["generic-object-response"]
+	score.ClientGenerationQuality -= toIssuesCount["likely-missing-enum"]
+	score.ClientGenerationQuality -= toIssuesCount["generic-object-response"]
+
+	// Schema Completeness: penalize for generic objects and weak linkage
+	score.SchemaCompleteness -= fromIssuesCount["generic-object-request"]
+	score.SchemaCompleteness -= fromIssuesCount["generic-object-response"]
+	score.SchemaCompleteness -= toIssuesCount["generic-object-response"]
+	score.SchemaCompleteness -= fromIssuesCount["weak-accepted-tracking-linkage"]
+	score.SchemaCompleteness -= fromIssuesCount["weak-action-follow-up-linkage"]
+	score.SchemaCompleteness -= fromIssuesCount["weak-follow-up-linkage"]
+
+	// UI Independence: penalize weak linkage and non-exposed identifiers in GET workflows
+	score.UIIndependence -= fromIssuesCount["weak-accepted-tracking-linkage"]
+	score.UIIndependence -= fromIssuesCount["weak-action-follow-up-linkage"]
+	score.UIIndependence -= fromIssuesCount["weak-follow-up-linkage"]
+	if !exposesIdentifier(fromOp) && strings.ToUpper(fromOp.Method) == "GET" {
+		score.UIIndependence -= 1 // User must select which item, identifier not exposed
+	}
+
+	// Clamp scores to 1-5 range
+	score.UIIndependence = clampScore(score.UIIndependence)
+	score.SchemaCompleteness = clampScore(score.SchemaCompleteness)
+	score.ClientGenerationQuality = clampScore(score.ClientGenerationQuality)
+
+	// Build explanation
+	score.Explanation = buildScoreExplanation(score, fromOp, fromIssuesCount, toIssuesCount)
+
+	return score
+}
+
+// ScoreGraph scores all workflows in a graph
+func ScoreGraph(graph *Graph, operations []*model.Operation, issues []*model.Issue) map[string]*WorkflowScore {
+	opMap := make(map[string]*model.Operation)
+	for _, op := range operations {
+		key := strings.Join([]string{op.Method, op.Path}, "|") // Use path|method as key
+		opMap[key] = op
+	}
+
+	scores := make(map[string]*WorkflowScore)
+	for i, edge := range graph.Edges {
+		fromKey := strings.Join([]string{edge.From.Method, edge.From.Path}, "|")
+		toKey := strings.Join([]string{edge.To.Method, edge.To.Path}, "|")
+
+		fromOp, fromOk := opMap[fromKey]
+		toOp, toOk := opMap[toKey]
+
+		if !fromOk || !toOk {
+			continue // Skip if endpoints not found
+		}
+
+		edgeKey := fmt.Sprintf("%d", i) // Use index as key for edge
+		scores[edgeKey] = ScoreWorkflow(&edge, fromOp, toOp, issues)
+	}
+
+	return scores
+}
+
+// Helper functions
+
+func buildIssueMapByPathCode(issues []*model.Issue) map[string]map[string]int {
+	// Structure: map[Path]map[Code]Count
+	m := make(map[string]map[string]int)
+	for _, issue := range issues {
+		if m[issue.Path] == nil {
+			m[issue.Path] = make(map[string]int)
+		}
+		m[issue.Path][issue.Code]++
+	}
+	return m
+}
+
+func countIssuesByCode(issuesByPathCode map[string]map[string]int, path string) map[string]int {
+	if issues, ok := issuesByPathCode[path]; ok {
+		return issues
+	}
+	return make(map[string]int)
+}
+
+func exposesIdentifier(op *model.Operation) bool {
+	for statusCode, response := range op.Responses {
+		// Check if 2xx success status
+		if len(statusCode) >= 1 && statusCode[0] == '2' {
+			if response != nil && response.Content != nil {
+				// Check application/json response
+				if mediaType, ok := response.Content["application/json"]; ok && mediaType.Schema != nil {
+					if responseExposesIdentifier(mediaType.Schema, 0) {
+						return true
+					}
+				}
+				// Also check if any response exposes identifier
+				for _, mediaType := range response.Content {
+					if mediaType.Schema != nil && responseExposesIdentifier(mediaType.Schema, 0) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+func clampScore(score int) int {
+	if score < 1 {
+		return 1
+	}
+	if score > 5 {
+		return 5
+	}
+	return score
+}
+
+func buildScoreExplanation(score *WorkflowScore, fromOp *model.Operation, fromIssuesCount, toIssuesCount map[string]int) string {
+	var parts []string
+
+	// UI Independence explanation
+	if score.UIIndependence < 5 {
+		reasons := []string{}
+		if fromIssuesCount["weak-accepted-tracking-linkage"] > 0 {
+			reasons = append(reasons, "202 without tracking ID")
+		}
+		if fromIssuesCount["weak-action-follow-up-linkage"] > 0 {
+			reasons = append(reasons, "no state exposed")
+		}
+		if fromIssuesCount["weak-follow-up-linkage"] > 0 {
+			reasons = append(reasons, "unclear next step")
+		}
+		if !exposesIdentifier(fromOp) && strings.ToUpper(fromOp.Method) == "GET" {
+			reasons = append(reasons, "identifier not exposed")
+		}
+		if len(reasons) == 0 {
+			reasons = append(reasons, "self-description gap")
+		}
+		parts = append(parts, fmt.Sprintf("UI %d/5: %s", score.UIIndependence, strings.Join(reasons, "; ")))
+	} else {
+		parts = append(parts, fmt.Sprintf("UI %d/5", score.UIIndependence))
+	}
+
+	// Schema Completeness explanation
+	if score.SchemaCompleteness < 5 {
+		reasons := []string{}
+		if fromIssuesCount["generic-object-request"] > 0 || fromIssuesCount["generic-object-response"] > 0 || toIssuesCount["generic-object-response"] > 0 {
+			reasons = append(reasons, "generic objects")
+		}
+		if fromIssuesCount["weak-accepted-tracking-linkage"] > 0 {
+			reasons = append(reasons, "missing tracking contract")
+		}
+		if fromIssuesCount["weak-action-follow-up-linkage"] > 0 {
+			reasons = append(reasons, "missing state contract")
+		}
+		if fromIssuesCount["weak-follow-up-linkage"] > 0 {
+			reasons = append(reasons, "missing tracking contract")
+		}
+		parts = append(parts, fmt.Sprintf("Schema %d/5: %s", score.SchemaCompleteness, strings.Join(reasons, "; ")))
+	} else {
+		parts = append(parts, fmt.Sprintf("Schema %d/5", score.SchemaCompleteness))
+	}
+
+	// Client Generation Quality explanation
+	if score.ClientGenerationQuality < 5 {
+		reasons := []string{}
+		if fromIssuesCount["likely-missing-enum"] > 0 || toIssuesCount["likely-missing-enum"] > 0 {
+			reasons = append(reasons, "missing enums")
+		}
+		if fromIssuesCount["generic-object-request"] > 0 || fromIssuesCount["generic-object-response"] > 0 || toIssuesCount["generic-object-response"] > 0 {
+			reasons = append(reasons, "generic objects")
+		}
+		parts = append(parts, fmt.Sprintf("Client %d/5: %s", score.ClientGenerationQuality, strings.Join(reasons, "; ")))
+	} else {
+		parts = append(parts, fmt.Sprintf("Client %d/5", score.ClientGenerationQuality))
+	}
+
+	return strings.Join(parts, " | ")
+}
+
+func FormatText(specFile string, operationCount int, graph *Graph, scores map[string]*WorkflowScore, verbose bool) string {
 	out := "API Doctor Workflow Report\n"
 	out += "==========================\n\n"
 	out += fmt.Sprintf("Spec: %s\n", specFile)
@@ -102,15 +302,21 @@ func FormatText(specFile string, operationCount int, graph *Graph, verbose bool)
 
 		if !verbose {
 			if kind == "list-to-detail" {
-				out += formatListDetailSummary(edges)
+				out += formatListDetailSummary(edges, scores)
 				out += "\n"
 				continue
 			}
 
 			out += fmt.Sprintf("  Representative workflows: showing %d of %d\n", minInt(len(edges), workflowSampleLimit), len(edges))
-			for _, edge := range edges[:minInt(len(edges), workflowSampleLimit)] {
-				out += fmt.Sprintf("  %s %s -> %s %s\n", strings.ToUpper(edge.From.Method), edge.From.Path, strings.ToUpper(edge.To.Method), edge.To.Path)
+			for i, edge := range edges[:minInt(len(edges), workflowSampleLimit)] {
+				edgeKey := fmt.Sprintf("%d", findEdgeIndex(graph.Edges, &edge))
+				var scoreStr string
+				if score, ok := scores[edgeKey]; ok {
+					scoreStr = fmt.Sprintf(" [Score: %d/%d/%d]", score.UIIndependence, score.SchemaCompleteness, score.ClientGenerationQuality)
+				}
+				out += fmt.Sprintf("  %s %s -> %s %s%s\n", strings.ToUpper(edge.From.Method), edge.From.Path, strings.ToUpper(edge.To.Method), edge.To.Path, scoreStr)
 				out += fmt.Sprintf("      Why: %s\n", edge.Reason)
+				_ = i
 			}
 			if len(edges) > workflowSampleLimit {
 				out += fmt.Sprintf("  More workflows: %d more hidden here; use --verbose or --json for the full list.\n", len(edges)-workflowSampleLimit)
@@ -119,9 +325,15 @@ func FormatText(specFile string, operationCount int, graph *Graph, verbose bool)
 			continue
 		}
 
-		for _, edge := range edges {
-			out += fmt.Sprintf("  %s %s -> %s %s\n", strings.ToUpper(edge.From.Method), edge.From.Path, strings.ToUpper(edge.To.Method), edge.To.Path)
+		for i, edge := range edges {
+			edgeKey := fmt.Sprintf("%d", findEdgeIndex(graph.Edges, &edge))
+			var scoreStr string
+			if score, ok := scores[edgeKey]; ok {
+				scoreStr = fmt.Sprintf(" [%s]", score.Explanation)
+			}
+			out += fmt.Sprintf("  %s %s -> %s %s%s\n", strings.ToUpper(edge.From.Method), edge.From.Path, strings.ToUpper(edge.To.Method), edge.To.Path, scoreStr)
 			out += fmt.Sprintf("      Why: %s\n", edge.Reason)
+			_ = i
 		}
 		out += "\n"
 	}
@@ -133,10 +345,40 @@ func FormatText(specFile string, operationCount int, graph *Graph, verbose bool)
 	return out
 }
 
-func FormatJSON(specFile string, operationCount int, graph *Graph) (string, error) {
+func FormatJSON(specFile string, operationCount int, graph *Graph, scores map[string]*WorkflowScore) (string, error) {
 	summary := map[string]int{}
 	for _, edge := range graph.Edges {
 		summary[edge.Kind]++
+	}
+
+	// Attach scores to edges
+	type ScoredEdge struct {
+		Kind                    string `json:"kind"`
+		From                    Node   `json:"from"`
+		To                      Node   `json:"to"`
+		Reason                  string `json:"reason"`
+		UIIndependence          int    `json:"ui_independence"`
+		SchemaCompleteness      int    `json:"schema_completeness"`
+		ClientGenerationQuality int    `json:"client_generation_quality"`
+		ScoreExplanation        string `json:"score_explanation"`
+	}
+
+	scoredEdges := make([]ScoredEdge, 0, len(graph.Edges))
+	for i, edge := range graph.Edges {
+		scoredEdge := ScoredEdge{
+			Kind:   edge.Kind,
+			From:   edge.From,
+			To:     edge.To,
+			Reason: edge.Reason,
+		}
+		edgeKey := fmt.Sprintf("%d", i)
+		if score, ok := scores[edgeKey]; ok {
+			scoredEdge.UIIndependence = score.UIIndependence
+			scoredEdge.SchemaCompleteness = score.SchemaCompleteness
+			scoredEdge.ClientGenerationQuality = score.ClientGenerationQuality
+			scoredEdge.ScoreExplanation = score.Explanation
+		}
+		scoredEdges = append(scoredEdges, scoredEdge)
 	}
 
 	payload := map[string]interface{}{
@@ -144,7 +386,7 @@ func FormatJSON(specFile string, operationCount int, graph *Graph) (string, erro
 		"operations":         operationCount,
 		"inferred_workflows": len(graph.Edges),
 		"summary":            summary,
-		"edges":              graph.Edges,
+		"edges":              scoredEdges,
 	}
 
 	b, err := json.MarshalIndent(payload, "", "  ")
@@ -154,7 +396,7 @@ func FormatJSON(specFile string, operationCount int, graph *Graph) (string, erro
 	return string(b), nil
 }
 
-func formatListDetailSummary(edges []Edge) string {
+func formatListDetailSummary(edges []Edge, scores map[string]*WorkflowScore) string {
 	getList := make([]Edge, 0)
 	postSearch := make([]Edge, 0)
 	other := make([]Edge, 0)
@@ -460,4 +702,79 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func FormatMarkdown(specFile string, operationCount int, graph *Graph, scores map[string]*WorkflowScore) string {
+	out := "# API Workflows Report\n\n"
+	out += fmt.Sprintf("**Spec:** %s | **Operations:** %d | **Inferred:** %d\n\n", specFile, operationCount, len(graph.Edges))
+
+	if len(graph.Edges) == 0 {
+		out += "No high-confidence workflows inferred.\n"
+		return out
+	}
+
+	// Summary table
+	groups := map[string][]Edge{}
+	for i, edge := range graph.Edges {
+		groups[edge.Kind] = append(groups[edge.Kind], edge)
+		_ = i
+	}
+
+	out += "## Summary\n\n"
+	out += "| Type | Count |\n"
+	out += "|---|---|\n"
+	for _, kind := range []string{"action-to-detail", "create-to-detail", "list-to-detail", "accepted-to-tracking"} {
+		if edges, ok := groups[kind]; ok {
+			out += fmt.Sprintf("| %s | %d |\n", title(kind), len(edges))
+		}
+	}
+	out += "\n"
+
+	// Workflows by type
+	for _, kind := range []string{"action-to-detail", "create-to-detail", "list-to-detail"} {
+		edges := groups[kind]
+		if len(edges) == 0 {
+			continue
+		}
+
+		out += fmt.Sprintf("## %s (%d)\n\n", title(kind), len(edges))
+		out += fmt.Sprintf("**Representative (showing %d of %d):**\n\n", minInt(workflowSampleLimit, len(edges)), len(edges))
+
+		for i, edge := range limitEdges(edges, workflowSampleLimit) {
+			if i > 0 {
+				out += "\n"
+			}
+			edgeKey := fmt.Sprintf("%d", findEdgeIndex(graph.Edges, &edge))
+			var scoreStr string
+			if score, ok := scores[edgeKey]; ok {
+				scoreStr = fmt.Sprintf(" \n  **Scores:** %d/%d/%d — %s", score.UIIndependence, score.SchemaCompleteness, score.ClientGenerationQuality, score.Explanation)
+			}
+			out += fmt.Sprintf("- `%s %s` → `%s %s`%s\n", edge.From.Method, edge.From.Path, edge.To.Method, edge.To.Path, scoreStr)
+			out += fmt.Sprintf("  — %s\n", edge.Reason)
+		}
+
+		if len(edges) > workflowSampleLimit {
+			out += fmt.Sprintf("\n_(Use `--json` or `--verbose` for all %d workflows)_\n\n", len(edges))
+		} else {
+			out += "\n"
+		}
+	}
+
+	return out
+}
+
+func findEdgeIndex(edges []Edge, target *Edge) int {
+	for i, edge := range edges {
+		if edge.Kind == target.Kind && edge.From == target.From && edge.To == target.To {
+			return i
+		}
+	}
+	return -1
+}
+
+func limitEdges(edges []Edge, limit int) []Edge {
+	if len(edges) <= limit {
+		return edges
+	}
+	return edges[:limit]
 }
