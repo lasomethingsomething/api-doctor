@@ -106,4 +106,32 @@ The current analysis skips all schemas resolved via `$ref`. The Shopware Admin A
 - `generic-object-response`, `likely-missing-enum`, `removed-request-field`, and `field-became-required` counts are all understated.
 - The diff command's `removed-request-field` and `removed-response-field` checks only fire on inline schemas.
 
-Until `$ref` resolution is implemented, treat these numbers as a lower bound. The actual surface area of schema-quality issues across this spec is larger.
+---
+
+## Least Self-Describing Workflow Types
+
+The weakest workflow patterns in the current Shopware Admin API analysis are Create To Detail and List To Detail. Together they account for 274 of 277 inferred workflows, and they align with the dominant weak-follow-up-linkage signal. In these flows, the response schema often does not clearly expose the identifier or follow-up linkage needed for the next obvious detail call. That weakens generated SDK ergonomics and makes client chaining depend more on convention, hard-coded path knowledge, or external documentation than on the schema itself.
+
+Action To Detail is also somewhat weak, but in a narrower way: a small number of state-transition endpoints do not clearly expose the resulting state in the success response, making verification workflows less self-describing.
+
+Accepted To Tracking currently shows only a limited weakness signal in the inferred set: one async endpoint lacks a tracking identifier in its 202 Accepted response. That is worth noting, but it is a smaller and less dominant issue than the create/detail and list/detail linkage gap.
+
+---
+
+## Diff Report: Version-to-Version Breaking Changes
+
+When analyzing Shopware Admin API from an older release to the current version, the `diff` command detected **1 real breaking change**:
+
+**`POST /_action/sync` — `request[].filter` removed**
+
+The bulk sync endpoint previously accepted a `filter` property on each item in the request body array. In the new version, that field no longer appears in the schema.
+
+**Impact:** Clients that pass a `filter` when syncing items will have the field silently ignored (or rejected, depending on validation strictness). This is a breaking change for any client that:
+- Reads the old schema and generates code that includes `filter` in sync requests
+- Relies on the server accepting the `filter` parameter for server-side searching within each sync batch
+
+**Root cause:** Either the field was intentionally removed and callers need updating, or it was accidentally dropped from the component schema definition (likely during the `$ref` refactoring mentioned in the schema analysis).
+
+This finding demonstrates that `diff` successfully catches real breaking changes in production API upgrades, even when changes are subtle (field removals in nested array schemas).
+
+---
