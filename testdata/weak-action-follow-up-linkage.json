@@ -1,0 +1,69 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Weak Action Follow Up Linkage",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/_action/order/{orderId}/state/{transition}": {
+      "post": {
+        "operationId": "transitionWeakOrder",
+        "responses": {
+          "200": {
+            "description": "Transition completed"
+          }
+        }
+      }
+    },
+    "/order/{id}": {
+      "get": {
+        "operationId": "getOrder",
+        "responses": {
+          "200": {
+            "description": "Order detail"
+          }
+        }
+      }
+    },
+    "/_action/order_delivery/{orderDeliveryId}/state/{transition}": {
+      "post": {
+        "operationId": "transitionStrongOrderDelivery",
+        "responses": {
+          "200": {
+            "description": "Transition details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "stateId": {
+                          "type": "string"
+                        },
+                        "technicalName": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/order-delivery/{id}": {
+      "get": {
+        "operationId": "getOrderDelivery",
+        "responses": {
+          "200": {
+            "description": "Order delivery detail"
+          }
+        }
+      }
+    }
+  }
+}

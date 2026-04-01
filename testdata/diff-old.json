@@ -1,0 +1,70 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Diff Old",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/removed-path": {
+      "get": {
+        "operationId": "getRemovedPath",
+        "responses": {
+          "200": {
+            "description": "Removed path response"
+          }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "operationId": "listProducts",
+        "responses": {
+          "200": {
+            "description": "List products"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createProduct",
+        "responses": {
+          "201": {
+            "description": "Create product",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "operationId": "listOrders",
+        "responses": {
+          "200": {
+            "description": "List orders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "status": { "type": "string" },
+                    "state": { "type": "string", "enum": ["open", "closed", "cancelled"] }
+                  },
+                  "required": ["state"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

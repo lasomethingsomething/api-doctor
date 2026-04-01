@@ -1,0 +1,41 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Diff New",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/products": {
+      "get": {
+        "operationId": "listProducts",
+        "responses": {
+          "200": {
+            "description": "List products"
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "operationId": "listOrders",
+        "responses": {
+          "200": {
+            "description": "List orders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string" },
+                    "state": { "type": "string", "enum": ["open", "closed"] }
+                  },
+                  "required": ["id", "state"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

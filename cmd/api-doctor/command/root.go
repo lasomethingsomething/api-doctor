@@ -17,4 +17,6 @@ func Execute() error {
 
 func init() {
 	rootCmd.AddCommand(analyzeCmd)
+	rootCmd.AddCommand(diffCmd)
+	rootCmd.AddCommand(workflowsCmd)
 }

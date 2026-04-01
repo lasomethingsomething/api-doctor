@@ -297,3 +297,30 @@ func TestChecker_CheckAll_WeakAcceptedTrackingLinkageFixture(t *testing.T) {
 		t.Fatalf("expected descriptive accepted tracking message, got %#v", issue)
 	}
 }
+
+func TestChecker_CheckAll_WeakActionFollowUpLinkageFixture(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/weak-action-follow-up-linkage.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	issues := NewChecker().CheckAll(result.Operations)
+	if len(issues) != 1 {
+		t.Fatalf("expected exactly 1 issue from action follow-up fixture, got %#v", issues)
+	}
+
+	issue := issues[0]
+	if issue.Code != "weak-action-follow-up-linkage" {
+		t.Fatalf("expected weak-action-follow-up-linkage issue, got %#v", issue)
+	}
+	if issue.Path != "/_action/order/{orderId}/state/{transition}" {
+		t.Fatalf("expected only weak action endpoint to trigger, got %#v", issue)
+	}
+	if issue.Operation != "post transitionWeakOrder (200)" {
+		t.Fatalf("expected weak action operation details, got %#v", issue)
+	}
+	if issue.Message == "" {
+		t.Fatalf("expected descriptive action follow-up message, got %#v", issue)
+	}
+}

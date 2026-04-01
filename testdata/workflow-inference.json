@@ -1,0 +1,173 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Workflow Inference",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/products": {
+      "post": {
+        "operationId": "createProduct",
+        "responses": {
+          "201": {
+            "description": "Created product",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "operationId": "getProduct",
+        "responses": {
+          "200": {
+            "description": "Product detail"
+          }
+        }
+      }
+    },
+    "/_action/order/{orderId}/state/{transition}": {
+      "post": {
+        "operationId": "transitionOrder",
+        "responses": {
+          "200": {
+            "description": "Transitioned"
+          }
+        }
+      }
+    },
+    "/order/{id}": {
+      "get": {
+        "operationId": "getOrder",
+        "responses": {
+          "200": {
+            "description": "Order detail"
+          }
+        }
+      }
+    },
+    "/orders/search": {
+      "post": {
+        "operationId": "searchOrders",
+        "responses": {
+          "200": {
+            "description": "Order search",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "operationId": "getOrderRecord",
+        "responses": {
+          "200": {
+            "description": "Order record detail"
+          }
+        }
+      }
+    },
+    "/widgets": {
+      "post": {
+        "operationId": "createWidget",
+        "responses": {
+          "201": {
+            "description": "Created widget",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/widgets/{id}": {
+      "get": {
+        "operationId": "getWidget",
+        "responses": {
+          "200": {
+            "description": "Widget detail"
+          }
+        }
+      }
+    },
+    "/users/search": {
+      "post": {
+        "operationId": "searchUsers",
+        "responses": {
+          "200": {
+            "description": "User search",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "operationId": "getUser",
+        "responses": {
+          "200": {
+            "description": "User detail"
+          }
+        }
+      }
+    }
+  }
+}

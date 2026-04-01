@@ -138,6 +138,15 @@ func parseSchema(s map[string]interface{}) *model.Schema {
 	if ref, ok := s["$ref"].(string); ok {
 		out.Ref = ref
 	}
+	if required, ok := s["required"].([]interface{}); ok {
+		for _, field := range required {
+			name, ok := field.(string)
+			if !ok {
+				continue
+			}
+			out.Required = append(out.Required, name)
+		}
+	}
 	if enumValues, ok := s["enum"].([]interface{}); ok {
 		out.Enum = append(out.Enum, enumValues...)
 	}

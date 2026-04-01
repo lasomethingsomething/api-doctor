@@ -39,6 +39,7 @@ func NewChecker() *Checker {
 			NewWeakFollowUpLinkageRule(),
 			NewWeakListDetailLinkageRule(),
 			NewWeakAcceptedTrackingLinkageRule(),
+			NewWeakActionFollowUpLinkageRule(),
 		},
 	}
 }
@@ -404,6 +405,50 @@ func (r *WeakAcceptedTrackingLinkageRule) CheckAll(operations []*model.Operation
 	return issues
 }
 
+type WeakActionFollowUpLinkageRule struct{}
+
+func NewWeakActionFollowUpLinkageRule() *WeakActionFollowUpLinkageRule {
+	return &WeakActionFollowUpLinkageRule{}
+}
+
+func (r *WeakActionFollowUpLinkageRule) Name() string { return "weak-action-follow-up-linkage" }
+
+func (r *WeakActionFollowUpLinkageRule) CheckAll(operations []*model.Operation) []*model.Issue {
+	detailPaths := map[string]bool{}
+	for _, op := range operations {
+		detailPaths[op.Path] = true
+	}
+
+	issues := make([]*model.Issue, 0)
+	for _, op := range operations {
+		detailPath, ok := actionTransitionDetailPath(op)
+		if !ok || !detailPaths[detailPath] {
+			continue
+		}
+
+		code, resp, ok := successfulResponse(op)
+		if !ok {
+			continue
+		}
+
+		reason, linked := actionFollowUpReason(resp)
+		if linked || reason == "" {
+			continue
+		}
+
+		issues = append(issues, &model.Issue{
+			Code:        r.Name(),
+			Severity:    "warning",
+			Path:        op.Path,
+			Operation:   fmt.Sprintf("%s %s (%s)", op.Method, op.OperationID, code),
+			Message:     fmt.Sprintf("%s for related detail endpoint %s", reason, detailPath),
+			Description: "Action and transition flows are easier to verify when the response clearly shows the resulting state or makes the next detail check obvious.",
+		})
+	}
+
+	return issues
+	}
+
 type InconsistentResponseShapeRule struct{}
 
 func NewInconsistentResponseShapeRule() *InconsistentResponseShapeRule { return &InconsistentResponseShapeRule{} }
@@ -708,6 +753,106 @@ func acceptedTrackingReason(resp *model.Response) (string, bool) {
 		"202 Accepted response body does not clearly expose a tracking identifier such as %s",
 		strings.Join(acceptedTrackingCandidates(), ", "),
 	), false
+}
+
+func actionTransitionDetailPath(op *model.Operation) (string, bool) {
+	if op == nil || strings.ToUpper(op.Method) != "POST" {
+		return "", false
+	}
+
+	segments := splitPathSegments(op.Path)
+	if len(segments) != 5 {
+		return "", false
+	}
+	if segments[0] != "_action" || !isPathParam(segments[2]) || segments[3] != "state" || !isPathParam(segments[4]) {
+		return "", false
+	}
+	if segments[1] == "state-machine" {
+		return "", false
+	}
+
+	resource := strings.ReplaceAll(segments[1], "_", "-")
+	return "/" + resource + "/{id}", true
+}
+
+func actionFollowUpReason(resp *model.Response) (string, bool) {
+	if resp == nil {
+		return "", false
+	}
+
+	mt, ok := resp.Content["application/json"]
+	if !ok || mt == nil || mt.Schema == nil {
+		return "Success response has no JSON body to expose resulting state information", false
+	}
+	if mt.Schema.Ref != "" {
+		return "", true
+	}
+	if exposesActionStateIndicator(mt.Schema, 0) {
+		return "", true
+	}
+
+	return fmt.Sprintf(
+		"Success response body does not clearly expose resulting state information such as %s",
+		strings.Join(actionStateCandidates(), ", "),
+	), false
+}
+
+func actionStateCandidates() []string {
+	return []string{"stateId", "state", "status", "stateMachineState", "stateMachineStateId", "toStateId", "toStateMachineStateId", "technicalName", "actionName"}
+}
+
+func exposesActionStateIndicator(schema *model.Schema, depth int) bool {
+	if schema == nil || depth > 3 {
+		return false
+	}
+	if schema.Ref != "" {
+		return true
+	}
+	if schema.Type == "array" {
+		return exposesActionStateIndicator(schema.Items, depth+1)
+	}
+	if schema.Type != "object" || len(schema.Properties) == 0 {
+		return false
+	}
+
+	for _, candidate := range actionStateCandidates() {
+		if _, ok := schema.Properties[candidate]; ok {
+			return true
+		}
+	}
+
+	for _, wrapper := range []string{"data", "result", "state", "transition"} {
+		child, ok := schema.Properties[wrapper]
+		if !ok || child == nil {
+			continue
+		}
+		if exposesActionStateIndicator(child, depth+1) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func successfulResponse(op *model.Operation) (string, *model.Response, bool) {
+	if op == nil {
+		return "", nil, false
+	}
+	preferredCodes := []string{"200", "201", "202", "204"}
+	for _, code := range preferredCodes {
+		resp, ok := op.Responses[code]
+		if ok && resp != nil {
+			return code, resp, true
+		}
+	}
+
+	for code, resp := range op.Responses {
+		if strings.HasPrefix(code, "2") && resp != nil {
+			return code, resp, true
+		}
+	}
+
+	return "", nil, false
 }
 
 func acceptedTrackingCandidates() []string {
