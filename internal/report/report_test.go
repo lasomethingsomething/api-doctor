@@ -4,12 +4,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lasomethingsomething/api-doctor/internal/endpoint"
 	"github.com/lasomethingsomething/api-doctor/internal/model"
 )
 
 func TestFormatText_NoIssues(t *testing.T) {
 	result := &model.AnalysisResult{SpecFile: "spec.json", Operations: []*model.Operation{}}
-	out := FormatText(result, false)
+	scores := make(map[string]*endpoint.EndpointScore)
+	out := FormatText(result, scores, false)
 	if !strings.Contains(out, "No issues found") {
 		t.Fatalf("expected no-issues message, got: %s", out)
 	}
@@ -28,7 +30,8 @@ func TestFormatText_VerboseIncludesTechnicalDetail(t *testing.T) {
 		}},
 	}
 
-	out := FormatText(result, true)
+	scores := make(map[string]*endpoint.EndpointScore)
+	out := FormatText(result, scores, true)
 	if !strings.Contains(out, "Why it matters:") {
 		t.Fatalf("expected why-it-matters explanation, got: %s", out)
 	}
@@ -40,6 +43,7 @@ func TestFormatText_VerboseIncludesTechnicalDetail(t *testing.T) {
 func TestFormatJSON_WithIssues(t *testing.T) {
 	result := &model.AnalysisResult{
 		SpecFile: "spec.json",
+		Operations: []*model.Operation{},
 		Issues: []*model.Issue{{
 			Code:      "deprecated-operation",
 			Severity:  "warning",
@@ -49,7 +53,8 @@ func TestFormatJSON_WithIssues(t *testing.T) {
 		}},
 	}
 
-	out, err := FormatJSON(result)
+	scores := make(map[string]*endpoint.EndpointScore)
+	out, err := FormatJSON(result, scores)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -105,7 +110,8 @@ func TestFormatText_GroupsWeakAcceptedTrackingInDefaultOutput(t *testing.T) {
 		},
 	}
 
-	out := FormatText(result, false)
+	scores := make(map[string]*endpoint.EndpointScore)
+	out := FormatText(result, scores, false)
 	if !strings.Contains(out, "Workflow self-descriptiveness signal: 4 endpoints across 3 endpoint families.") {
 		t.Fatalf("expected grouped accepted-tracking summary, got: %s", out)
 	}
@@ -155,7 +161,8 @@ func TestFormatText_VerboseKeepsFullWeakAcceptedTrackingDetails(t *testing.T) {
 		},
 	}
 
-	out := FormatText(result, true)
+	scores := make(map[string]*endpoint.EndpointScore)
+	out := FormatText(result, scores, true)
 	if strings.Contains(out, "Workflow self-descriptiveness signal:") {
 		t.Fatalf("expected verbose output to keep full issue detail instead of grouped summary, got: %s", out)
 	}
@@ -209,7 +216,8 @@ func TestFormatText_GroupsWeakFollowUpLinkageInDefaultOutput(t *testing.T) {
 		},
 	}
 
-	out := FormatText(result, false)
+	scores := make(map[string]*endpoint.EndpointScore)
+	out := FormatText(result, scores, false)
 	if !strings.Contains(out, "[WARNING] weak-follow-up-linkage") {
 		t.Fatalf("expected grouped follow-up summary, got: %s", out)
 	}
@@ -268,7 +276,8 @@ func TestFormatText_VerboseKeepsFullWeakFollowUpDetails(t *testing.T) {
 		},
 	}
 
-	out := FormatText(result, true)
+	scores := make(map[string]*endpoint.EndpointScore)
+	out := FormatText(result, scores, true)
 	if strings.Contains(out, "Workflow self-descriptiveness signal:") {
 		t.Fatalf("expected verbose output to keep full issue detail instead of grouped follow-up summary, got: %s", out)
 	}

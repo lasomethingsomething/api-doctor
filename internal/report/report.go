@@ -6,12 +6,13 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/lasomethingsomething/api-doctor/internal/endpoint"
 	"github.com/lasomethingsomething/api-doctor/internal/model"
 )
 
 const groupedWorkflowSampleLimit = 3
 
-func FormatText(result *model.AnalysisResult, verbose bool) string {
+func FormatText(result *model.AnalysisResult, scores map[string]*endpoint.EndpointScore, verbose bool) string {
 	out := "API Doctor Analysis Report\n"
 	out += "==========================\n\n"
 	out += fmt.Sprintf("Spec: %s\n", result.SpecFile)
@@ -95,6 +96,16 @@ func FormatText(result *model.AnalysisResult, verbose bool) string {
 		out += fmt.Sprintf("Info: %d\n", len(c))
 	}
 
+	// Endpoint Quality Summary
+	out += "\nEndpoint Quality\n"
+	out += "----------------\n"
+	schemaScore := buildScoreDistribution(scores, "schema")
+	out += fmt.Sprintf("Schema Completeness:      %s\n", schemaScore)
+	clientScore := buildScoreDistribution(scores, "client")
+	out += fmt.Sprintf("Client Generation:       %s\n", clientScore)
+	versioningScore := buildScoreDistribution(scores, "versioning")
+	out += fmt.Sprintf("Versioning Safety:       %s\n", versioningScore)
+
 	if !verbose {
 		out += "\nTip: use --verbose for technical detail per finding.\n"
 	}
@@ -102,10 +113,33 @@ func FormatText(result *model.AnalysisResult, verbose bool) string {
 	return out
 }
 
-func FormatJSON(result *model.AnalysisResult) (string, error) {
+func FormatJSON(result *model.AnalysisResult, scores map[string]*endpoint.EndpointScore) (string, error) {
 	summary := map[string]int{}
 	for _, issue := range result.Issues {
 		summary[issue.Severity]++
+	}
+
+	// Build endpoint scores map keyed by method|path
+	endpointList := make([]map[string]interface{}, 0, len(result.Operations))
+	for _, op := range result.Operations {
+		key := strings.Join([]string{op.Method, op.Path}, "|")
+		score := scores[key]
+		
+		endpoint := map[string]interface{}{
+			"path":   op.Path,
+			"method": op.Method,
+		}
+		
+		if score != nil {
+			endpoint["score"] = map[string]interface{}{
+				"schema_completeness":       score.SchemaCompleteness,
+				"client_generation_quality": score.ClientGenerationQuality,
+				"versioning_safety":         score.VersioningSafety,
+				"explanation":               score.Explanation,
+			}
+		}
+		
+		endpointList = append(endpointList, endpoint)
 	}
 
 	payload := map[string]interface{}{
@@ -113,6 +147,7 @@ func FormatJSON(result *model.AnalysisResult) (string, error) {
 		"operations":   len(result.Operations),
 		"total_issues": len(result.Issues),
 		"summary":      summary,
+		"endpoints":    endpointList,
 		"issues":       result.Issues,
 	}
 
@@ -121,6 +156,57 @@ func FormatJSON(result *model.AnalysisResult) (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+func buildScoreDistribution(scores map[string]*endpoint.EndpointScore, dimension string) string {
+	if len(scores) == 0 {
+		return "no endpoints"
+	}
+
+	var excellent, good, fair, poor int
+	for _, score := range scores {
+		var value int
+		switch dimension {
+		case "schema":
+			value = score.SchemaCompleteness
+		case "client":
+			value = score.ClientGenerationQuality
+		case "versioning":
+			value = score.VersioningSafety
+		default:
+			return ""
+		}
+
+		switch {
+		case value == 5:
+			excellent++
+		case value == 4:
+			good++
+		case value == 3:
+			fair++
+		default:
+			poor++
+		}
+	}
+
+	parts := []string{}
+	if excellent > 0 {
+		parts = append(parts, fmt.Sprintf("%d/5 (%d%%)", 5, excellent*100/len(scores)))
+	}
+	if good > 0 {
+		parts = append(parts, fmt.Sprintf("%d/5 (%d%%)", 4, good*100/len(scores)))
+	}
+	if fair > 0 {
+		parts = append(parts, fmt.Sprintf("%d/5 (%d%%)", 3, fair*100/len(scores)))
+	}
+	if poor > 0 {
+		parts = append(parts, fmt.Sprintf("≤2/5 (%d%%)", poor*100/len(scores)))
+	}
+
+	if len(parts) == 0 {
+		return "n/a"
+	}
+	return strings.Join(parts, " | ")
 }
 
 func title(s string) string {
@@ -360,7 +446,7 @@ func limitStrings(values []string, limit int) []string {
 	return values[:limit]
 }
 
-func FormatAnalysisMarkdown(result *model.AnalysisResult) string {
+func FormatAnalysisMarkdown(result *model.AnalysisResult, scores map[string]*endpoint.EndpointScore) string {
 	out := "# API Analysis Report\n\n"
 	out += fmt.Sprintf("**Spec:** %s | **Operations:** %d\n\n", result.SpecFile, len(result.Operations))
 
@@ -384,6 +470,50 @@ func FormatAnalysisMarkdown(result *model.AnalysisResult) string {
 		}
 	}
 	out += "\n"
+
+	// Endpoint Quality Summary
+	if len(scores) > 0 {
+		out += "## Endpoint Quality Summary\n\n"
+		out += "| Dimension | Excellent (5) | Good (4) | Fair (3) | Poor (≤2) |\n"
+		out += "|---|---|---|---|---|\n"
+
+		dims := []struct {
+			name string
+			key  string
+		}{
+			{"Schema Completeness", "schema"},
+			{"Client Generation", "client"},
+			{"Versioning Safety", "versioning"},
+		}
+
+		for _, dim := range dims {
+			var excellent, good, fair, poor int
+			for _, score := range scores {
+				var value int
+				switch dim.key {
+				case "schema":
+					value = score.SchemaCompleteness
+				case "client":
+					value = score.ClientGenerationQuality
+				case "versioning":
+					value = score.VersioningSafety
+				}
+
+				switch {
+				case value == 5:
+					excellent++
+				case value == 4:
+					good++
+				case value == 3:
+					fair++
+				default:
+					poor++
+				}
+			}
+			out += fmt.Sprintf("| %s | %d | %d | %d | %d |\n", dim.name, excellent, good, fair, poor)
+		}
+		out += "\n"
+	}
 
 	// Issues grouped by severity
 	groups := map[string][]*model.Issue{}

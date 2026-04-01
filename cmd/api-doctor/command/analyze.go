@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/lasomethingsomething/api-doctor/internal/endpoint"
 	"github.com/lasomethingsomething/api-doctor/internal/model"
 	"github.com/lasomethingsomething/api-doctor/internal/openapi"
 	"github.com/lasomethingsomething/api-doctor/internal/report"
@@ -51,19 +52,22 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	checker := rule.NewChecker()
 	result.Issues = checker.CheckAll(result.Operations)
 
+	// Score endpoints
+	endpointScores := endpoint.ScoreOperations(result.Operations, result.Issues)
+
 	// Format and print output
 	switch format {
 	case "json":
-		jsonStr, err := report.FormatJSON(result)
+		jsonStr, err := report.FormatJSON(result, endpointScores)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error formatting JSON: %v\n", err)
 			return err
 		}
 		fmt.Println(jsonStr)
 	case "markdown":
-		fmt.Print(report.FormatAnalysisMarkdown(result))
+		fmt.Print(report.FormatAnalysisMarkdown(result, endpointScores))
 	default:
-		fmt.Print(report.FormatText(result, verbose))
+		fmt.Print(report.FormatText(result, endpointScores, verbose))
 	}
 
 	// Exit with error code if there are errors
