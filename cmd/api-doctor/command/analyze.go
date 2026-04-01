@@ -25,15 +25,20 @@ Example:
 var (
 	specFile string
 	jsonOut  bool
+	verbose  bool
 )
 
 func init() {
 	analyzeCmd.Flags().StringVarP(&specFile, "spec", "s", "", "Path to OpenAPI spec file (JSON or YAML)")
 	analyzeCmd.Flags().BoolVar(&jsonOut, "json", false, "Output results as JSON")
+	analyzeCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show deeper technical detail in text output")
 	analyzeCmd.MarkFlagRequired("spec")
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
+	// The command is valid at this point, so runtime analysis errors should not print usage.
+	cmd.SilenceUsage = true
+
 	// Parse the OpenAPI spec
 	parser := openapi.NewParser()
 	result, err := parser.ParseFile(specFile)
@@ -55,7 +60,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println(jsonStr)
 	} else {
-		fmt.Print(report.FormatText(result))
+		fmt.Print(report.FormatText(result, verbose))
 	}
 
 	// Exit with error code if there are errors

@@ -1,18 +1,43 @@
 # api-doctor
 
-Small standalone Go CLI to analyze a local OpenAPI spec and report deterministic issues.
+Developer-facing CLI to analyze a local OpenAPI spec and report deterministic issues.
 
-## Command
+## Quick Usage
+
+Default scan-friendly output:
 
 ```sh
 api-doctor analyze --spec ./adminapi.json
 ```
 
-Optional JSON output:
+Deeper technical detail for follow-up work:
+
+```sh
+api-doctor analyze --spec ./adminapi.json --verbose
+```
+
+Machine-readable output:
 
 ```sh
 api-doctor analyze --spec ./adminapi.json --json
 ```
+
+## Two Output Styles
+
+1. Fast interpretation (default)
+
+- Designed for quick triage.
+- Each finding shows:
+  - severity + rule code
+  - endpoint (operation + path)
+  - short "Why it matters" explanation
+- Ends with a compact summary and a tip for `--verbose`.
+
+1. Technical follow-up (`--verbose`)
+
+- Includes everything from default mode.
+- Adds per-finding technical detail (exact detection message).
+- Keeps rule code and endpoint visible for implementation work.
 
 ## Checks (v1)
 
@@ -25,11 +50,12 @@ api-doctor analyze --spec ./adminapi.json --json
 ## Build and Test
 
 ```sh
-go build -o api-doctor ./
+go mod tidy
 go test ./...
+go build ./...
 ```
 
-## Sample Output
+## Example (Default)
 
 ```text
 API Doctor Analysis Report
@@ -40,31 +66,25 @@ Operations analyzed: 5
 
 Error (2 issues)
 ---
-  [missing-request-schema] Request body has no schema for media type 'application/json'
-      Path: /products/{id}
-      Op: put updateProduct
-      Request bodies should have a defined schema to describe the expected structure
-
-  [missing-response-schema] Response 200 has no schema for media type 'application/json'
-      Path: /products/{id}
-      Op: put updateProduct
-      Responses with content should have a defined schema to describe the response structure
-
-Warning (2 issues)
----
-  [generic-object-response] Response uses a generic object type without properties
-      Path: /users
-      Op: get listUsers (200)
-      Define specific properties in the response schema instead of using a generic object
-
-  [deprecated-operation] Operation is marked as deprecated
-      Path: /products/{id}
-      Op: put updateProduct
-      This operation is deprecated and should not be used for new integrations. Check the API documentation for recommended alternatives.
+  [ERROR] missing-request-schema
+      Endpoint: put updateProduct /products/{id}
+      Why it matters: Request bodies should have a defined schema to describe the expected structure
 
 Summary
 -------
 Total issues: 4
 Errors: 2
 Warnings: 2
+
+Tip: use --verbose for technical detail per finding.
+```
+
+## Example (Verbose)
+
+```text
+  [ERROR] missing-response-schema
+      Endpoint: put updateProduct /products/{id}
+      Why it matters: Responses with content should have a defined schema to describe the response structure
+      Technical detail: Response 200 has no schema for media type 'application/json'
+      Rule: missing-response-schema
 ```

@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/lasomethingsomething/api-doctor/internal/model"
 )
 
-func FormatText(result *model.AnalysisResult) string {
+func FormatText(result *model.AnalysisResult, verbose bool) string {
 	out := "API Doctor Analysis Report\n"
 	out += "==========================\n\n"
 	out += fmt.Sprintf("Spec: %s\n", result.SpecFile)
@@ -40,10 +41,17 @@ func FormatText(result *model.AnalysisResult) string {
 		out += fmt.Sprintf("%s (%d issues)\n", title(sev), len(issues))
 		out += "---\n"
 		for _, issue := range issues {
-			out += fmt.Sprintf("  [%s] %s\n", issue.Code, issue.Message)
-			out += fmt.Sprintf("      Path: %s\n", issue.Path)
-			out += fmt.Sprintf("      Op: %s\n", issue.Operation)
-			out += fmt.Sprintf("      %s\n\n", issue.Description)
+			// Default mode is scan-friendly first: severity + code + endpoint.
+			out += fmt.Sprintf("  [%s] %s\n", strings.ToUpper(issue.Severity), issue.Code)
+			out += fmt.Sprintf("      Endpoint: %s %s\n", issue.Operation, issue.Path)
+			out += fmt.Sprintf("      Why it matters: %s\n", issue.Description)
+
+			if verbose {
+				out += fmt.Sprintf("      Technical detail: %s\n", issue.Message)
+				out += fmt.Sprintf("      Rule: %s\n", issue.Code)
+			}
+
+			out += "\n"
 		}
 	}
 
@@ -55,6 +63,13 @@ func FormatText(result *model.AnalysisResult) string {
 	}
 	if c, ok := groups["warning"]; ok {
 		out += fmt.Sprintf("Warnings: %d\n", len(c))
+	}
+	if c, ok := groups["info"]; ok {
+		out += fmt.Sprintf("Info: %d\n", len(c))
+	}
+
+	if !verbose {
+		out += "\nTip: use --verbose for technical detail per finding.\n"
 	}
 
 	return out
