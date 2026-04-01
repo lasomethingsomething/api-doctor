@@ -1,0 +1,100 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Inconsistent Response Shapes",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/weak-items/{id}": {
+      "get": {
+        "operationId": "getWeakItemById",
+        "responses": {
+          "200": {
+            "description": "Single item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/weak-items/{itemId}": {
+      "get": {
+        "operationId": "getWeakItemByItemId",
+        "responses": {
+          "200": {
+            "description": "Unexpected list shape",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/strong-items/{id}": {
+      "get": {
+        "operationId": "getStrongItemById",
+        "responses": {
+          "200": {
+            "description": "Single item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/strong-items/{itemId}": {
+      "get": {
+        "operationId": "getStrongItemByItemId",
+        "responses": {
+          "200": {
+            "description": "Single item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Weak Follow Up Linkage",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/weak-items": {
+      "post": {
+        "operationId": "createWeakItem",
+        "responses": {
+          "200": {
+            "description": "Weak list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/weak-items/{id}": {
+      "get": {
+        "operationId": "getWeakItem",
+        "responses": {
+          "200": {
+            "description": "Weak item detail"
+          }
+        }
+      }
+    },
+    "/strong-items": {
+      "post": {
+        "operationId": "createStrongItem",
+        "responses": {
+          "200": {
+            "description": "Strong list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/strong-items/{id}": {
+      "get": {
+        "operationId": "getStrongItem",
+        "responses": {
+          "200": {
+            "description": "Strong item detail"
+          }
+        }
+      }
+    }
+  }
+}

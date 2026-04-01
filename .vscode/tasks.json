@@ -69,6 +69,230 @@
 				"--verbose"
 			],
 			"isBackground": false
+		},
+		{
+			"label": "api-doctor-enum-demo",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/likely-missing-enum.json",
+				"--verbose"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-real-enum-check",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./adminapi.json",
+				"--json"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-inconsistent-shape-demo",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/inconsistent-response-shapes.json",
+				"--verbose"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-real-shape-check",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./adminapi.json",
+				"--json"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-inconsistent-family-demo",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/inconsistent-response-shapes-family.json",
+				"--verbose"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-real-shape-family-check",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./adminapi.json",
+				"--json"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-follow-up-demo",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/weak-follow-up-linkage.json",
+				"--verbose"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-real-follow-up-check",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./adminapi.json",
+				"--json"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-follow-up-demo-refined",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/weak-follow-up-linkage.json",
+				"--verbose"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-real-follow-up-check-refined",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./adminapi.json",
+				"--json"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-follow-up-demo-post-only",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/weak-follow-up-linkage.json",
+				"--verbose"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-real-follow-up-check-post-only",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./adminapi.json",
+				"--json"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-list-detail-demo",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/weak-list-detail-linkage.json",
+				"--verbose"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-real-list-detail-check",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./adminapi.json",
+				"--json"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-list-detail-demo-refined",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/weak-list-detail-linkage.json",
+				"--verbose"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-real-list-detail-check-refined",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./adminapi.json",
+				"--json"
+			],
+			"isBackground": false
 		}
 	]
 }

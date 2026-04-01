@@ -1,0 +1,92 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Weak List Detail Linkage",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/weak-items/search": {
+      "post": {
+        "operationId": "searchWeakItems",
+        "responses": {
+          "200": {
+            "description": "Weak search response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/weak-items/{id}": {
+      "get": {
+        "operationId": "getWeakItem",
+        "responses": {
+          "200": {
+            "description": "Weak detail"
+          }
+        }
+      }
+    },
+    "/strong-items/search": {
+      "post": {
+        "operationId": "searchStrongItems",
+        "responses": {
+          "200": {
+            "description": "Strong search response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/strong-items/{id}": {
+      "get": {
+        "operationId": "getStrongItem",
+        "responses": {
+          "200": {
+            "description": "Strong detail"
+          }
+        }
+      }
+    }
+  }
+}

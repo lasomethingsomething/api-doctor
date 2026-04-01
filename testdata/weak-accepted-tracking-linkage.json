@@ -1,0 +1,50 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Weak Accepted Tracking Linkage",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/imports/run": {
+      "post": {
+        "operationId": "startWeakImport",
+        "responses": {
+          "202": {
+            "description": "Accepted with no tracking handle"
+          }
+        }
+      }
+    },
+    "/exports/run": {
+      "post": {
+        "operationId": "startStrongExport",
+        "responses": {
+          "202": {
+            "description": "Accepted with task handle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "taskId": {
+                          "type": "string"
+                        },
+                        "status": {
+								  "type": "string",
+								  "enum": ["queued", "running", "completed"]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
