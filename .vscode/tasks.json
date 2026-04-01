@@ -27,6 +27,48 @@
 				"--json"
 			],
 			"isBackground": false
+		},
+		{
+			"label": "api-doctor-real-json",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./adminapi.json",
+				"--json"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-weak-array-demo",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/weak-array-items.json",
+				"--verbose"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "api-doctor-array-contrast-demo",
+			"type": "shell",
+			"command": "go",
+			"args": [
+				"run",
+				".",
+				"analyze",
+				"--spec",
+				"./testdata/array-items-contrast.json",
+				"--verbose"
+			],
+			"isBackground": false
 		}
 	]
 }

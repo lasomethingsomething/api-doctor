@@ -21,6 +21,7 @@ func NewChecker() *Checker {
 		NewMissingResponseSchemaRule(),
 		NewGenericObjectRequestRule(),
 		NewGenericObjectResponseRule(),
+		NewWeakArrayItemsRule(),
 		NewDeprecatedOperationRule(),
 	}}
 }
@@ -139,6 +140,50 @@ func (r *GenericObjectResponseRule) Check(op *model.Operation) []*model.Issue {
 	return issues
 }
 
+type WeakArrayItemsRule struct{}
+
+func NewWeakArrayItemsRule() *WeakArrayItemsRule { return &WeakArrayItemsRule{} }
+func (r *WeakArrayItemsRule) Name() string       { return "weak-array-items-schema" }
+
+func (r *WeakArrayItemsRule) Check(op *model.Operation) []*model.Issue {
+	issues := make([]*model.Issue, 0)
+
+	if op.RequestBody != nil {
+		for mtName, mt := range op.RequestBody.Content {
+			if mt != nil && hasWeakArrayItems(mt.Schema) {
+				issues = append(issues, &model.Issue{
+					Code:        r.Name(),
+					Severity:    "warning",
+					Path:        op.Path,
+					Operation:   fmt.Sprintf("%s %s", op.Method, op.OperationID),
+					Message:     fmt.Sprintf("Request body array has missing or overly generic items schema for media type '%s'", mtName),
+					Description: "Generated clients depend on array item schemas for strong typing; weak item definitions often become loosely typed collections.",
+				})
+			}
+		}
+	}
+
+	for code, resp := range op.Responses {
+		if resp == nil {
+			continue
+		}
+		for mtName, mt := range resp.Content {
+			if mt != nil && hasWeakArrayItems(mt.Schema) {
+				issues = append(issues, &model.Issue{
+					Code:        r.Name(),
+					Severity:    "warning",
+					Path:        op.Path,
+					Operation:   fmt.Sprintf("%s %s (%s)", op.Method, op.OperationID, code),
+					Message:     fmt.Sprintf("Response array has missing or overly generic items schema for media type '%s'", mtName),
+					Description: "Generated clients depend on array item schemas for strong typing; weak item definitions often become loosely typed collections.",
+				})
+			}
+		}
+	}
+
+	return issues
+}
+
 type DeprecatedOperationRule struct{}
 
 func NewDeprecatedOperationRule() *DeprecatedOperationRule { return &DeprecatedOperationRule{} }
@@ -163,4 +208,23 @@ func isGenericObject(schema *model.Schema) bool {
 		return false
 	}
 	return schema.Type == "object" && len(schema.Properties) == 0 && schema.Ref == ""
+}
+
+func hasWeakArrayItems(schema *model.Schema) bool {
+	if schema == nil || schema.Type != "array" {
+		return false
+	}
+	if schema.Items == nil {
+		return true
+	}
+	if schema.Items.Ref != "" {
+		return false
+	}
+	if schema.Items.Type == "" {
+		return true
+	}
+	if isGenericObject(schema.Items) {
+		return true
+	}
+	return false
 }

@@ -1,0 +1,54 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Array Items Contrast",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/weak-items": {
+      "get": {
+        "operationId": "listWeakItems",
+        "responses": {
+          "200": {
+            "description": "Weakly typed list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/strong-items": {
+      "get": {
+        "operationId": "listStrongItems",
+        "responses": {
+          "200": {
+            "description": "Strongly typed list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

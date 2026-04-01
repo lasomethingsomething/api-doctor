@@ -38,6 +38,19 @@ func TestParserParseFile(t *testing.T) {
 	if !operationFound {
 		t.Errorf("Expected to find 'listProducts' operation")
 	}
+
+	for _, op := range result.Operations {
+		if op.OperationID == "listProducts" {
+			resp := op.Responses["200"]
+			if resp == nil || resp.Content["application/json"] == nil || resp.Content["application/json"].Schema == nil {
+				t.Fatalf("expected response schema for listProducts")
+			}
+			schema := resp.Content["application/json"].Schema
+			if schema.Type != "array" || schema.Items == nil || schema.Items.Type != "object" {
+				t.Fatalf("expected array items schema to be parsed, got %#v", schema)
+			}
+		}
+	}
 }
 
 func TestParserParseFile_NotFound(t *testing.T) {

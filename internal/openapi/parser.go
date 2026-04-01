@@ -138,6 +138,9 @@ func parseSchema(s map[string]interface{}) *model.Schema {
 	if ref, ok := s["$ref"].(string); ok {
 		out.Ref = ref
 	}
+	if items, ok := s["items"].(map[string]interface{}); ok {
+		out.Items = parseSchema(items)
+	}
 	if props, ok := s["properties"].(map[string]interface{}); ok {
 		for k, v := range props {
 			m, ok := v.(map[string]interface{})
