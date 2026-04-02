@@ -47,9 +47,10 @@ func FormatText(result *model.AnalysisResult, scores map[string]*endpoint.Endpoi
 		if !verbose {
 			acceptedIssues := filterIssuesByCode(issues, "weak-accepted-tracking-linkage")
 			followUpIssues := filterIssuesByCode(issues, "weak-follow-up-linkage")
-			for _, issue := range filterIssuesWithoutCodes(issues, "weak-accepted-tracking-linkage", "weak-follow-up-linkage") {
+			burdenIssues := filterIssuesByCode(issues, "prerequisite-task-burden")
+			for _, issue := range filterIssuesWithoutCodes(issues, "weak-accepted-tracking-linkage", "weak-follow-up-linkage", "prerequisite-task-burden") {
 				// Default mode is scan-friendly first: severity + code + endpoint.
-				out += fmt.Sprintf("  [%s] %s\n", strings.ToUpper(issue.Severity), issue.Code)
+				out += fmt.Sprintf("  [%s] %s\n", strings.ToUpper(issue.Severity), issueDisplayCode(issue.Code))
 				out += fmt.Sprintf("      Endpoint: %s %s\n", issue.Operation, issue.Path)
 				out += fmt.Sprintf("      Why it matters: %s\n", issue.Description)
 				if issue.Code == "sibling-path-shape-drift" {
@@ -68,12 +69,17 @@ func FormatText(result *model.AnalysisResult, scores map[string]*endpoint.Endpoi
 				out += "\n"
 			}
 
+			if len(burdenIssues) > 0 {
+				out += formatTaskBurdenSummary(burdenIssues)
+				out += "\n"
+			}
+
 			continue
 		}
 
 		for _, issue := range issues {
 			// Default mode is scan-friendly first: severity + code + endpoint.
-			out += fmt.Sprintf("  [%s] %s\n", strings.ToUpper(issue.Severity), issue.Code)
+			out += fmt.Sprintf("  [%s] %s\n", strings.ToUpper(issue.Severity), issueDisplayCode(issue.Code))
 			out += fmt.Sprintf("      Endpoint: %s %s\n", issue.Operation, issue.Path)
 			out += fmt.Sprintf("      Why it matters: %s\n", issue.Description)
 
@@ -449,6 +455,61 @@ func limitStrings(values []string, limit int) []string {
 	return values[:limit]
 }
 
+func issueDisplayCode(code string) string {
+	if strings.TrimSpace(code) == "prerequisite-task-burden" {
+		return "prerequisite-task-burden (task burden signal)"
+	}
+	return code
+}
+
+func formatTaskBurdenSummary(issues []*model.Issue) string {
+	if len(issues) == 0 {
+		return ""
+	}
+
+	familySet := map[string]bool{}
+	levelCounts := map[string]int{"high": 0, "medium": 0, "low": 0}
+	for _, issue := range issues {
+		familySet[endpointFamily(issue.Path)] = true
+		level := taskBurdenLevel(issue.Message)
+		if _, ok := levelCounts[level]; ok {
+			levelCounts[level]++
+		}
+	}
+
+	sampleEndpoints := make([]string, 0, groupedWorkflowSampleLimit)
+	for i, issue := range issues {
+		if i >= groupedWorkflowSampleLimit {
+			break
+		}
+		sampleEndpoints = append(sampleEndpoints, fmt.Sprintf("%s %s", issue.Operation, issue.Path))
+	}
+
+	out := ""
+	out += "  [WARNING] prerequisite-task-burden (task burden signal)\n"
+	out += fmt.Sprintf("      Prerequisite burden signal: %d endpoints across %d endpoint families.\n", len(issues), len(familySet))
+	out += "      Why it matters: These tasks appear to require extra prerequisite coordination before and after the main call.\n"
+	out += fmt.Sprintf("      Burden levels: high=%d, medium=%d, low=%d\n", levelCounts["high"], levelCounts["medium"], levelCounts["low"])
+	out += fmt.Sprintf("      Sample endpoints: %s\n", strings.Join(sampleEndpoints, "; "))
+	if len(issues) > groupedWorkflowSampleLimit {
+		out += fmt.Sprintf("      More endpoints: %d more hidden here; use --verbose or --json for the full list.\n", len(issues)-groupedWorkflowSampleLimit)
+	}
+
+	return out
+}
+
+func taskBurdenLevel(message string) string {
+	lower := strings.ToLower(strings.TrimSpace(message))
+	switch {
+	case strings.HasPrefix(lower, "high prerequisite burden"):
+		return "high"
+	case strings.HasPrefix(lower, "medium prerequisite burden"):
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
 func FormatAnalysisMarkdown(result *model.AnalysisResult, scores map[string]*endpoint.EndpointScore) string {
 	out := "# API Analysis Report\n\n"
 	out += fmt.Sprintf("**Spec:** %s | **Operations:** %d\n\n", result.SpecFile, len(result.Operations))
@@ -552,7 +613,7 @@ func FormatAnalysisMarkdown(result *model.AnalysisResult, scores map[string]*end
 
 		for _, code := range codes {
 			codeIssues := codeGroups[code]
-			out += fmt.Sprintf("### `%s`\n\n", code)
+			out += fmt.Sprintf("### `%s`\n\n", issueDisplayCode(code))
 			for _, issue := range codeIssues {
 				out += fmt.Sprintf("- **Endpoint:** `%s %s`\n", issue.Operation, issue.Path)
 				out += fmt.Sprintf("  **Impact:** %s\n", issue.Description)

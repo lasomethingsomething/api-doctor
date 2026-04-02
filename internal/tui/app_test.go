@@ -268,3 +268,61 @@ func TestPaneEndpoints_ChainingHintsExposedIdentifierStatus(t *testing.T) {
 		t.Fatalf("expected exposed linkage status when no weak linkage issue exists, got: %s", detail)
 	}
 }
+
+func TestPaneFindings_TaskBurdenDiscoverability(t *testing.T) {
+	analysis := &model.AnalysisResult{
+		SpecFile: "spec.json",
+		Issues: []*model.Issue{
+			{
+				Severity:    "warning",
+				Code:        "prerequisite-task-burden",
+				Path:        "/products",
+				Operation:   "post createProduct",
+				Message:     "high prerequisite burden appears likely: requires 3 identifier-like inputs",
+				Description: "Task likely requires extra coordination.",
+			},
+		},
+	}
+
+	m := NewModel(analysis, nil, nil, nil, nil, nil)
+	m.findingsDetailOpen = true
+
+	_, main, _, detail := m.paneFindings()
+	if !strings.Contains(main, "Task burden signals flagged: 1 endpoints") {
+		t.Fatalf("expected task burden count banner in findings list, got: %s", main)
+	}
+	if !strings.Contains(main, "[task burden] prerequisite-task-burden (task burden signal)") {
+		t.Fatalf("expected burden-tagged finding row, got: %s", main)
+	}
+	if !strings.Contains(detail, "Category type: task burden signal") {
+		t.Fatalf("expected task burden detail category text, got: %s", detail)
+	}
+}
+
+func TestPaneEndpoints_TaskBurdenCallout(t *testing.T) {
+	op := &model.Operation{Path: "/products", Method: "post", OperationID: "createProduct"}
+	analysis := &model.AnalysisResult{
+		Operations: []*model.Operation{op},
+		Issues: []*model.Issue{
+			{
+				Severity:    "warning",
+				Code:        "prerequisite-task-burden",
+				Path:        "/products",
+				Operation:   "post createProduct",
+				Message:     "high prerequisite burden appears likely: requires 3 identifier-like inputs",
+				Description: "Task likely requires extra coordination.",
+			},
+		},
+	}
+
+	m := NewModel(analysis, nil, nil, nil, nil, nil)
+	m.endpointDetailOpen = true
+
+	_, _, _, detail := m.paneEndpoints()
+	if !strings.Contains(detail, "Task burden signal:") {
+		t.Fatalf("expected task burden section in endpoint detail, got: %s", detail)
+	}
+	if !strings.Contains(detail, "this task likely requires extra prerequisite coordination") {
+		t.Fatalf("expected plain-language task burden wording in endpoint detail, got: %s", detail)
+	}
+}

@@ -606,14 +606,14 @@ func (m Model) paneHotspots() (string, string, string, string) {
 		if item.risk >= 10 {
 			riskText = styleBad.Render(fmt.Sprintf("priority:%3d", item.risk))
 		}
-		row := fmt.Sprintf("%s %2d) %-16s %-30s %s %s", prefix, i+1, hotspotKindLabel(item.kind), truncate(item.label, 30), riskText, hotspotMetricLabel(item.value))
+		row := fmt.Sprintf("%s %2d) %-16s %-30s %s %s", prefix, i+1, hotspotKindLabel(item.kind), truncate(hotspotDisplayLabel(item), 30), riskText, hotspotMetricLabel(item.value))
 		if i == idx {
 			row = styleRowSelected.Render(row)
 		}
 		list += row + "\n"
 	}
 	sel := items[idx]
-	detail := fmt.Sprintf("Type: %s\nLabel: %s\nMetric: %s\n\nWhat this metric means:\n%s\n\nWhy this is ranked high:\n%s\n\n", hotspotKindLabel(sel.kind), sel.label, hotspotMetricLabel(sel.value), hotspotMetricExplanation(sel.value), sel.detail)
+	detail := fmt.Sprintf("Type: %s\nLabel: %s\nMetric: %s\n\nWhat this metric means:\n%s\n\nWhy this is ranked high:\n%s\n\n", hotspotKindLabel(sel.kind), hotspotDisplayLabel(sel), hotspotMetricLabel(sel.value), hotspotMetricExplanation(sel.value), sel.detail)
 	if (sel.kind == "finding-bucket" || sel.kind == "consistency-bucket") && isConsistencyFindingCode(sel.label) {
 		detail += fmt.Sprintf("Consistency problem: yes\n\nHow to read this:\n%s\n\n", consistencyFindingExplanation(sel.label))
 	}
@@ -680,12 +680,21 @@ func (m Model) paneEndpoints() (string, string, string, string) {
 		} else {
 			detail += "Matching findings:\n"
 			for _, issue := range matches {
-				label := issue.Code
+				label := findingDisplayName(issue.Code)
 				if isConsistencyFindingCode(issue.Code) {
-					label = "consistency: " + issue.Code
+					label = "consistency: " + findingDisplayName(issue.Code)
 				}
 				detail += fmt.Sprintf("- [%s/%s] %s\n", issue.Severity, label, truncate(issue.Message, 70))
 			}
+		}
+
+		burdenFindings := m.findingsByCodeForOperation(op, "prerequisite-task-burden")
+		detail += "\nTask burden signal:\n"
+		if len(burdenFindings) == 0 {
+			detail += "- none detected for this endpoint\n"
+		} else {
+			detail += "- this task likely requires extra prerequisite coordination\n"
+			detail += fmt.Sprintf("- evidence: %s\n", truncate(burdenFindings[0].Message, 85))
 		}
 
 		detail += "\nLikely next calls:\n"
@@ -730,6 +739,11 @@ func (m Model) paneFindings() (string, string, string, string) {
 	}
 	idx := wrapIndex(m.findingsBucketIndex, len(buckets))
 	main := fmt.Sprintf("Total findings: %d | Buckets: %d\n\n", len(m.analysis.Issues), len(buckets))
+	taskBurdenTotal := len(m.findingIssuesByCode("prerequisite-task-burden"))
+	if taskBurdenTotal > 0 {
+		main += fmt.Sprintf("Task burden signals flagged: %d endpoints\n", taskBurdenTotal)
+		main += "Look for rows marked with [task burden].\n\n"
+	}
 	consistencyTotal, consistencyCategories := m.consistencyFindingCounts()
 	if consistencyTotal > 0 {
 		main += fmt.Sprintf("Consistency checks flagged: %d findings across %d categories\n", consistencyTotal, consistencyCategories)
@@ -740,10 +754,7 @@ func (m Model) paneFindings() (string, string, string, string) {
 		if i == idx {
 			prefix = styleSelection.Render(">")
 		}
-		label := b.key
-		if isConsistencyFindingCode(b.key) {
-			label = "[consistency] " + b.key
-		}
+		label := findingBucketLabel(b.key)
 		row := fmt.Sprintf("%s %2d) %-40s %4d", prefix, i+1, label, b.count)
 		if i == idx {
 			row = styleRowSelected.Render(row)
@@ -754,10 +765,14 @@ func (m Model) paneFindings() (string, string, string, string) {
 	if m.findingsDetailOpen {
 		code := buckets[idx].key
 		issues := m.findingIssuesByCode(code)
-		detail = fmt.Sprintf("Issue category: %s\n", code)
+		detail = fmt.Sprintf("Issue category: %s\n", findingDisplayName(code))
+		detail += fmt.Sprintf("Rule code: %s\n", code)
 		if isConsistencyFindingCode(code) {
 			detail += "Category type: consistency problem\n"
 			detail += fmt.Sprintf("Consistency meaning: %s\n", consistencyFindingExplanation(code))
+		} else if isTaskBurdenFindingCode(code) {
+			detail += "Category type: task burden signal\n"
+			detail += "Task burden meaning: This task appears to require extra prerequisite coordination to complete a basic flow.\n"
 		}
 		detail += "\n"
 		detail += fmt.Sprintf("Summary: %s\n", m.findingSummary(code))
@@ -1004,13 +1019,13 @@ func (m Model) viewHotspots() string {
 		if item.risk >= 10 {
 			riskText = styleBad.Render(fmt.Sprintf("risk:%3d", item.risk))
 		}
-		list += fmt.Sprintf("%s %2d) %-14s %-40s %s %s\n", prefix, i+1, item.kind, truncate(item.label, 40), riskText, item.value)
+		list += fmt.Sprintf("%s %2d) %-14s %-40s %s %s\n", prefix, i+1, item.kind, truncate(hotspotDisplayLabel(item), 40), riskText, item.value)
 	}
 
 	sel := items[idx]
 	detail := "Selected hotspot\n\n"
 	detail += fmt.Sprintf("- Type: %s\n", sel.kind)
-	detail += fmt.Sprintf("- Label: %s\n", sel.label)
+	detail += fmt.Sprintf("- Label: %s\n", hotspotDisplayLabel(sel))
 	detail += fmt.Sprintf("- Metric: %s\n", sel.value)
 	detail += fmt.Sprintf("- Why risky: %s\n", sel.detail)
 	if sel.operation != nil {
@@ -1087,8 +1102,16 @@ func (m Model) viewEndpoints() string {
 		} else {
 			detail += "- Matching findings (up to 8):\n"
 			for _, issue := range matches {
-				detail += fmt.Sprintf("  - [%s/%s] %s\n", issue.Severity, issue.Code, truncate(issue.Message, 90))
+				detail += fmt.Sprintf("  - [%s/%s] %s\n", issue.Severity, findingDisplayName(issue.Code), truncate(issue.Message, 90))
 			}
+		}
+
+		burdenFindings := m.findingsByCodeForOperation(op, "prerequisite-task-burden")
+		if len(burdenFindings) == 0 {
+			detail += "- Task burden signal: none\n"
+		} else {
+			detail += "- Task burden signal: likely extra prerequisite coordination\n"
+			detail += fmt.Sprintf("  - Evidence: %s\n", truncate(burdenFindings[0].Message, 100))
 		}
 
 		edges, chains := m.workflowReferencesForOperation(op)
@@ -1167,6 +1190,10 @@ func (m Model) viewFindings() string {
 	out += fmt.Sprintf("Errors: %d\n", summary["error"])
 	out += fmt.Sprintf("Warnings: %d\n", summary["warning"])
 	out += fmt.Sprintf("Info: %d\n", summary["info"])
+	taskBurdenCount := codes["prerequisite-task-burden"]
+	if taskBurdenCount > 0 {
+		out += fmt.Sprintf("Task burden signals: %d\n", taskBurdenCount)
+	}
 
 	out += "\nTop finding code buckets\n"
 	buckets := m.findingCodeBuckets()
@@ -1177,12 +1204,12 @@ func (m Model) viewFindings() string {
 			prefix = ">"
 		}
 		pct := percent(item.count, total)
-		out += fmt.Sprintf("%s %d) %-42s %4d (%2d%%)\n", prefix, i+1, item.key, item.count, pct)
+		out += fmt.Sprintf("%s %d) %-42s %4d (%2d%%)\n", prefix, i+1, findingBucketLabel(item.key), item.count, pct)
 	}
 
 	if m.findingsDetailOpen && len(buckets) > 0 {
 		selected := buckets[m.findingsBucketIndex].key
-		out += fmt.Sprintf("\nDetails for %s (up to 5)\n", selected)
+		out += fmt.Sprintf("\nDetails for %s (up to 5)\n", findingDisplayName(selected))
 		for _, line := range m.findingDetails(selected, 5) {
 			out += fmt.Sprintf("- %s\n", line)
 		}
@@ -1574,6 +1601,13 @@ func hotspotMetricExplanation(value string) string {
 	return "This value is a summary metric for the selected hotspot family."
 }
 
+func hotspotDisplayLabel(item hotspotItem) string {
+	if item.kind == "finding-bucket" || item.kind == "consistency-bucket" {
+		return findingDisplayName(item.label)
+	}
+	return item.label
+}
+
 func (m Model) endpointOperations() []*model.Operation {
 	if m.analysis == nil {
 		return nil
@@ -1699,6 +1733,41 @@ func (m Model) allFindingsForOperation(op *model.Operation) []*model.Issue {
 		all = append(all, issue)
 	}
 	return all
+}
+
+func (m Model) findingsByCodeForOperation(op *model.Operation, code string) []*model.Issue {
+	if op == nil || m.analysis == nil || strings.TrimSpace(code) == "" {
+		return nil
+	}
+	out := make([]*model.Issue, 0)
+	for _, issue := range m.analysis.Issues {
+		if issue.Path != op.Path || issue.Code != code {
+			continue
+		}
+		out = append(out, issue)
+	}
+	return out
+}
+
+func isTaskBurdenFindingCode(code string) bool {
+	return strings.TrimSpace(code) == "prerequisite-task-burden"
+}
+
+func findingDisplayName(code string) string {
+	if isTaskBurdenFindingCode(code) {
+		return "prerequisite-task-burden (task burden signal)"
+	}
+	return code
+}
+
+func findingBucketLabel(code string) string {
+	if isConsistencyFindingCode(code) {
+		return "[consistency] " + findingDisplayName(code)
+	}
+	if isTaskBurdenFindingCode(code) {
+		return "[task burden] " + findingDisplayName(code)
+	}
+	return findingDisplayName(code)
 }
 
 func (m Model) endpointRiskScore(op *model.Operation) int {
@@ -1998,7 +2067,7 @@ func (m Model) endpointWhyMatters(op *model.Operation, findings []*model.Issue, 
 		top := topCounts(codes, 2)
 		labels := make([]string, 0, len(top))
 		for _, t := range top {
-			labels = append(labels, t.key)
+			labels = append(labels, findingDisplayName(t.key))
 		}
 		reasons = append(reasons, fmt.Sprintf("%d matching findings (%s)", len(findings), strings.Join(labels, ", ")))
 	}
@@ -2381,6 +2450,9 @@ func (m Model) findingSummary(code string) string {
 	if isConsistencyFindingCode(code) {
 		return consistencyFindingSummary(code)
 	}
+	if isTaskBurdenFindingCode(code) {
+		return "Task likely requires too much prerequisite coordination before or after the main call."
+	}
 	issues := m.findingIssuesByCode(code)
 	for _, issue := range issues {
 		if strings.TrimSpace(issue.Description) != "" {
@@ -2398,6 +2470,9 @@ func (m Model) findingSummary(code string) string {
 func (m Model) findingWhyItMatters(code string) string {
 	if isConsistencyFindingCode(code) {
 		return consistencyFindingImpact(code)
+	}
+	if isTaskBurdenFindingCode(code) {
+		return "Higher prerequisite burden can make simple product or order/media tasks feel like managing internal IDs and state handoffs."
 	}
 	issues := m.findingIssuesByCode(code)
 	for _, issue := range issues {

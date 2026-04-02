@@ -363,3 +363,77 @@ func TestFormatText_DefaultShowsShapeDetailForSiblingPathShapeDrift(t *testing.T
 		t.Fatalf("expected default output to remain non-verbose, got: %s", out)
 	}
 }
+
+func TestFormatText_GroupsPrerequisiteTaskBurdenInDefaultOutput(t *testing.T) {
+	result := &model.AnalysisResult{
+		SpecFile: "spec.json",
+		Issues: []*model.Issue{
+			{
+				Code:        "prerequisite-task-burden",
+				Severity:    "warning",
+				Path:        "/products",
+				Operation:   "post createProduct",
+				Message:     "high prerequisite burden appears likely: requires 3 identifier-like inputs (body.manufacturerId, body.taxId, path.id)",
+				Description: "Task likely requires extra coordination.",
+			},
+			{
+				Code:        "prerequisite-task-burden",
+				Severity:    "warning",
+				Path:        "/products/{id}/media",
+				Operation:   "post addProductMedia",
+				Message:     "medium prerequisite burden appears likely: requires 2 identifier-like inputs (body.mediaId, path.id)",
+				Description: "Task likely requires extra coordination.",
+			},
+			{
+				Code:        "deprecated-operation",
+				Severity:    "warning",
+				Path:        "/products/{id}",
+				Operation:   "put updateProduct",
+				Message:     "Operation is marked as deprecated",
+				Description: "Deprecated endpoint should be replaced.",
+			},
+		},
+	}
+
+	scores := make(map[string]*endpoint.EndpointScore)
+	out := FormatText(result, scores, false)
+	if !strings.Contains(out, "[WARNING] prerequisite-task-burden (task burden signal)") {
+		t.Fatalf("expected grouped burden signal summary, got: %s", out)
+	}
+	if !strings.Contains(out, "Prerequisite burden signal: 2 endpoints across 1 endpoint families.") {
+		t.Fatalf("expected burden count summary, got: %s", out)
+	}
+	if !strings.Contains(out, "Burden levels: high=1, medium=1, low=0") {
+		t.Fatalf("expected burden level breakdown, got: %s", out)
+	}
+	if strings.Contains(out, "Endpoint: post createProduct /products") {
+		t.Fatalf("expected grouped burden issues to be summarized in default output, got: %s", out)
+	}
+	if !strings.Contains(out, "[WARNING] deprecated-operation") {
+		t.Fatalf("expected non-burden warning to stay itemized, got: %s", out)
+	}
+}
+
+func TestFormatAnalysisMarkdown_UsesTaskBurdenLabel(t *testing.T) {
+	result := &model.AnalysisResult{
+		SpecFile: "spec.json",
+		Operations: []*model.Operation{
+			{Method: "post", Path: "/products"},
+		},
+		Issues: []*model.Issue{
+			{
+				Code:        "prerequisite-task-burden",
+				Severity:    "warning",
+				Path:        "/products",
+				Operation:   "post createProduct",
+				Description: "Task likely requires extra coordination.",
+				Message:     "high prerequisite burden appears likely: requires 3 identifier-like inputs",
+			},
+		},
+	}
+
+	out := FormatAnalysisMarkdown(result, map[string]*endpoint.EndpointScore{})
+	if !strings.Contains(out, "### `prerequisite-task-burden (task burden signal)`") {
+		t.Fatalf("expected markdown burden label to be plain-language friendly, got: %s", out)
+	}
+}

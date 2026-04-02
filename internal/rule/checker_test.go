@@ -428,3 +428,60 @@ func TestChecker_CheckAll_WeakActionFollowUpLinkageFixture(t *testing.T) {
 		t.Fatalf("expected descriptive action follow-up message, got %#v", issue)
 	}
 }
+
+func TestChecker_CheckAll_PrerequisiteTaskBurdenFixture(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/prerequisite-task-burden.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	issues := NewChecker().CheckAll(result.Operations)
+	matched := make([]*model.Issue, 0)
+	for _, issue := range issues {
+		if issue.Code == "prerequisite-task-burden" {
+			matched = append(matched, issue)
+		}
+	}
+
+	if len(matched) != 4 {
+		t.Fatalf("expected exactly 4 prerequisite-task-burden issues from fixture, got %#v", matched)
+	}
+
+	byPath := map[string]*model.Issue{}
+	for _, issue := range matched {
+		byPath[issue.Path] = issue
+		if issue.Severity != "warning" {
+			t.Fatalf("expected warning severity for burden issue, got %#v", issue)
+		}
+		if !strings.Contains(issue.Message, "appears likely") {
+			t.Fatalf("expected cautious wording in message, got %#v", issue)
+		}
+	}
+
+	for _, expectedPath := range []string{
+		"/products",
+		"/products/{id}",
+		"/_action/order/{orderId}/state/{transition}",
+		"/products/{id}/media",
+	} {
+		if _, ok := byPath[expectedPath]; !ok {
+			t.Fatalf("expected prerequisite-task-burden issue for %s, got %#v", expectedPath, matched)
+		}
+	}
+
+	if _, ok := byPath["/profiles/{id}"]; ok {
+		t.Fatalf("did not expect task-level update endpoint to be flagged, got %#v", byPath["/profiles/{id}"])
+	}
+
+	createIssue := byPath["/products"]
+	if !strings.Contains(createIssue.Message, "requires") || !strings.Contains(createIssue.Message, "identifier-like inputs") {
+		t.Fatalf("expected dependent identifier count reason for create flow, got %#v", createIssue)
+	}
+	if !strings.Contains(createIssue.Message, "likely needs pre-task identifier lookup") {
+		t.Fatalf("expected pre-task lookup reason for create flow, got %#v", createIssue)
+	}
+	if !strings.Contains(createIssue.Message, "does not clearly expose") {
+		t.Fatalf("expected weak follow-up exposure reason for create flow, got %#v", createIssue)
+	}
+}

@@ -43,6 +43,7 @@ func NewChecker() *Checker {
 			NewWeakListDetailLinkageRule(),
 			NewWeakAcceptedTrackingLinkageRule(),
 			NewWeakActionFollowUpLinkageRule(),
+			NewPrerequisiteTaskBurdenRule(),
 		},
 	}
 }
@@ -451,6 +452,69 @@ func (r *WeakActionFollowUpLinkageRule) CheckAll(operations []*model.Operation) 
 
 	return issues
 	}
+
+type PrerequisiteTaskBurdenRule struct{}
+
+func NewPrerequisiteTaskBurdenRule() *PrerequisiteTaskBurdenRule { return &PrerequisiteTaskBurdenRule{} }
+func (r *PrerequisiteTaskBurdenRule) Name() string               { return "prerequisite-task-burden" }
+
+func (r *PrerequisiteTaskBurdenRule) CheckAll(operations []*model.Operation) []*model.Issue {
+	detailParamsByBase := map[string][]string{}
+	for _, op := range operations {
+		basePath, paramName, ok := detailPathBaseAndParam(op.Path)
+		if !ok {
+			continue
+		}
+		detailParamsByBase[basePath] = appendUnique(detailParamsByBase[basePath], paramName)
+	}
+
+	issues := make([]*model.Issue, 0)
+	for _, op := range operations {
+		if !isLikelyTaskBurdenTarget(op) {
+			continue
+		}
+
+		depCount, depLabels, taskFieldCount := requiredDependentIdentifierCount(op)
+		lookupLikely := isLikelyPreTaskLookupNeed(depCount, taskFieldCount)
+		weakFollowUp := hasWeakFollowUpExposure(op, detailParamsByBase)
+
+		signalCount := 0
+		if depCount >= 2 {
+			signalCount++
+		}
+		if lookupLikely {
+			signalCount++
+		}
+		if weakFollowUp {
+			signalCount++
+		}
+		if signalCount < 2 {
+			continue
+		}
+
+		reasons := make([]string, 0, 3)
+		if depCount >= 2 {
+			reasons = append(reasons, fmt.Sprintf("requires %d identifier-like inputs (%s)", depCount, strings.Join(depLabels, ", ")))
+		}
+		if lookupLikely {
+			reasons = append(reasons, "likely needs pre-task identifier lookup before the main call")
+		}
+		if weakFollowUp {
+			reasons = append(reasons, "success response does not clearly expose follow-up identifiers or state")
+		}
+
+		issues = append(issues, &model.Issue{
+			Code:        r.Name(),
+			Severity:    "warning",
+			Path:        op.Path,
+			Operation:   fmt.Sprintf("%s %s", op.Method, op.OperationID),
+			Message:     fmt.Sprintf("%s prerequisite burden appears likely: %s", prerequisiteBurdenRating(depCount, lookupLikely, weakFollowUp), strings.Join(reasons, "; ")),
+			Description: "This task appears to require extra identifier coordination and follow-up context that may make the happy path feel like managing internal model state instead of completing one user task.",
+		})
+	}
+
+	return issues
+}
 
 type InconsistentResponseShapeRule struct{}
 
@@ -1024,6 +1088,23 @@ func isLikelyWorkflowSource(op *model.Operation) bool {
 	return strings.ToUpper(op.Method) == "POST"
 }
 
+func isLikelyTaskBurdenTarget(op *model.Operation) bool {
+	if op == nil {
+		return false
+	}
+
+	method := strings.ToUpper(op.Method)
+	if method != "POST" && method != "PUT" && method != "PATCH" {
+		return false
+	}
+
+	if method == "POST" && strings.HasSuffix(op.Path, "/search") {
+		return false
+	}
+
+	return true
+}
+
 func isLikelyAcceptedWorkflowSource(op *model.Operation) bool {
 	if op == nil {
 		return false
@@ -1385,6 +1466,174 @@ func findLikelyMissingEnums(schema *model.Schema, prefix string) []string {
 	}
 
 	return paths
+}
+
+func hasWeakFollowUpExposure(op *model.Operation, detailParamsByBase map[string][]string) bool {
+	if op == nil {
+		return false
+	}
+
+	if params := detailParamsByBase[op.Path]; len(params) > 0 {
+		_, schema, ok := successfulJSONResponseSchema(op)
+		if ok {
+			known, linked := exposesFollowUpIdentifier(schema, params)
+			if known && !linked {
+				return true
+			}
+		}
+	}
+
+	detailPath, ok := actionTransitionDetailPath(op)
+	if !ok || detailPath == "" {
+		return false
+	}
+
+	_, resp, ok := successfulResponse(op)
+	if !ok {
+		return false
+	}
+
+	reason, linked := actionFollowUpReason(resp)
+	return !linked && reason != ""
+}
+
+func requiredDependentIdentifierCount(op *model.Operation) (int, []string, int) {
+	idFields := map[string]bool{}
+	taskFields := map[string]bool{}
+
+	for _, paramName := range pathParameterNames(op.Path) {
+		if isIdentifierLikeField(paramName) {
+			idFields["path."+paramName] = true
+		}
+	}
+
+	if schema, ok := requestBodySchema(op); ok {
+		collectRequiredFieldKinds(schema, "body", 0, idFields, taskFields)
+	}
+
+	labels := make([]string, 0, len(idFields))
+	for label := range idFields {
+		labels = append(labels, label)
+	}
+	sort.Strings(labels)
+	if len(labels) > 3 {
+		labels = labels[:3]
+		labels = append(labels, "...")
+	}
+
+	return len(idFields), labels, len(taskFields)
+}
+
+func isLikelyPreTaskLookupNeed(dependentIdentifierCount int, requiredTaskFieldCount int) bool {
+	if dependentIdentifierCount <= 0 {
+		return false
+	}
+	if dependentIdentifierCount >= 2 && requiredTaskFieldCount <= 1 {
+		return true
+	}
+	if dependentIdentifierCount >= 3 {
+		return true
+	}
+	return false
+}
+
+func prerequisiteBurdenRating(dependentIdentifierCount int, lookupLikely bool, weakFollowUp bool) string {
+	score := 0
+	if dependentIdentifierCount >= 2 {
+		score++
+	}
+	if dependentIdentifierCount >= 3 {
+		score++
+	}
+	if lookupLikely {
+		score++
+	}
+	if weakFollowUp {
+		score++
+	}
+
+	switch {
+	case score >= 4:
+		return "high"
+	case score == 3:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func requestBodySchema(op *model.Operation) (*model.Schema, bool) {
+	if op == nil || op.RequestBody == nil {
+		return nil, false
+	}
+
+	if mt, ok := op.RequestBody.Content["application/json"]; ok && mt != nil && mt.Schema != nil {
+		return mt.Schema, true
+	}
+
+	for _, mt := range op.RequestBody.Content {
+		if mt != nil && mt.Schema != nil {
+			return mt.Schema, true
+		}
+	}
+
+	return nil, false
+}
+
+func pathParameterNames(path string) []string {
+	segments := splitPathSegments(path)
+	names := make([]string, 0)
+	for _, segment := range segments {
+		if !isPathParam(segment) {
+			continue
+		}
+		name := strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}")
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func collectRequiredFieldKinds(schema *model.Schema, prefix string, depth int, idFields map[string]bool, taskFields map[string]bool) {
+	if schema == nil || schema.Ref != "" || depth > 4 {
+		return
+	}
+
+	if schema.Type == "array" {
+		collectRequiredFieldKinds(schema.Items, prefix+"[]", depth+1, idFields, taskFields)
+		return
+	}
+
+	if schema.Type != "object" || len(schema.Properties) == 0 || len(schema.Required) == 0 {
+		return
+	}
+
+	for _, name := range schema.Required {
+		fieldPath := prefix + "." + name
+		if isIdentifierLikeField(name) {
+			idFields[fieldPath] = true
+		} else {
+			taskFields[fieldPath] = true
+		}
+		collectRequiredFieldKinds(schema.Properties[name], fieldPath, depth+1, idFields, taskFields)
+	}
+}
+
+func isIdentifierLikeField(name string) bool {
+	if name == "" {
+		return false
+	}
+
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "id" {
+		return true
+	}
+	if strings.HasSuffix(lower, "_id") || strings.HasSuffix(lower, "_ids") {
+		return true
+	}
+
+	return strings.HasSuffix(name, "Id") || strings.HasSuffix(name, "ID") || strings.HasSuffix(name, "Ids") || strings.HasSuffix(name, "IDs")
 }
 
 func isLikelyEnumProperty(name string, schema *model.Schema) bool {
