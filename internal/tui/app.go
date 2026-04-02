@@ -16,41 +16,52 @@ import (
 )
 
 var (
-	styleTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("225"))
+	styleTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("57"))
 	styleHeader = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("111")).
-		Background(lipgloss.Color("60")).
-		Foreground(lipgloss.Color("255")).
+		BorderForeground(lipgloss.Color("81")).
+		Background(lipgloss.Color("255")).
+		Foreground(lipgloss.Color("238")).
 		Padding(0, 1)
 	styleFooter = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("219")).
-		Background(lipgloss.Color("236")).
-		Foreground(lipgloss.Color("255")).
+		Background(lipgloss.Color("255")).
+		Foreground(lipgloss.Color("238")).
 		Padding(0, 1)
 	stylePanel = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("117")).
-		Background(lipgloss.Color("235")).
+		BorderForeground(lipgloss.Color("250")).
+		Background(lipgloss.Color("255")).
+		Foreground(lipgloss.Color("236")).
 		Padding(0, 1)
-	stylePanelTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("219"))
-	styleSelection = lipgloss.NewStyle().Foreground(lipgloss.Color("219")).Bold(true)
-	styleMuted = lipgloss.NewStyle().Foreground(lipgloss.Color("248"))
+	stylePanelTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("57"))
+	styleSelection = lipgloss.NewStyle().Foreground(lipgloss.Color("198")).Bold(true)
+	styleMuted = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	styleOK = lipgloss.NewStyle().Foreground(lipgloss.Color("121"))
-	styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("223"))
+	styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
 	styleBad = lipgloss.NewStyle().Foreground(lipgloss.Color("204")).Bold(true)
 	styleNav = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("219")).
-		Background(lipgloss.Color("237")).
+		BorderForeground(lipgloss.Color("81")).
+		Background(lipgloss.Color("255")).
 		Padding(0, 1)
-	styleNavItem = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	styleNavItem = lipgloss.NewStyle().Foreground(lipgloss.Color("236"))
 	styleNavActive = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("255")).
-		Background(lipgloss.Color("62")).
+		Foreground(lipgloss.Color("236")).
+		Background(lipgloss.Color("189")).
 		Bold(true)
-	styleFocus = lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
+	styleFocus = lipgloss.NewStyle().Foreground(lipgloss.Color("57")).Bold(true)
+	styleFocusedPanel = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("198")).Background(lipgloss.Color("255")).Foreground(lipgloss.Color("236")).Padding(0, 1)
+	styleRowSelected = lipgloss.NewStyle().Foreground(lipgloss.Color("236")).Background(lipgloss.Color("189")).Bold(true)
+)
+
+type paneFocus int
+
+const (
+	paneNav paneFocus = iota
+	paneMain
+	paneDetail
 )
 
 type screen int
@@ -67,7 +78,7 @@ const (
 type Model struct {
 	active screen
 	menuIndex int
-	focusNav bool
+	focusPane paneFocus
 
 	helpModel help.Model
 	keys     tuiKeyMap
@@ -172,7 +183,7 @@ func NewModel(
 	return Model{
 		active:         screenOverview,
 		menuIndex:      0,
-		focusNav:       true,
+		focusPane:      paneNav,
 		helpModel:      h,
 		keys:           defaultKeyMap(),
 		analysis:       analysis,
@@ -193,12 +204,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
-		if key.Matches(msg, m.keys.FocusPane) || msg.String() == "left" || msg.String() == "right" {
-			m.focusNav = !m.focusNav
+		if key.Matches(msg, m.keys.FocusPane) {
+			m.cyclePaneFocus(1)
 			return m, nil
 		}
 
-		if m.focusNav {
+		if msg.String() == "left" {
+			m.cyclePaneFocus(-1)
+			return m, nil
+		}
+
+		if msg.String() == "right" {
+			m.cyclePaneFocus(1)
+			return m, nil
+		}
+
+		if m.focusPane == paneNav {
 			switch msg.String() {
 			case "up", "k":
 				m.moveMenu(-1)
@@ -208,12 +229,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "enter":
 				m.setActive(m.screenAtMenuIndex())
-				m.focusNav = false
+				m.focusPane = paneMain
 				return m, nil
 			}
 		}
 
-		if m.active == screenFindings {
+		if m.active == screenFindings && m.focusPane == paneMain {
 			switch msg.String() {
 			case "up", "k":
 				m.findingsMove(-1)
@@ -240,7 +261,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.active == screenWorkflows {
+		if m.active == screenWorkflows && m.focusPane == paneMain {
 			switch msg.String() {
 			case "up", "k":
 				m.workflowMove(-1)
@@ -277,7 +298,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.active == screenEndpoints {
+		if m.active == screenEndpoints && m.focusPane == paneMain {
 			switch msg.String() {
 			case "up", "k":
 				m.endpointMove(-1)
@@ -296,7 +317,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		if m.active == screenHotspots {
+		if m.active == screenHotspots && m.focusPane == paneMain {
 			switch msg.String() {
 			case "up", "k":
 				m.hotspotMove(-1)
@@ -315,6 +336,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
+		}
+
+		if msg.String() == "esc" {
+			switch m.active {
+			case screenEndpoints:
+				m.endpointDetailOpen = false
+			case screenFindings:
+				m.findingsDetailOpen = false
+			case screenWorkflows:
+				if m.workflowItemDetailOpen {
+					m.workflowItemDetailOpen = false
+				} else {
+					m.workflowDetailOpen = false
+				}
+			}
+			if m.focusPane == paneDetail {
+				m.focusPane = paneMain
+			}
+			return m, nil
 		}
 
 		switch msg.String() {
@@ -358,35 +398,53 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	header := styleHeader.Render(strings.Join([]string{
 		styleTitle.Render("api-doctor dashboard"),
-		"Menu-driven navigation: move in sidebar with ↑/↓ and Enter; press Tab to switch focus",
+		fmt.Sprintf("Section: %s | Focus: %s", m.activeTitle(), m.focusTitle()),
 		m.dataStatusLine(),
 	}, "\n"))
 
-	content := ""
-	switch m.active {
-	case screenOverview:
-		content = m.viewOverview()
-	case screenHotspots:
-		content = m.viewHotspots()
-	case screenEndpoints:
-		content = m.viewEndpoints()
-	case screenFindings:
-		content = m.viewFindings()
-	case screenWorkflows:
-		content = m.viewWorkflows()
-	case screenDiff:
-		content = m.viewDiff()
-	default:
-		content = stylePanel.Render("Unknown screen")
-	}
-
-	layout := lipgloss.JoinHorizontal(lipgloss.Top, m.viewSidebar(), content)
-	focus := "Focus: Content"
-	if m.focusNav {
-		focus = "Focus: Navigation"
-	}
-	footer := styleFooter.Render(styleFocus.Render(focus) + "  |  " + m.helpModel.View(m.keys))
+	mainTitle, mainBody, detailTitle, detailBody := m.currentPaneBodies()
+	layout := lipgloss.JoinHorizontal(lipgloss.Top,
+		m.viewSidebar(),
+		m.renderPane(mainTitle, mainBody, paneMain, 54),
+		m.renderPane(detailTitle, detailBody, paneDetail, 46),
+	)
+	footer := styleFooter.Render("Pane move: Left/Right or Tab (Navigation -> Main -> Detail) | Select/open: Enter | Drill-down: o/d | Close detail: Esc | Quit: q")
 	return lipgloss.JoinVertical(lipgloss.Left, header, layout, footer)
+}
+
+func (m *Model) cyclePaneFocus(delta int) {
+	order := []paneFocus{paneNav, paneMain, paneDetail}
+	idx := 0
+	for i, p := range order {
+		if p == m.focusPane {
+			idx = i
+			break
+		}
+	}
+	idx = wrapIndex(idx+delta, len(order))
+	m.focusPane = order[idx]
+}
+
+func (m Model) focusTitle() string {
+	switch m.focusPane {
+	case paneNav:
+		return "Navigation"
+	case paneMain:
+		return "Main"
+	case paneDetail:
+		return "Detail"
+	default:
+		return "Unknown"
+	}
+}
+
+func (m Model) activeTitle() string {
+	for _, item := range m.menuItems() {
+		if item.id == m.active {
+			return item.label
+		}
+	}
+	return "Unknown"
 }
 
 func (m *Model) setActive(s screen) {
@@ -428,7 +486,10 @@ func (m Model) menuItems() []menuItem {
 }
 
 func (m Model) viewSidebar() string {
-	lines := []string{stylePanelTitle.Render("Menu")}
+	lines := []string{stylePanelTitle.Render("Navigation")}
+	if m.focusPane == paneNav {
+		lines[0] = styleFocus.Render("Navigation [focused]")
+	}
 	for i, item := range m.menuItems() {
 		prefix := "  "
 		if item.id == m.active {
@@ -436,7 +497,7 @@ func (m Model) viewSidebar() string {
 		}
 		line := fmt.Sprintf("%s%d. %s", prefix, i+1, item.label)
 		if i == m.menuIndex {
-			line = styleNavActive.Render(line)
+			line = styleRowSelected.Render(line)
 		} else {
 			line = styleNavItem.Render(line)
 		}
@@ -444,7 +505,228 @@ func (m Model) viewSidebar() string {
 	}
 
 	lines = append(lines, "", styleMuted.Render("Enter = open section"), styleMuted.Render("Tab = switch focus"))
-	return styleNav.Width(28).Render(strings.Join(lines, "\n"))
+	base := styleNav
+	if m.focusPane == paneNav {
+		base = styleFocusedPanel
+	}
+	return base.Width(26).Render(strings.Join(lines, "\n"))
+}
+
+func (m Model) renderPane(title, body string, p paneFocus, width int) string {
+	base := stylePanel
+	if m.focusPane == p {
+		base = styleFocusedPanel
+		title = styleFocus.Render(title + " [focused]")
+	}
+	return base.Width(width).Render(stylePanelTitle.Render(title) + "\n\n" + strings.TrimRight(body, "\n"))
+}
+
+func (m Model) currentPaneBodies() (string, string, string, string) {
+	switch m.active {
+	case screenOverview:
+		return m.paneOverview()
+	case screenHotspots:
+		return m.paneHotspots()
+	case screenEndpoints:
+		return m.paneEndpoints()
+	case screenFindings:
+		return m.paneFindings()
+	case screenWorkflows:
+		return m.paneWorkflows()
+	case screenDiff:
+		return m.paneDiff()
+	default:
+		return "Main", "Unknown screen", "Detail", "No detail available"
+	}
+}
+
+func (m Model) paneOverview() (string, string, string, string) {
+	main := "Overview\n\n"
+	main += fmt.Sprintf("Operations: %d\n", len(m.endpointOperations()))
+	if m.analysis != nil {
+		main += fmt.Sprintf("Findings: %d\n", len(m.analysis.Issues))
+		main += fmt.Sprintf("Errors: %d | Warnings: %d | Info: %d\n", countSeverity(m.analysis.Issues, "error"), countSeverity(m.analysis.Issues, "warning"), countSeverity(m.analysis.Issues, "info"))
+	}
+	if m.workflowGraph != nil {
+		main += fmt.Sprintf("Workflows: %d\n", len(m.workflowGraph.Edges))
+		main += fmt.Sprintf("Chains: %d\n", len(m.workflowGraph.Chains))
+	}
+	detail := "Use the left menu to choose a section.\n\nMove between panes with Left/Right or Tab.\n\nIn content panes, Enter/o/d opens drill-down details."
+	return "Overview", main, "How to navigate", detail
+}
+
+func (m Model) paneHotspots() (string, string, string, string) {
+	items := m.hotspotItems()
+	if len(items) == 0 {
+		return "Hotspots", "No hotspot data available.", "Detail", "Provide --spec to populate this section."
+	}
+	idx := wrapIndex(m.hotspotIndex, len(items))
+	list := fmt.Sprintf("Top hotspots: %d | Selected: %d/%d\n\n", len(items), idx+1, len(items))
+	for i, item := range items {
+		prefix := " "
+		if i == idx {
+			prefix = styleSelection.Render(">")
+		}
+		riskText := styleWarn.Render(fmt.Sprintf("risk:%3d", item.risk))
+		if item.risk >= 10 {
+			riskText = styleBad.Render(fmt.Sprintf("risk:%3d", item.risk))
+		}
+		row := fmt.Sprintf("%s %2d) %-14s %-34s %s %s", prefix, i+1, item.kind, truncate(item.label, 34), riskText, item.value)
+		if i == idx {
+			row = styleRowSelected.Render(row)
+		}
+		list += row + "\n"
+	}
+	sel := items[idx]
+	detail := fmt.Sprintf("Type: %s\nLabel: %s\nMetric: %s\n\nWhy risky:\n%s\n\n", sel.kind, sel.label, sel.value, sel.detail)
+	if sel.operation != nil {
+		detail += "Press Enter or o in Main pane to jump to endpoint detail."
+	} else {
+		detail += "Press Enter or o in Main pane to open related context when available."
+	}
+	return "Hotspots", list, "Selected hotspot", detail
+}
+
+func (m Model) paneEndpoints() (string, string, string, string) {
+	if m.analysis == nil {
+		return "Endpoints", "No analysis data available.", "Detail", "Provide --spec to populate this section."
+	}
+	ops := m.endpointOperations()
+	if len(ops) == 0 {
+		return "Endpoints", "No endpoints were parsed from this spec.", "Detail", "No detail available."
+	}
+	idx := wrapIndex(m.endpointIndex, len(ops))
+	list := fmt.Sprintf("Total endpoints: %d | Selected: %d/%d\n\n", len(ops), idx+1, len(ops))
+	start, end := listWindow(len(ops), idx, 12)
+	for i := start; i < end; i++ {
+		op := ops[i]
+		prefix := " "
+		if i == idx {
+			prefix = styleSelection.Render(">")
+		}
+		row := fmt.Sprintf("%s %3d) %-6s %-36s f:%-2d s:%s", prefix, i+1, strings.ToUpper(op.Method), truncate(op.Path, 36), len(m.findingsForOperation(op)), m.endpointScoreSummary(op))
+		if i == idx {
+			row = styleRowSelected.Render(row)
+		}
+		list += row + "\n"
+	}
+
+	detail := styleMuted.Render("Press Enter or d in Main pane to open endpoint detail.")
+	if m.endpointDetailOpen {
+		op := ops[idx]
+		detail = fmt.Sprintf("Operation: %s %s\n", strings.ToUpper(op.Method), op.Path)
+		if op.OperationID != "" {
+			detail += fmt.Sprintf("Operation ID: %s\n", op.OperationID)
+		}
+		detail += fmt.Sprintf("Scores: %s\n\n", m.endpointScoreSummary(op))
+		matches := m.findingsForOperation(op)
+		if len(matches) == 0 {
+			detail += "Matching findings: none\n"
+		} else {
+			detail += "Matching findings:\n"
+			for _, issue := range matches {
+				detail += fmt.Sprintf("- [%s/%s] %s\n", issue.Severity, issue.Code, truncate(issue.Message, 70))
+			}
+		}
+	}
+	return "Endpoints", list, "Endpoint detail", detail
+}
+
+func (m Model) paneFindings() (string, string, string, string) {
+	if m.analysis == nil {
+		return "Findings", "No findings data available.", "Detail", "Provide --spec to populate this section."
+	}
+	buckets := m.findingCodeBuckets()
+	if len(buckets) == 0 {
+		return "Findings", "No findings detected in this run.", "Detail", "No detail available."
+	}
+	idx := wrapIndex(m.findingsBucketIndex, len(buckets))
+	main := fmt.Sprintf("Total findings: %d | Buckets: %d\n\n", len(m.analysis.Issues), len(buckets))
+	for i, b := range buckets {
+		prefix := " "
+		if i == idx {
+			prefix = styleSelection.Render(">")
+		}
+		row := fmt.Sprintf("%s %2d) %-40s %4d", prefix, i+1, b.key, b.count)
+		if i == idx {
+			row = styleRowSelected.Render(row)
+		}
+		main += row + "\n"
+	}
+	detail := styleMuted.Render("Press Enter or d in Main pane to preview finding details.\nPress o to jump to endpoint detail.")
+	if m.findingsDetailOpen {
+		detail = fmt.Sprintf("Details for %s\n\n", buckets[idx].key)
+		for _, line := range m.findingDetails(buckets[idx].key, 8) {
+			detail += fmt.Sprintf("- %s\n", line)
+		}
+	}
+	return "Findings", main, "Finding detail", detail
+}
+
+func (m Model) paneWorkflows() (string, string, string, string) {
+	if m.workflowGraph == nil {
+		return "Workflows", "No workflow data available.", "Detail", "Provide --spec to populate this section."
+	}
+	main := fmt.Sprintf("Pairwise workflows: %d\nChains: %d\n\n", len(m.workflowGraph.Edges), len(m.workflowGraph.Chains))
+	buckets := m.workflowActiveBuckets()
+	if len(buckets) == 0 {
+		return "Workflows", main + "No workflow buckets available.", "Workflow detail", "No detail available."
+	}
+	idx := wrapIndex(m.workflowBucketIndex, len(buckets))
+	for i, b := range buckets {
+		prefix := " "
+		if i == idx {
+			prefix = styleSelection.Render(">")
+		}
+		row := fmt.Sprintf("%s %2d) %-40s %4d", prefix, i+1, b.key, b.count)
+		if i == idx {
+			row = styleRowSelected.Render(row)
+		}
+		main += row + "\n"
+	}
+	main += "\nUse w/s to switch pairwise/chains."
+
+	detail := styleMuted.Render("Press Enter or d for bucket preview.\nPress o for workflow/chain item detail.")
+	if m.workflowDetailOpen {
+		detail = fmt.Sprintf("Bucket: %s\n\n", buckets[idx].key)
+		if m.workflowSection == 0 {
+			for _, line := range m.workflowEdgeDetails(buckets[idx].key, 7) {
+				detail += fmt.Sprintf("- %s\n", line)
+			}
+		} else {
+			for _, line := range m.workflowChainDetails(buckets[idx].key, 7) {
+				detail += fmt.Sprintf("- %s\n", line)
+			}
+		}
+	}
+	if m.workflowItemDetailOpen {
+		detail += "\nItem detail\n\n" + m.viewWorkflowItemDetail()
+	}
+	return "Workflows", main, "Workflow detail", detail
+}
+
+func (m Model) paneDiff() (string, string, string, string) {
+	if m.diffResult == nil {
+		return "Diff", "No diff data available.", "Detail", "Use --old and --new to populate this section."
+	}
+	main := fmt.Sprintf("Old spec: %s\nNew spec: %s\nTotal changes: %d\n\n", m.diffResult.OldSpec, m.diffResult.NewSpec, len(m.diffResult.Changes))
+	sev := map[string]int{}
+	for _, c := range m.diffResult.Changes {
+		sev[c.Severity]++
+	}
+	main += fmt.Sprintf("Errors: %d\nWarnings: %d\n", sev["error"], sev["warning"])
+	detail := "Top change buckets\n\n"
+	codes := map[string]int{}
+	for _, c := range m.diffResult.Changes {
+		codes[c.Code]++
+	}
+	for _, item := range topCounts(codes, 10) {
+		detail += fmt.Sprintf("- %s: %d\n", item.key, item.count)
+	}
+	if len(codes) == 0 {
+		detail += "No breaking changes detected.\n"
+	}
+	return "Diff", main, "Diff detail", detail
 }
 
 func (m Model) screenTabs() string {

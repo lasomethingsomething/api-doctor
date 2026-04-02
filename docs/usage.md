@@ -9,6 +9,37 @@ Scope reminder:
 - Broader API support should not be assumed unless validated in this repository
 - Store API support is not claimed here
 
+## Local Usage Setup (Important)
+
+When developing locally, run commands from the project root (the directory that contains `go.mod`).
+
+Why this matters:
+
+- `go run . ...`, `go build ./...`, and `go test ./...` are module-aware commands.
+- If you run them outside this repo root (for example from `~`), they fail because Go cannot find the module.
+
+Two supported local usage patterns:
+
+### 1) Run from the repo root
+
+```sh
+cd ~/api-doctor
+go run . analyze --spec ./adminapi.json
+go run . workflows --spec ./adminapi.json
+go run . tui --spec ./adminapi.json
+```
+
+### 2) Build a local binary first
+
+```sh
+cd ~/api-doctor
+go build -o api-doctor .
+./api-doctor analyze --spec ./adminapi.json
+./api-doctor tui --spec ./adminapi.json
+```
+
+This is documentation for local development usage only. Packaging and external tool integration are optional and not required for the workflows above.
+
 ## 1) Analyze
 
 ### What it does
@@ -157,7 +188,7 @@ go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2
 ### Navigation keys
 
 - Sidebar navigation (primary): up/down (or j/k), Enter to open selected section
-- Pane focus: Tab toggles between Navigation and Content (left/right also toggles focus)
+- Pane focus: Tab or left/right moves focus across Navigation, Main, and Detail panes
 - Secondary screen shortcuts: 1 Overview, 2 Hotspots, 3 Endpoints, 4 Findings, 5 Workflows, 6 Diff
 - Legacy quick cycling: [ and ] (or h/l)
 - Quit: q (or Ctrl+C)
@@ -180,8 +211,9 @@ The layout is menu-driven:
 Recommended first-run navigation:
 
 - Start in the sidebar and choose a section with up/down.
-- Press Enter to load that section, then Tab into content.
-- Use Enter, o, d, and Esc in content to open and close drill-down detail.
+- Press Enter to load that section in the Main pane.
+- Use Enter, o, d, and Esc in Main to open and close drill-down detail.
+- Move to the Detail pane with Tab or right arrow when a drill-down is open.
 
 - Overview: totals and severity summary
 - Hotspots: worst-first ranking across finding buckets, endpoint families, and workflow/chain categories

@@ -124,6 +124,7 @@ func TestFindingsKeyOpenEndpoint(t *testing.T) {
 	}
 	m := NewModel(analysis, nil, nil, nil, nil, nil)
 	m.active = screenFindings
+	m.focusPane = paneMain
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
 	next := updated.(Model)
@@ -160,6 +161,7 @@ func TestHotspotsKeyOpenEndpoint(t *testing.T) {
 	}
 	m := NewModel(analysis, nil, nil, nil, nil, nil)
 	m.active = screenHotspots
+	m.focusPane = paneMain
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
 	next := updated.(Model)
@@ -190,6 +192,7 @@ func TestHotspotsKeyOpenWorkflowDetail(t *testing.T) {
 	g := &workflow.Graph{Edges: []workflow.Edge{{Kind: "list-to-detail", From: workflow.Node{Method: "get", Path: "/orders"}, To: workflow.Node{Method: "get", Path: "/orders/{id}"}}}}
 	m := NewModel(&model.AnalysisResult{}, nil, g, map[string]*workflow.WorkflowScore{"0": {UIIndependence: 3, SchemaCompleteness: 4, ClientGenerationQuality: 5}}, nil, nil)
 	m.active = screenHotspots
+	m.focusPane = paneMain
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
 	next := updated.(Model)

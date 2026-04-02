@@ -39,6 +39,11 @@ Current validated scope is intentionally narrow:
 
 ## Install
 
+Important for local development:
+
+- Commands like `go run . ...`, `go build ./...`, and `go test ./...` must be run from the project root directory (the folder that contains `go.mod`).
+- If you run them from another directory (for example `~`), they will fail because Go cannot find this module.
+
 Build and verify locally:
 
 ```sh
@@ -52,6 +57,34 @@ Optional: install the binary in your Go bin path:
 ```sh
 go install .
 ```
+
+## Local Developer Workflows
+
+You can use api-doctor locally in two simple ways while developing.
+
+### 1) Run from the repo root
+
+Use this when iterating quickly on code changes:
+
+```sh
+cd ~/api-doctor
+go run . analyze --spec ./adminapi.json
+go run . workflows --spec ./adminapi.json
+go run . tui --spec ./adminapi.json
+```
+
+### 2) Build a local binary first
+
+Use this when you want repeatable command runs without `go run` startup overhead:
+
+```sh
+cd ~/api-doctor
+go build -o api-doctor .
+./api-doctor analyze --spec ./adminapi.json
+./api-doctor tui --spec ./adminapi.json
+```
+
+Both workflows are local-only and do not require packaging or any external CLI integration.
 
 ## Quickstart
 
@@ -103,7 +136,7 @@ Current high-level screens:
 Common keybindings:
 
 - Sidebar-first navigation: Up/down to choose section, Enter to open
-- Focus switching: Tab (or left/right) toggles Navigation and Content focus
+- Focus switching: Tab or left/right moves focus across Navigation, Main, and Detail panes
 - Quick section shortcuts: number keys 1..6 (secondary)
 - Legacy section cycling: [ and ] (or h/l)
 - Open related detail: Enter or o (context-dependent)
@@ -112,8 +145,8 @@ Common keybindings:
 First-time flow:
 
 - Move in the left menu with up/down.
-- Press Enter to open a section in the main pane.
-- Use Tab to move into content and open drill-down details.
+- Press Enter to open a section in the Main pane.
+- Use Tab or right arrow to move to the Detail pane when a drill-down is open.
 
 ## Command overview
 
