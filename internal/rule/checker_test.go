@@ -1,6 +1,7 @@
 package rule
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/lasomethingsomething/api-doctor/internal/openapi"
@@ -187,11 +188,17 @@ func TestChecker_CheckAll_InconsistentResponseShapesFixture(t *testing.T) {
 	}
 
 	issues := NewChecker().CheckAll(result.Operations)
-	if len(issues) != 2 {
-		t.Fatalf("expected exactly 2 issues from inconsistent response fixture, got %#v", issues)
+	matched := make([]*model.Issue, 0)
+	for _, issue := range issues {
+		if issue.Code == "inconsistent-response-shape" {
+			matched = append(matched, issue)
+		}
+	}
+	if len(matched) != 2 {
+		t.Fatalf("expected exactly 2 inconsistent-response-shape issues from fixture, got %#v", matched)
 	}
 
-	for _, issue := range issues {
+	for _, issue := range matched {
 		if issue.Code != "inconsistent-response-shape" {
 			t.Fatalf("expected inconsistent-response-shape, got %#v", issue)
 		}
@@ -209,17 +216,114 @@ func TestChecker_CheckAll_InconsistentResponseShapesFamilyFixture(t *testing.T) 
 	}
 
 	issues := NewChecker().CheckAll(result.Operations)
-	if len(issues) != 2 {
-		t.Fatalf("expected exactly 2 issues from family fixture, got %#v", issues)
+	matched := make([]*model.Issue, 0)
+	for _, issue := range issues {
+		if issue.Code == "inconsistent-response-shape" {
+			matched = append(matched, issue)
+		}
+	}
+	if len(matched) != 2 {
+		t.Fatalf("expected exactly 2 inconsistent-response-shape issues from family fixture, got %#v", matched)
 	}
 
-	for _, issue := range issues {
+	for _, issue := range matched {
 		if issue.Code != "inconsistent-response-shape" {
 			t.Fatalf("expected inconsistent-response-shape, got %#v", issue)
 		}
 		if issue.Path != "/weak-items/by-id/{id}" && issue.Path != "/weak-items/by-code/{code}" {
 			t.Fatalf("expected only weak family endpoints to trigger, got %#v", issue)
 		}
+	}
+}
+
+func TestChecker_CheckAll_DetailPathParameterNameDriftFixture(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/detail-path-parameter-name-drift.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	issues := NewChecker().CheckAll(result.Operations)
+	matched := make([]*model.Issue, 0)
+	for _, issue := range issues {
+		if issue.Code == "detail-path-parameter-name-drift" {
+			matched = append(matched, issue)
+		}
+	}
+
+	if len(matched) != 2 {
+		t.Fatalf("expected exactly 2 detail-path-parameter-name-drift issues, got %#v", matched)
+	}
+
+	for _, issue := range matched {
+		if issue.Path != "/weak-items/{id}" && issue.Path != "/weak-items/{itemId}" {
+			t.Fatalf("expected weak detail endpoints only, got %#v", issue)
+		}
+		if !strings.Contains(issue.Message, "id, itemId") {
+			t.Fatalf("expected message to include drifted identifier names, got %#v", issue)
+		}
+	}
+}
+
+func TestChecker_CheckAll_EndpointPathStyleDriftFixture(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/endpoint-path-style-drift.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	issues := NewChecker().CheckAll(result.Operations)
+	matched := make([]*model.Issue, 0)
+	for _, issue := range issues {
+		if issue.Code == "endpoint-path-style-drift" {
+			matched = append(matched, issue)
+		}
+	}
+
+	if len(matched) != 1 {
+		t.Fatalf("expected exactly 1 endpoint-path-style-drift issue, got %#v", matched)
+	}
+
+	issue := matched[0]
+	if issue.Path != "/catalog/{id}/media_upload" {
+		t.Fatalf("expected only the non-dominant snake_case endpoint to be flagged, got %#v", issue)
+	}
+	if !strings.Contains(issue.Message, "dominant: kebab-case") {
+		t.Fatalf("expected dominant-style hint in message, got %#v", issue)
+	}
+	if strings.Contains(issue.Path, "/_action/") || strings.Contains(issue.Path, "/search/") {
+		t.Fatalf("expected excluded prefixes to be ignored, got %#v", issue)
+	}
+}
+
+func TestChecker_CheckAll_SiblingPathShapeDriftFixture(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/sibling-path-shape-drift.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	issues := NewChecker().CheckAll(result.Operations)
+	matched := make([]*model.Issue, 0)
+	for _, issue := range issues {
+		if issue.Code == "sibling-path-shape-drift" {
+			matched = append(matched, issue)
+		}
+	}
+
+	if len(matched) != 1 {
+		t.Fatalf("expected exactly 1 sibling-path-shape-drift issue, got %#v", matched)
+	}
+
+	issue := matched[0]
+	if issue.Path != "/catalog/{id}/detail" {
+		t.Fatalf("expected only minority catalog shape endpoint to be flagged, got %#v", issue)
+	}
+	if !strings.Contains(issue.Message, "mostly use shape") {
+		t.Fatalf("expected plain-language dominant-vs-observed message, got %#v", issue)
+	}
+	if strings.Contains(issue.Path, "/_action/") || strings.Contains(issue.Path, "/search/") {
+		t.Fatalf("expected excluded families to be ignored, got %#v", issue)
 	}
 }
 

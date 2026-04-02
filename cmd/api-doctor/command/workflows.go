@@ -16,7 +16,7 @@ var workflowVerbose bool
 
 var workflowsCmd = &cobra.Command{
 	Use:   "workflows",
-	Short: "Infer a small high-confidence workflow graph",
+	Short: "Infer likely API call chains",
 	Long: `Infer a small set of high-confidence workflows from an OpenAPI specification.
 
 Example:

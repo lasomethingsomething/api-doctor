@@ -200,3 +200,71 @@ func TestHotspotsKeyOpenWorkflowDetail(t *testing.T) {
 		t.Fatalf("expected hotspots key 'o' to open workflow detail, got active=%v detail=%v", next.active, next.workflowItemDetailOpen)
 	}
 }
+
+func TestPaneEndpoints_ChainingHintsAndMissingIdentifierStatus(t *testing.T) {
+	ops := []*model.Operation{
+		{Path: "/orders", Method: "get", OperationID: "listOrders"},
+		{Path: "/orders/{id}", Method: "get", OperationID: "getOrder"},
+		{Path: "/orders/{id}/line-items", Method: "get", OperationID: "getOrderLineItems"},
+	}
+	analysis := &model.AnalysisResult{
+		Operations: ops,
+		Issues: []*model.Issue{
+			{Severity: "warning", Code: "weak-follow-up-linkage", Path: "/orders", Operation: "get", Message: "follow-up identifier is not clearly exposed"},
+		},
+	}
+	g := &workflow.Graph{
+		Edges: []workflow.Edge{{
+			Kind:   "list-to-detail",
+			From:   workflow.Node{Method: "get", Path: "/orders"},
+			To:     workflow.Node{Method: "get", Path: "/orders/{id}"},
+			Reason: "list response links to detail endpoint",
+		}},
+		Chains: []workflow.Chain{{
+			Kind: "order-detail-to-lines",
+			Steps: []workflow.ChainStep{
+				{Node: workflow.Node{Method: "get", Path: "/orders"}},
+				{Node: workflow.Node{Method: "get", Path: "/orders/{id}"}},
+				{Node: workflow.Node{Method: "get", Path: "/orders/{id}/line-items"}},
+			},
+		}},
+	}
+
+	m := NewModel(analysis, nil, g, nil, nil, nil)
+	m.endpointDetailOpen = true
+
+	_, _, _, detail := m.paneEndpoints()
+	if !strings.Contains(detail, "Likely next calls") || !strings.Contains(detail, "Required identifiers") {
+		t.Fatalf("expected chaining hint sections in endpoint detail, got: %s", detail)
+	}
+	if !strings.Contains(detail, "GET /orders/{id}") || !strings.Contains(detail, "id") {
+		t.Fatalf("expected next call and required identifier hints, got: %s", detail)
+	}
+	if !strings.Contains(detail, "Linkage status: identifier likely missing") {
+		t.Fatalf("expected missing linkage status from weak linkage issue, got: %s", detail)
+	}
+	if !strings.Contains(detail, "Suggested call sequence:") {
+		t.Fatalf("expected suggested call sequence in endpoint detail, got: %s", detail)
+	}
+}
+
+func TestPaneEndpoints_ChainingHintsExposedIdentifierStatus(t *testing.T) {
+	ops := []*model.Operation{
+		{Path: "/products", Method: "post", OperationID: "createProduct"},
+		{Path: "/products/{id}", Method: "get", OperationID: "getProduct"},
+	}
+	analysis := &model.AnalysisResult{Operations: ops}
+	g := &workflow.Graph{Edges: []workflow.Edge{{
+		Kind: "create-to-detail",
+		From: workflow.Node{Method: "post", Path: "/products"},
+		To:   workflow.Node{Method: "get", Path: "/products/{id}"},
+	}}}
+
+	m := NewModel(analysis, nil, g, nil, nil, nil)
+	m.endpointDetailOpen = true
+
+	_, _, _, detail := m.paneEndpoints()
+	if !strings.Contains(detail, "Linkage status: identifier appears exposed by deterministic checks") {
+		t.Fatalf("expected exposed linkage status when no weak linkage issue exists, got: %s", detail)
+	}
+}

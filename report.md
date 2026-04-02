@@ -1,8 +1,8 @@
-# api-doctor - Real-Spec Findings Checkpoint
+# api-doctor - Real-Spec Analysis Checkpoint
 
 Spec: Shopware Admin API (`adminapi.json`)
 Operations analyzed: 1036
-Scope: stable tool state with validated endpoint scoring, validated pairwise workflow scoring, validated multi-step chain scoring, and diff validation
+Scope: stable tool state with validated endpoint scoring, validated single-step workflow scoring, validated multi-step chain scoring, and diff validation
 Date: April 2026
 
 ---
@@ -29,7 +29,7 @@ Interpretation:
 Workflow inference and scoring are validated and stable.
 
 Workflow output behavior (current):
-- Pairwise workflows remain and are still reported/scored as the baseline signal.
+- Single-step workflows remain and are still reported/scored as the baseline signal.
 - Multi-step chains are inferred additively from deterministic continuity rules.
 - Chain scoring is deterministic and explainable: worst-step plus continuity penalty.
 - Default text/Markdown output surfaces stronger chains and hides noisier CRUD-heavy chain families by default.
@@ -94,9 +94,18 @@ Why this matters:
 
 ---
 
-## Next Planned Phase
+## Current TUI Status
 
-TUI phase:
-- add an interactive view for findings, pairwise workflows, chain signals, and score summaries
+Interactive TUI is available and read-only.
+
+Current TUI coverage:
+- Overview with severity and workflow/path totals
+- Hotspots with ranked priority areas
+- Endpoints with issues/quality/priority labels and sort toggle
+- Issue categories with structured detail and endpoint jump
+- Workflows with single-step and multi-step pattern summaries
+- Diff guidance when not launched with --old and --new, or diff summary when both are provided
+
+TUI constraints:
 - keep current deterministic analyzers/inference unchanged
 - prioritize navigation, triage speed, and developer ergonomics over new inference complexity

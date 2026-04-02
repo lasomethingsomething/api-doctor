@@ -52,6 +52,9 @@ func FormatText(result *model.AnalysisResult, scores map[string]*endpoint.Endpoi
 				out += fmt.Sprintf("  [%s] %s\n", strings.ToUpper(issue.Severity), issue.Code)
 				out += fmt.Sprintf("      Endpoint: %s %s\n", issue.Operation, issue.Path)
 				out += fmt.Sprintf("      Why it matters: %s\n", issue.Description)
+				if issue.Code == "sibling-path-shape-drift" {
+					out += fmt.Sprintf("      Shape detail: %s\n", issue.Message)
+				}
 				out += "\n"
 			}
 

@@ -40,6 +40,32 @@ go build -o api-doctor .
 
 This is documentation for local development usage only. Packaging and external tool integration are optional and not required for the workflows above.
 
+## 5-Minute Paths By Role
+
+### External developer: chain calls and avoid hidden follow-up traps
+
+1. Run `go run . workflows --spec ./adminapi.json` to see likely route sequences.
+2. Run `go run . tui --spec ./adminapi.json`.
+3. Open Endpoints and inspect your target endpoint detail.
+4. Read `Likely next calls`, `Required identifiers`, and `Linkage status`.
+5. Open Issue categories and check rows marked `[consistency]` for naming/shape mismatch traps.
+
+### Internal API owner/team: find worst quality and consistency problems
+
+1. Run `go run . analyze --spec ./adminapi.json`.
+2. Open `go run . tui --spec ./adminapi.json`.
+3. Read Overview `Fix first (deterministic snapshot)` to get immediate priorities.
+4. Use Hotspots for high-priority endpoint families and repeated issue categories.
+5. Use Issue categories detail for consistency categories and affected endpoint examples.
+
+### PM/stakeholder: get a quick current-state summary for planning
+
+1. Run `go run . analyze --spec ./adminapi.json`.
+2. Capture total issues, severity split, and endpoint quality summary.
+3. Open `go run . tui --spec ./adminapi.json` and read Overview totals plus `Fix first` lines.
+4. Check Workflows totals for single-step and multi-step usability signal.
+5. If comparing releases, run `go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json`.
+
 ## 1) Analyze
 
 ### What it does
@@ -109,7 +135,7 @@ go run . workflows --spec ./adminapi.json
 
 ### What kind of output to expect
 
-You get a summary of inferred workflow buckets and counts.
+You get a summary of inferred workflow patterns and counts.
 
 In verbose mode, you get more detail.
 JSON output includes complete structured workflow and chain data.
@@ -170,7 +196,7 @@ Use tui when plain command output feels too dense and you want a quick visual su
 Good moments to run it:
 
 - Local review sessions
-- Pair-review of findings and workflow signals
+- Pair-review of issues and workflow signals
 - Quick triage before digging into JSON output
 
 ### Launch command
@@ -195,16 +221,16 @@ go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2
 
 - Sidebar navigation (primary): up/down (or j/k), Enter to open selected section
 - Pane focus: Tab or left/right moves focus across Navigation, Main, and Detail panes
-- Secondary screen shortcuts: 1 Overview, 2 Hotspots, 3 Endpoints, 4 Findings, 5 Workflows, 6 Diff
+- Secondary screen shortcuts: 1 Overview, 2 Hotspots, 3 Endpoints, 4 Issue categories, 5 Workflows, 6 Diff
 - Legacy quick cycling: [ and ] (or h/l)
 - Quit: q (or Ctrl+C)
 - Open related detail: Enter or o (context-dependent)
-- Endpoints sort mode: r toggles risk-first and path order
-- Open/close bucket preview: Enter or d (Findings/Workflows buckets)
+- Endpoints sort mode: r toggles priority-first and path order
+- Open/close bucket preview: Enter or d (Issue categories/Workflows lists)
 - Close detail pane/preview: Esc
-- Findings bucket move: up/down (or j/k)
-- Workflows bucket move: up/down (or j/k)
-- Workflows section toggle (pairwise vs chains): w or s
+- Issue categories move: up/down (or j/k)
+- Workflows list move: up/down (or j/k)
+- Workflows section toggle (single-step vs multi-step): w or s
 
 ### Current screens and views
 
@@ -212,7 +238,7 @@ The layout is menu-driven:
 
 - Left sidebar: always-visible section menu for guided navigation
 - Main content pane: selected section summary/list content
-- Detail/drill-down pane: shown when endpoint/workflow/findings detail is opened
+- Detail/drill-down pane: shown when endpoint/workflow/issue detail is opened
 - Persistent footer: key hints via Charm help component
 
 Recommended first-run navigation:
@@ -222,18 +248,18 @@ Recommended first-run navigation:
 - Use Enter, o, d, and Esc in Main to open and close drill-down detail.
 - Move to the Detail pane with Tab or right arrow when a drill-down is open.
 
-- Overview: totals and severity summary
-- Hotspots: worst-first ranking across finding buckets, endpoint families, and workflow/chain categories
-- Endpoints: browsable endpoint list with explicit row labels (`findings`, `scores`, `risk`) and sort toggle (`r`: risk-first/path)
-- Findings: finding-code buckets with structured detail (summary, affected count, representative examples, why it matters, plus hidden-items note)
-- Workflows: pairwise/chain bucket summary with inline kind examples so equal counts are easier to interpret
+- Overview: totals, severity summary, and a compact deterministic "Fix first" snapshot
+- Hotspots: ranked priority areas across issue categories, endpoint areas, and workflow patterns
+- Endpoints: browsable endpoint list with explicit row labels (`issues`, `quality`, `priority`) and sort toggle (`r`: priority-first/path)
+- Issue categories: grouped issue-code categories with structured detail (summary, affected count, representative examples, why it matters, plus hidden-items note)
+- Workflows: single-step and multi-step pattern summaries with inline examples so equal counts are easier to interpret
 - Diff: change summary when started with --old and --new; otherwise the pane explains how to relaunch with diff flags and shows an example
 
 ### Drill-down supported today
 
 - Endpoints: select an endpoint row, then open a detail pane with operation info, endpoint score summary, matching findings, related workflows/chains, and a short why-this-matters summary
-- Findings: select a finding-code bucket to open structured detail (meaning, affected count, representative examples, why it matters), or press o to jump to a related endpoint detail
-- Workflows: select pairwise or chain section, preview a kind bucket with explanation/examples, then press o to open a specific workflow/chain item detail (kind, step sequence, scores, bottleneck summary, related endpoints/findings, why-this-matters)
+- Issue categories: select an issue-code category to open structured detail (meaning, affected count, representative examples, why it matters), or press o to jump to a related endpoint detail
+- Workflows: select single-step or multi-step section, preview a pattern bucket with explanation/examples, then press o to open a specific workflow/chain item detail (kind, step sequence, scores, bottleneck summary, related endpoints/issues, why-this-matters)
 - Hotspots: select a hotspot row, then press Enter or o to jump into related endpoint detail or workflow/chain detail when available
 
 ### Current limitations

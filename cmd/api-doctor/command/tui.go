@@ -22,8 +22,8 @@ var (
 
 var tuiCmd = &cobra.Command{
 	Use:   "tui",
-	Short: "Run interactive TUI summary",
-	Long: `Run a minimal interactive Bubble Tea TUI over existing analysis/workflow/diff outputs.
+	Short: "Run interactive read-only TUI",
+	Long: `Run an interactive read-only Bubble Tea TUI over existing analysis/workflow/diff outputs.
 
 Example:
   api-doctor tui --spec ./adminapi.json

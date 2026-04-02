@@ -36,6 +36,9 @@ func NewChecker() *Checker {
 		},
 		setRules: []SetRule{
 			NewInconsistentResponseShapeRule(),
+			NewDetailPathParameterNameDriftRule(),
+			NewEndpointPathStyleDriftRule(),
+			NewSiblingPathShapeDriftRule(),
 			NewWeakFollowUpLinkageRule(),
 			NewWeakListDetailLinkageRule(),
 			NewWeakAcceptedTrackingLinkageRule(),
@@ -522,6 +525,286 @@ func (r *InconsistentResponseShapeRule) CheckAll(operations []*model.Operation) 
 	return issues
 }
 
+type DetailPathParameterNameDriftRule struct{}
+
+func NewDetailPathParameterNameDriftRule() *DetailPathParameterNameDriftRule {
+	return &DetailPathParameterNameDriftRule{}
+}
+
+func (r *DetailPathParameterNameDriftRule) Name() string { return "detail-path-parameter-name-drift" }
+
+func (r *DetailPathParameterNameDriftRule) CheckAll(operations []*model.Operation) []*model.Issue {
+	type detailEntry struct {
+		op       *model.Operation
+		param    string
+		groupKey string
+	}
+
+	groups := map[string][]detailEntry{}
+	for _, op := range operations {
+		if op == nil || strings.ToUpper(op.Method) != "GET" {
+			continue
+		}
+		if countPathParams(op.Path) != 1 {
+			continue
+		}
+		basePath, paramName, ok := detailPathBaseAndParam(op.Path)
+		if !ok {
+			continue
+		}
+		groupKey := strings.ToUpper(op.Method) + " " + normalizePathTemplate(basePath)
+		groups[groupKey] = append(groups[groupKey], detailEntry{op: op, param: paramName, groupKey: groupKey})
+	}
+
+	issues := make([]*model.Issue, 0)
+	for groupKey, entries := range groups {
+		if len(entries) < 2 {
+			continue
+		}
+		paramSet := map[string]bool{}
+		for _, entry := range entries {
+			paramSet[entry.param] = true
+		}
+		if len(paramSet) < 2 {
+			continue
+		}
+
+		paramNames := make([]string, 0, len(paramSet))
+		for name := range paramSet {
+			paramNames = append(paramNames, name)
+		}
+		sort.Strings(paramNames)
+
+		for _, entry := range entries {
+			issues = append(issues, &model.Issue{
+				Code:        r.Name(),
+				Severity:    "warning",
+				Path:        entry.op.Path,
+				Operation:   fmt.Sprintf("%s %s", entry.op.Method, entry.op.OperationID),
+				Message:     fmt.Sprintf("Related detail endpoints in '%s' use different identifier parameter names: %s", groupKey, strings.Join(paramNames, ", ")),
+				Description: "Using multiple identifier parameter names for the same detail endpoint family makes call chaining and reusable integration code harder to keep consistent.",
+			})
+		}
+	}
+
+	return issues
+}
+
+type EndpointPathStyleDriftRule struct{}
+
+func NewEndpointPathStyleDriftRule() *EndpointPathStyleDriftRule {
+	return &EndpointPathStyleDriftRule{}
+}
+
+func (r *EndpointPathStyleDriftRule) Name() string { return "endpoint-path-style-drift" }
+
+func (r *EndpointPathStyleDriftRule) CheckAll(operations []*model.Operation) []*model.Issue {
+	type styleEntry struct {
+		op      *model.Operation
+		segment string
+		style   string
+		group   string
+	}
+
+	groups := map[string][]styleEntry{}
+	for _, op := range operations {
+		if op == nil {
+			continue
+		}
+		segments := splitPathSegments(op.Path)
+		if len(segments) < 2 || isExcludedStyleDriftPrefix(segments[0]) {
+			continue
+		}
+
+		for i := range segments {
+			segment := segments[i]
+			if isPathParam(segment) {
+				continue
+			}
+			style := staticSegmentStyle(segment)
+			if style == "other" {
+				continue
+			}
+
+			groupParts := make([]string, 0, len(segments))
+			for j, part := range segments {
+				switch {
+				case j == i:
+					groupParts = append(groupParts, "*")
+				case isPathParam(part):
+					groupParts = append(groupParts, "{}")
+				default:
+					groupParts = append(groupParts, strings.ToLower(part))
+				}
+			}
+			groupKey := strings.ToUpper(op.Method) + " " + joinPathSegments(groupParts)
+			groups[groupKey] = append(groups[groupKey], styleEntry{op: op, segment: segment, style: style, group: groupKey})
+		}
+	}
+
+	issues := make([]*model.Issue, 0)
+	seen := map[string]bool{}
+	for groupKey, entries := range groups {
+		if len(entries) < 3 {
+			continue
+		}
+
+		styleCounts := map[string]int{"kebab": 0, "snake": 0}
+		for _, entry := range entries {
+			if entry.style == "kebab" || entry.style == "snake" {
+				styleCounts[entry.style]++
+			}
+		}
+		if styleCounts["kebab"] == 0 || styleCounts["snake"] == 0 {
+			continue
+		}
+
+		dominant := "kebab"
+		if styleCounts["snake"] > styleCounts["kebab"] {
+			dominant = "snake"
+		}
+		if styleCounts["kebab"] == styleCounts["snake"] {
+			continue
+		}
+
+		for _, entry := range entries {
+			if entry.style == dominant || (entry.style != "kebab" && entry.style != "snake") {
+				continue
+			}
+
+			issueKey := strings.Join([]string{r.Name(), entry.op.Method, entry.op.Path, groupKey}, "|")
+			if seen[issueKey] {
+				continue
+			}
+			seen[issueKey] = true
+
+			issues = append(issues, &model.Issue{
+				Code:      r.Name(),
+				Severity:  "warning",
+				Path:      entry.op.Path,
+				Operation: fmt.Sprintf("%s %s", entry.op.Method, entry.op.OperationID),
+				Message: fmt.Sprintf(
+					"Sibling endpoints in '%s' mix static segment styles (dominant: %s-case, found: %s-case segment '%s')",
+					groupKey,
+					dominant,
+					entry.style,
+					entry.segment,
+				),
+				Description: "Static path segments should use one naming style within a sibling endpoint family to keep endpoint discovery and integration code consistent.",
+			})
+		}
+	}
+
+	return issues
+}
+
+type SiblingPathShapeDriftRule struct{}
+
+func NewSiblingPathShapeDriftRule() *SiblingPathShapeDriftRule {
+	return &SiblingPathShapeDriftRule{}
+}
+
+func (r *SiblingPathShapeDriftRule) Name() string { return "sibling-path-shape-drift" }
+
+func (r *SiblingPathShapeDriftRule) CheckAll(operations []*model.Operation) []*model.Issue {
+	type shapeEntry struct {
+		op        *model.Operation
+		familyKey string
+		signature string
+		display   string
+	}
+
+	groups := map[string][]shapeEntry{}
+	for _, op := range operations {
+		if op == nil {
+			continue
+		}
+		familyKey, signature, display, ok := siblingShapeInfo(op.Path)
+		if !ok {
+			continue
+		}
+		groupKey := strings.ToUpper(op.Method) + " " + familyKey
+		groups[groupKey] = append(groups[groupKey], shapeEntry{
+			op:        op,
+			familyKey: familyKey,
+			signature: signature,
+			display:   display,
+		})
+	}
+
+	issues := make([]*model.Issue, 0)
+	seen := map[string]bool{}
+	for groupKey, entries := range groups {
+		if len(entries) < 3 {
+			continue
+		}
+
+		sigCounts := map[string]int{}
+		sigDisplay := map[string]string{}
+		for _, entry := range entries {
+			sigCounts[entry.signature]++
+			sigDisplay[entry.signature] = entry.display
+		}
+		if len(sigCounts) < 2 {
+			continue
+		}
+
+		type sigCount struct {
+			signature string
+			count     int
+		}
+		ranked := make([]sigCount, 0, len(sigCounts))
+		for signature, count := range sigCounts {
+			ranked = append(ranked, sigCount{signature: signature, count: count})
+		}
+		sort.Slice(ranked, func(i, j int) bool {
+			if ranked[i].count != ranked[j].count {
+				return ranked[i].count > ranked[j].count
+			}
+			return ranked[i].signature < ranked[j].signature
+		})
+
+		dominant := ranked[0]
+		second := ranked[1]
+		total := len(entries)
+
+		if dominant.count == second.count {
+			continue
+		}
+		// Strong-majority guardrail: dominant shape must cover at least two-thirds of the sibling set.
+		if dominant.count*3 < total*2 {
+			continue
+		}
+
+		for _, entry := range entries {
+			if entry.signature == dominant.signature {
+				continue
+			}
+			issueKey := strings.Join([]string{r.Name(), entry.op.Method, entry.op.Path, groupKey}, "|")
+			if seen[issueKey] {
+				continue
+			}
+			seen[issueKey] = true
+
+			issues = append(issues, &model.Issue{
+				Code:      r.Name(),
+				Severity:  "warning",
+				Path:      entry.op.Path,
+				Operation: fmt.Sprintf("%s %s", entry.op.Method, entry.op.OperationID),
+				Message: fmt.Sprintf(
+					"Sibling endpoints in '%s' mostly use shape '%s', but this endpoint uses '%s'",
+					groupKey,
+					sigDisplay[dominant.signature],
+					entry.display,
+				),
+				Description: "Sibling endpoints are easier to discover and automate when they follow one dominant path shape within a method and family.",
+			})
+		}
+	}
+
+	return issues
+}
+
 func isGenericObject(schema *model.Schema) bool {
 	if schema == nil {
 		return false
@@ -639,6 +922,64 @@ func splitPathSegments(path string) []string {
 		}
 	}
 	return segments
+}
+
+func isExcludedStyleDriftPrefix(segment string) bool {
+	lower := strings.ToLower(strings.TrimSpace(segment))
+	return lower == "_action" || lower == "search"
+}
+
+func staticSegmentStyle(segment string) string {
+	trimmed := strings.TrimSpace(segment)
+	if trimmed == "" {
+		return "other"
+	}
+	hasDash := strings.Contains(trimmed, "-")
+	hasUnderscore := strings.Contains(trimmed, "_")
+	switch {
+	case hasDash && !hasUnderscore:
+		return "kebab"
+	case hasUnderscore && !hasDash:
+		return "snake"
+	default:
+		return "other"
+	}
+}
+
+func siblingShapeInfo(path string) (string, string, string, bool) {
+	segments := splitPathSegments(path)
+	if len(segments) < 2 {
+		return "", "", "", false
+	}
+	if isPathParam(segments[0]) || isExcludedStyleDriftPrefix(segments[0]) {
+		return "", "", "", false
+	}
+
+	family := "/" + strings.ToLower(segments[0])
+	kinds := make([]string, 0, len(segments))
+	labels := make([]string, 0, len(segments))
+	for _, segment := range segments {
+		if isPathParam(segment) {
+			kinds = append(kinds, "{}")
+			labels = append(labels, "param")
+		} else {
+			kinds = append(kinds, "*")
+			labels = append(labels, "static")
+		}
+	}
+	signature := fmt.Sprintf("%d|%s", len(segments), strings.Join(kinds, "/"))
+	display := fmt.Sprintf("%d segments (%s)", len(segments), strings.Join(labels, " -> "))
+	return family, signature, display, true
+}
+
+func countPathParams(path string) int {
+	count := 0
+	for _, segment := range splitPathSegments(path) {
+		if isPathParam(segment) {
+			count++
+		}
+	}
+	return count
 }
 
 func joinPathSegments(segments []string) string {

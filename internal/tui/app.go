@@ -499,7 +499,7 @@ func (m Model) menuItems() []menuItem {
 		{id: screenOverview, label: "Overview"},
 		{id: screenHotspots, label: "Hotspots"},
 		{id: screenEndpoints, label: "Endpoints"},
-		{id: screenFindings, label: "Findings"},
+		{id: screenFindings, label: "Issue categories"},
 		{id: screenWorkflows, label: "Workflows"},
 		{id: screenDiff, label: "Diff"},
 	}
@@ -564,21 +564,28 @@ func (m Model) paneOverview() (string, string, string, string) {
 	main := "\n"
 	main += fmt.Sprintf("Endpoints analyzed from spec: %d\n", len(m.endpointOperations()))
 	if m.analysis != nil {
-		main += fmt.Sprintf("Total findings: %d\n", len(m.analysis.Issues))
+		main += fmt.Sprintf("Total warnings/quality issues detected: %d\n", len(m.analysis.Issues))
 		errCount := countSeverity(m.analysis.Issues, "error")
 		warnCount := countSeverity(m.analysis.Issues, "warning")
 		infoCount := countSeverity(m.analysis.Issues, "info")
 		if infoCount > 0 {
-			main += fmt.Sprintf("Findings by severity: errors %d, warnings %d, info %d\n", errCount, warnCount, infoCount)
+			main += fmt.Sprintf("Issues by severity: errors %d, warnings %d, informational %d\n", errCount, warnCount, infoCount)
 		} else {
-			main += fmt.Sprintf("Findings by severity: errors %d, warnings %d\n", errCount, warnCount)
+			main += fmt.Sprintf("Issues by severity: errors %d, warnings %d\n", errCount, warnCount)
 		}
 	}
 	if m.workflowGraph != nil {
-		main += fmt.Sprintf("Inferred pairwise workflow links: %d\n", len(m.workflowGraph.Edges))
-		main += fmt.Sprintf("Inferred multi-step workflow chains: %d\n", len(m.workflowGraph.Chains))
+		main += fmt.Sprintf("Single-step workflow handoffs found: %d\n", len(m.workflowGraph.Edges))
+		main += fmt.Sprintf("Multi-step workflow paths found: %d\n", len(m.workflowGraph.Chains))
 	}
-	detail := "This overview summarizes parsed endpoints, finding severity, and inferred workflow coverage.\n\nUse the left menu to explore details in each section."
+	fixFirst := m.fixFirstSummaryLines()
+	if len(fixFirst) > 0 {
+		main += "\nFix first (deterministic snapshot)\n"
+		for _, line := range fixFirst {
+			main += fmt.Sprintf("- %s\n", line)
+		}
+	}
+	detail := "This dashboard summarizes what was detected in the API spec: endpoint quality issues, workflow patterns, and optional diff results.\n\nUse the left menu to inspect each area in plain detail."
 	return "Overview", main, "What these numbers mean", detail
 }
 
@@ -588,16 +595,16 @@ func (m Model) paneHotspots() (string, string, string, string) {
 		return "Hotspots", "No hotspot data available.", "Detail", "Provide --spec to populate this section."
 	}
 	idx := wrapIndex(m.hotspotIndex, len(items))
-	list := fmt.Sprintf("Top hotspots: %d | Selected: %d/%d\n\n", len(items), idx+1, len(items))
+	list := fmt.Sprintf("Top hotspots shown: %d (ranked summary, not every issue) | Selected: %d/%d\n\n", len(items), idx+1, len(items))
 	list += "Move with Up/Down. Press Enter or o to open related detail.\n\n"
 	for i, item := range items {
 		prefix := " "
 		if i == idx {
 			prefix = styleSelection.Render(">")
 		}
-		riskText := styleWarn.Render(fmt.Sprintf("risk:%3d", item.risk))
+		riskText := styleWarn.Render(fmt.Sprintf("priority:%3d", item.risk))
 		if item.risk >= 10 {
-			riskText = styleBad.Render(fmt.Sprintf("risk:%3d", item.risk))
+			riskText = styleBad.Render(fmt.Sprintf("priority:%3d", item.risk))
 		}
 		row := fmt.Sprintf("%s %2d) %-16s %-30s %s %s", prefix, i+1, hotspotKindLabel(item.kind), truncate(item.label, 30), riskText, hotspotMetricLabel(item.value))
 		if i == idx {
@@ -606,7 +613,10 @@ func (m Model) paneHotspots() (string, string, string, string) {
 		list += row + "\n"
 	}
 	sel := items[idx]
-	detail := fmt.Sprintf("Type: %s\nLabel: %s\nMetric: %s\n\nWhat this metric means:\n%s\n\nWhy this is a hotspot:\n%s\n\n", hotspotKindLabel(sel.kind), sel.label, hotspotMetricLabel(sel.value), hotspotMetricExplanation(sel.value), sel.detail)
+	detail := fmt.Sprintf("Type: %s\nLabel: %s\nMetric: %s\n\nWhat this metric means:\n%s\n\nWhy this is ranked high:\n%s\n\n", hotspotKindLabel(sel.kind), sel.label, hotspotMetricLabel(sel.value), hotspotMetricExplanation(sel.value), sel.detail)
+	if (sel.kind == "finding-bucket" || sel.kind == "consistency-bucket") && isConsistencyFindingCode(sel.label) {
+		detail += fmt.Sprintf("Consistency problem: yes\n\nHow to read this:\n%s\n\n", consistencyFindingExplanation(sel.label))
+	}
 	if sel.operation != nil {
 		detail += "Press Enter or o in Main pane to jump to endpoint detail."
 	} else {
@@ -626,13 +636,14 @@ func (m Model) paneEndpoints() (string, string, string, string) {
 	idx := wrapIndex(m.endpointIndex, len(ops))
 	list := fmt.Sprintf("Total endpoints: %d | Selected: %d/%d\n", len(ops), idx+1, len(ops))
 	list += fmt.Sprintf("Sort: %s (press r to toggle)\n", m.endpointSortLabel())
+	list += "Quality score dimensions: schema completeness / client generation / versioning safety (1=low, 5=high)\n"
 	triples := m.endpointScoreTriples(3)
 	if len(triples) > 0 {
 		parts := make([]string, 0, len(triples))
 		for _, item := range triples {
-			parts = append(parts, fmt.Sprintf("%s=%d", item.key, item.count))
+			parts = append(parts, fmt.Sprintf("%s on %d endpoints", item.key, item.count))
 		}
-		list += fmt.Sprintf("Common scores: %s\n", strings.Join(parts, ", "))
+		list += fmt.Sprintf("Most common quality profiles: %s\n", strings.Join(parts, "; "))
 	}
 	list += "\n"
 	start, end := listWindow(len(ops), idx, 12)
@@ -645,14 +656,14 @@ func (m Model) paneEndpoints() (string, string, string, string) {
 		findings := len(m.findingsForOperation(op))
 		score := m.endpointScoreSummary(op)
 		risk := m.endpointRiskScore(op)
-		row := fmt.Sprintf("%s %3d) %-6s %-28s findings:%-2d scores:%-5s risk:%-2d", prefix, i+1, strings.ToUpper(op.Method), truncate(op.Path, 28), findings, score, risk)
+		row := fmt.Sprintf("%s %3d) %-6s %-28s issues:%-2d quality:%-5s priority:%-2d", prefix, i+1, strings.ToUpper(op.Method), truncate(op.Path, 28), findings, score, risk)
 		if i == idx {
 			row = styleRowSelected.Render(row)
 		}
 		list += row + "\n"
 	}
 
-	detail := styleMuted.Render("Press Enter or d in Main pane to open endpoint detail.\nRows show findings, score triplet, and risk to make clean vs problematic endpoints easier to trust.")
+	detail := styleMuted.Render("Press Enter or d in Main pane to open endpoint detail.\nRows show issue count, quality score, and priority ranking to help you spot weaker endpoints first.")
 	if m.endpointDetailOpen {
 		op := ops[idx]
 		detail = fmt.Sprintf("Operation: %s %s\n", strings.ToUpper(op.Method), op.Path)
@@ -663,13 +674,47 @@ func (m Model) paneEndpoints() (string, string, string, string) {
 		detail += fmt.Sprintf("Findings count: %d\n", len(m.allFindingsForOperation(op)))
 		detail += fmt.Sprintf("Risk score: %d\n\n", m.endpointRiskScore(op))
 		matches := m.findingsForOperation(op)
+		nextCalls := m.likelyNextCallsForOperation(op, 3)
 		if len(matches) == 0 {
 			detail += "Matching findings: none\n"
 		} else {
 			detail += "Matching findings:\n"
 			for _, issue := range matches {
-				detail += fmt.Sprintf("- [%s/%s] %s\n", issue.Severity, issue.Code, truncate(issue.Message, 70))
+				label := issue.Code
+				if isConsistencyFindingCode(issue.Code) {
+					label = "consistency: " + issue.Code
+				}
+				detail += fmt.Sprintf("- [%s/%s] %s\n", issue.Severity, label, truncate(issue.Message, 70))
 			}
+		}
+
+		detail += "\nLikely next calls:\n"
+		if len(nextCalls) == 0 {
+			detail += "- none detected from deterministic workflow links\n"
+		} else {
+			for _, next := range nextCalls {
+				reason := strings.TrimSpace(next.reason)
+				if reason == "" {
+					reason = "detected workflow link"
+				}
+				detail += fmt.Sprintf("- %s %s (%s)\n", strings.ToUpper(next.method), next.path, truncate(reason, 62))
+			}
+		}
+
+		detail += "\nRequired identifiers:\n"
+		required := m.requiredIdentifiersByNextCall(nextCalls)
+		if len(required) == 0 {
+			detail += "- none for detected next calls\n"
+		} else {
+			for _, line := range required {
+				detail += fmt.Sprintf("- %s\n", line)
+			}
+		}
+
+		detail += fmt.Sprintf("\nLinkage status: %s\n", m.endpointIdentifierLinkageStatus(op))
+		sequence := m.suggestedCallSequence(op)
+		if sequence != "" {
+			detail += fmt.Sprintf("Suggested call sequence: %s\n", sequence)
 		}
 	}
 	return "Endpoints", list, "Endpoint detail", detail
@@ -685,12 +730,21 @@ func (m Model) paneFindings() (string, string, string, string) {
 	}
 	idx := wrapIndex(m.findingsBucketIndex, len(buckets))
 	main := fmt.Sprintf("Total findings: %d | Buckets: %d\n\n", len(m.analysis.Issues), len(buckets))
+	consistencyTotal, consistencyCategories := m.consistencyFindingCounts()
+	if consistencyTotal > 0 {
+		main += fmt.Sprintf("Consistency checks flagged: %d findings across %d categories\n", consistencyTotal, consistencyCategories)
+		main += "Look for rows marked with [consistency].\n\n"
+	}
 	for i, b := range buckets {
 		prefix := " "
 		if i == idx {
 			prefix = styleSelection.Render(">")
 		}
-		row := fmt.Sprintf("%s %2d) %-40s %4d", prefix, i+1, b.key, b.count)
+		label := b.key
+		if isConsistencyFindingCode(b.key) {
+			label = "[consistency] " + b.key
+		}
+		row := fmt.Sprintf("%s %2d) %-40s %4d", prefix, i+1, label, b.count)
 		if i == idx {
 			row = styleRowSelected.Render(row)
 		}
@@ -700,7 +754,12 @@ func (m Model) paneFindings() (string, string, string, string) {
 	if m.findingsDetailOpen {
 		code := buckets[idx].key
 		issues := m.findingIssuesByCode(code)
-		detail = fmt.Sprintf("Finding: %s\n\n", code)
+		detail = fmt.Sprintf("Issue category: %s\n", code)
+		if isConsistencyFindingCode(code) {
+			detail += "Category type: consistency problem\n"
+			detail += fmt.Sprintf("Consistency meaning: %s\n", consistencyFindingExplanation(code))
+		}
+		detail += "\n"
 		detail += fmt.Sprintf("Summary: %s\n", m.findingSummary(code))
 		detail += fmt.Sprintf("Affected endpoints: %d\n\n", len(issues))
 		detail += "Representative examples:\n"
@@ -721,18 +780,18 @@ func (m Model) paneFindings() (string, string, string, string) {
 			detail += fmt.Sprintf("\nMore items: %d additional endpoints are hidden here. Use JSON output for full details.\n", len(issues)-exampleLimit)
 		}
 	}
-	return "Findings", main, "Finding detail", detail
+	return "Issue categories", main, "Issue category detail", detail
 }
 
 func (m Model) paneWorkflows() (string, string, string, string) {
 	if m.workflowGraph == nil {
 		return "Workflows", "No workflow data available.", "Detail", "Provide --spec to populate this section."
 	}
-	main := fmt.Sprintf("Inferred pairwise workflow links: %d\nInferred multi-step workflow chains: %d\n\n", len(m.workflowGraph.Edges), len(m.workflowGraph.Chains))
+	main := fmt.Sprintf("Single-step workflow handoffs found: %d\nMulti-step workflow paths found: %d\n\n", len(m.workflowGraph.Edges), len(m.workflowGraph.Chains))
 	if m.workflowSection == 0 {
-		main += "Section: Pairwise edge families (route-to-route links)\n\n"
+		main += "Workflow pattern types (single-step):\n\n"
 	} else {
-		main += "Section: Multi-step chain families\n\n"
+		main += "Workflow pattern types (multi-step):\n\n"
 	}
 	buckets := m.workflowActiveBuckets()
 	if len(buckets) == 0 {
@@ -745,18 +804,18 @@ func (m Model) paneWorkflows() (string, string, string, string) {
 			prefix = styleSelection.Render(">")
 		}
 		expl := workflowKindExample(b.key)
-		row := fmt.Sprintf("%s %2d) %-22s %4d  %s", prefix, i+1, b.key, b.count, truncate(expl, 34))
+		row := fmt.Sprintf("%s %2d) %-22s %4d  %s", prefix, i+1, workflowKindLabel(b.key), b.count, truncate(expl, 34))
 		if i == idx {
 			row = styleRowSelected.Render(row)
 		}
 		main += row + "\n"
 	}
-	main += "\nUse w/s to switch pairwise/chains."
+	main += "\nOnly pattern types detected in this spec are listed. Use w/s to switch single-step and multi-step patterns."
 
 	detail := styleMuted.Render("Press Enter or d for bucket preview.\nPress o for workflow/chain item detail.")
 	if m.workflowDetailOpen {
-		detail = fmt.Sprintf("Bucket: %s\n\n", buckets[idx].key)
-		detail += fmt.Sprintf("What this kind means: %s\n\n", workflowKindExplanation(buckets[idx].key))
+		detail = fmt.Sprintf("Pattern: %s\n\n", workflowKindLabel(buckets[idx].key))
+		detail += fmt.Sprintf("What this pattern means: %s\n\n", workflowKindExplanation(buckets[idx].key))
 		if m.workflowSection == 0 {
 			for _, line := range m.workflowEdgeDetails(buckets[idx].key, 7) {
 				detail += fmt.Sprintf("- %s\n", line)
@@ -780,37 +839,52 @@ func (m Model) paneWorkflows() (string, string, string, string) {
 func workflowKindExample(kind string) string {
 	switch kind {
 	case "create-to-detail":
-		return "POST /x -> GET /x/{id}"
+		return "POST /products -> GET /products/{id}"
 	case "list-to-detail":
-		return "GET /x -> GET /x/{id}"
+		return "GET /products -> GET /products/{id}"
 	case "action-to-detail":
-		return "POST /_action/... -> GET /resource/{id}"
+		return "POST /_action/order/... -> GET /order/{id}"
 	case "accepted-to-tracking":
-		return "POST /x (202) -> GET /x/status/{id}"
+		return "POST /sync (202) -> GET /sync/status/{id}"
 	default:
-		return "deterministic workflow family"
+		return "detected workflow pattern"
+	}
+}
+
+func workflowKindLabel(kind string) string {
+	switch kind {
+	case "create-to-detail":
+		return "Create -> detail"
+	case "list-to-detail":
+		return "List -> detail"
+	case "action-to-detail":
+		return "Action -> detail"
+	case "accepted-to-tracking":
+		return "Accepted -> status tracking"
+	default:
+		return kind
 	}
 }
 
 func workflowKindExplanation(kind string) string {
 	switch kind {
 	case "create-to-detail":
-		return "Entity creation flow where the create response links to a follow-up detail read. Example: POST /x -> GET /x/{id}."
+		return "Create flow where the response links to a follow-up detail read. Example: POST /products -> GET /products/{id}."
 	case "list-to-detail":
-		return "Collection browsing flow where a list/search endpoint links to per-item detail reads. Example: GET /x -> GET /x/{id}."
+		return "Browse flow where a list/search endpoint links to per-item detail reads. Example: GET /products -> GET /products/{id}."
 	case "action-to-detail":
-		return "Action-triggered flow where a state-changing action links to a detail endpoint for verification."
+		return "Action flow where a state-changing endpoint links to a detail endpoint for verification."
 	case "accepted-to-tracking":
-		return "Async accepted flow where the initial endpoint should expose tracking linkage for status follow-up."
+		return "Async flow where an accepted response should expose tracking for later status checks."
 	default:
-		return "A deterministic inferred workflow family grouped by kind."
+		return "A detected workflow pattern grouped by type."
 	}
 }
 
 func (m Model) paneDiff() (string, string, string, string) {
 	if m.diffResult == nil {
 		main := "Diff mode is currently inactive.\n\nThis TUI session was started without --old and --new inputs."
-		detail := "Diff data is not auto-discovered in this mode.\n\nUse your current local spec as --spec (for example ./adminapi.json) and provide both comparison files explicitly.\n\nExample:\napi-doctor tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2.json"
+		detail := "Diff compares two versions of an API spec: an older file and a newer file.\n\nWhere to get the older file: from your previous release branch, a tagged version snapshot, or a saved local copy.\n\nLaunch example:\napi-doctor tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2.json\n\nAfter relaunching with both files, this tab will show detected breaking changes between those versions."
 		return "Diff", main, "How to enable diff", detail
 	}
 	main := fmt.Sprintf("Old spec: %s\nNew spec: %s\nTotal changes: %d\n\n", m.diffResult.OldSpec, m.diffResult.NewSpec, len(m.diffResult.Changes))
@@ -838,7 +912,7 @@ func (m Model) screenTabs() string {
 		m.tabLabel(screenOverview, "1 Overview"),
 		m.tabLabel(screenHotspots, "2 Hotspots"),
 		m.tabLabel(screenEndpoints, "3 Endpoints"),
-		m.tabLabel(screenFindings, "4 Findings"),
+		m.tabLabel(screenFindings, "4 Issue categories"),
 		m.tabLabel(screenWorkflows, "5 Workflows"),
 		m.tabLabel(screenDiff, "6 Diff"),
 	}
@@ -887,7 +961,7 @@ func (m Model) screenHints() string {
 	case screenEndpoints:
 		return "Endpoints keys: up/down move endpoint, enter or d details, esc back"
 	case screenFindings:
-		return "Findings keys: up/down move bucket, enter or d details, o open endpoint, esc back"
+		return "Issue categories keys: up/down move category, enter or d details, o open endpoint, esc back"
 	case screenWorkflows:
 		return "Workflows keys: up/down move bucket, w or s section, enter or d bucket preview, o item detail, esc back"
 	default:
@@ -1464,13 +1538,15 @@ func (m *Model) hotspotMove(delta int) {
 func hotspotKindLabel(kind string) string {
 	switch kind {
 	case "finding-bucket":
-		return "finding group"
+		return "issue category"
+	case "consistency-bucket":
+		return "consistency issue"
 	case "endpoint-family":
-		return "endpoint family"
+		return "endpoint area"
 	case "workflow-kind":
-		return "workflow family"
+		return "workflow pattern"
 	case "chain-kind":
-		return "chain family"
+		return "multi-step pattern"
 	default:
 		return kind
 	}
@@ -1478,22 +1554,22 @@ func hotspotKindLabel(kind string) string {
 
 func hotspotMetricLabel(value string) string {
 	v := strings.TrimSpace(value)
-	v = strings.ReplaceAll(v, "count=", "affected=")
-	v = strings.ReplaceAll(v, "avg-risk=", "avg-risk=")
-	v = strings.ReplaceAll(v, "avg-score=", "avg-score=")
+	v = strings.ReplaceAll(v, "count=", "issues=")
+	v = strings.ReplaceAll(v, "avg-risk=", "avg-priority=")
+	v = strings.ReplaceAll(v, "avg-score=", "avg-quality=")
 	return v
 }
 
 func hotspotMetricExplanation(value string) string {
 	v := strings.TrimSpace(value)
 	if strings.HasPrefix(v, "count=") {
-		return "Count is how many findings in this grouped issue category were detected."
+		return "How many times this issue category appears in the analyzed spec."
 	}
 	if strings.HasPrefix(v, "avg-risk=") {
-		return "Average risk is the mean endpoint risk score for this path family. Higher means more score gaps and/or repeated findings."
+		return "Average priority across endpoints in this area. Higher usually means lower quality scores and/or more repeated issues."
 	}
 	if strings.HasPrefix(v, "avg-score=") {
-		return "Average score is the mean workflow or chain score across this family. Lower averages indicate weaker automation clarity."
+		return "Average workflow quality score for this pattern. Lower values indicate weaker schema/automation clarity."
 	}
 	return "This value is a summary metric for the selected hotspot family."
 }
@@ -1655,9 +1731,14 @@ func (m Model) hotspotItems() []hotspotItem {
 
 	if m.analysis != nil {
 		codes := map[string]int{}
+		consistencyCodes := map[string]int{}
 		codeOp := map[string]*model.Operation{}
 		for _, issue := range m.analysis.Issues {
-			codes[issue.Code]++
+			if isConsistencyFindingCode(issue.Code) {
+				consistencyCodes[issue.Code]++
+			} else {
+				codes[issue.Code]++
+			}
 			if codeOp[issue.Code] == nil {
 				codeOp[issue.Code] = m.findOperationByIssue(issue)
 			}
@@ -1668,7 +1749,17 @@ func (m Model) hotspotItems() []hotspotItem {
 				label:  item.key,
 				value:  fmt.Sprintf("count=%d", item.count),
 				risk:   item.count * 3,
-				detail: "Frequent finding code; likely repeated usability or schema trap.",
+				detail: "Frequent issue category across endpoints, which suggests a repeated schema or usability gap.",
+				operation: codeOp[item.key],
+			})
+		}
+		for _, item := range topCounts(consistencyCodes, 3) {
+			items = append(items, hotspotItem{
+				kind:      "consistency-bucket",
+				label:     item.key,
+				value:     fmt.Sprintf("count=%d", item.count),
+				risk:      item.count*4 + 2,
+				detail:    "Repeated endpoint consistency problem; this can make API behavior harder to predict across similar routes.",
 				operation: codeOp[item.key],
 			})
 		}
@@ -1708,7 +1799,7 @@ func (m Model) hotspotItems() []hotspotItem {
 					label:     fr.key,
 					value:     fmt.Sprintf("avg-risk=%d", fr.count),
 					risk:      fr.count,
-					detail:    "Path family has weaker endpoint scores and/or repeated findings.",
+					detail:    "This endpoint area combines weaker quality scores and/or repeated issue categories.",
 					operation: representative[fr.key],
 				})
 			}
@@ -1738,7 +1829,7 @@ func (m Model) hotspotItems() []hotspotItem {
 					label:  kind,
 					value:  fmt.Sprintf("avg-score=%d/15", avg),
 					risk:   risk,
-					detail: "Lower workflow scores can signal weaker automation or schema continuity.",
+					detail: "Lower workflow quality here can indicate weak linkage or continuity between related endpoints.",
 				})
 			}
 		}
@@ -1765,7 +1856,7 @@ func (m Model) hotspotItems() []hotspotItem {
 					label:  kind,
 					value:  fmt.Sprintf("avg-score=%d/15", avg),
 					risk:   risk,
-					detail: "Lower chain scores can signal brittle multi-step integration paths.",
+					detail: "Lower multi-step workflow quality can indicate brittle integration paths.",
 				})
 			}
 		}
@@ -2063,6 +2154,132 @@ func nodeMatchesOperation(node workflow.Node, op *model.Operation) bool {
 	return node.Path == op.Path && strings.EqualFold(node.Method, op.Method)
 }
 
+type nextCallHint struct {
+	method string
+	path   string
+	reason string
+}
+
+func pathParamNames(path string) []string {
+	segments := strings.Split(path, "/")
+	params := make([]string, 0)
+	for _, segment := range segments {
+		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") && len(segment) > 2 {
+			params = append(params, strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}"))
+		}
+	}
+	return params
+}
+
+func (m Model) likelyNextCallsForOperation(op *model.Operation, limit int) []nextCallHint {
+	if op == nil || m.workflowGraph == nil || limit <= 0 {
+		return nil
+	}
+
+	seen := map[string]bool{}
+	hints := make([]nextCallHint, 0)
+
+	for _, edge := range m.workflowGraph.Edges {
+		if !nodeMatchesOperation(edge.From, op) {
+			continue
+		}
+		key := strings.ToLower(edge.To.Method) + "|" + edge.To.Path
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		reason := strings.TrimSpace(edge.Reason)
+		if reason == "" {
+			reason = workflowKindLabel(edge.Kind)
+		}
+		hints = append(hints, nextCallHint{method: edge.To.Method, path: edge.To.Path, reason: reason})
+		if len(hints) >= limit {
+			return hints
+		}
+	}
+
+	for _, chain := range m.workflowGraph.Chains {
+		for i := 0; i < len(chain.Steps)-1; i++ {
+			if !nodeMatchesOperation(chain.Steps[i].Node, op) {
+				continue
+			}
+			next := chain.Steps[i+1].Node
+			key := strings.ToLower(next.Method) + "|" + next.Path
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			reason := strings.TrimSpace(chain.Reason)
+			if reason == "" {
+				reason = "detected multi-step workflow link"
+			}
+			hints = append(hints, nextCallHint{method: next.Method, path: next.Path, reason: reason})
+			if len(hints) >= limit {
+				return hints
+			}
+		}
+	}
+
+	return hints
+}
+
+func (m Model) requiredIdentifiersByNextCall(calls []nextCallHint) []string {
+	if len(calls) == 0 {
+		return nil
+	}
+	out := make([]string, 0)
+	for _, call := range calls {
+		ids := pathParamNames(call.path)
+		if len(ids) == 0 {
+			out = append(out, fmt.Sprintf("%s %s: none", strings.ToUpper(call.method), call.path))
+			continue
+		}
+		out = append(out, fmt.Sprintf("%s %s: %s", strings.ToUpper(call.method), call.path, strings.Join(ids, ", ")))
+	}
+	return out
+}
+
+func (m Model) endpointIdentifierLinkageStatus(op *model.Operation) string {
+	if op == nil {
+		return "identifier linkage unavailable"
+	}
+	for _, issue := range m.allFindingsForOperation(op) {
+		switch issue.Code {
+		case "weak-follow-up-linkage", "weak-list-detail-linkage", "weak-action-follow-up-linkage", "weak-accepted-tracking-linkage":
+			return "identifier likely missing"
+		}
+	}
+	return "identifier appears exposed by deterministic checks"
+}
+
+func (m Model) suggestedCallSequence(op *model.Operation) string {
+	if op == nil {
+		return ""
+	}
+	nextCalls := m.likelyNextCallsForOperation(op, 1)
+	if len(nextCalls) == 0 {
+		return ""
+	}
+	first := nextCalls[0]
+	parts := []string{
+		fmt.Sprintf("%s %s", strings.ToUpper(op.Method), op.Path),
+		fmt.Sprintf("%s %s", strings.ToUpper(first.method), first.path),
+	}
+
+	firstOp := m.findOperationByMethodPath(first.method, first.path)
+	if firstOp != nil {
+		followOn := m.likelyNextCallsForOperation(firstOp, 1)
+		if len(followOn) > 0 {
+			next := followOn[0]
+			if !strings.EqualFold(next.method, op.Method) || next.path != op.Path {
+				parts = append(parts, fmt.Sprintf("%s %s", strings.ToUpper(next.method), next.path))
+			}
+		}
+	}
+
+	return strings.Join(parts, " -> ")
+}
+
 func (m Model) workflowReferencesForOperation(op *model.Operation) ([]string, []string) {
 	if op == nil || m.workflowGraph == nil {
 		return nil, nil
@@ -2161,6 +2378,9 @@ func (m Model) findingIssuesByCode(code string) []*model.Issue {
 }
 
 func (m Model) findingSummary(code string) string {
+	if isConsistencyFindingCode(code) {
+		return consistencyFindingSummary(code)
+	}
 	issues := m.findingIssuesByCode(code)
 	for _, issue := range issues {
 		if strings.TrimSpace(issue.Description) != "" {
@@ -2176,6 +2396,9 @@ func (m Model) findingSummary(code string) string {
 }
 
 func (m Model) findingWhyItMatters(code string) string {
+	if isConsistencyFindingCode(code) {
+		return consistencyFindingImpact(code)
+	}
 	issues := m.findingIssuesByCode(code)
 	for _, issue := range issues {
 		if strings.TrimSpace(issue.Description) != "" {
@@ -2326,4 +2549,192 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-3] + "..."
+}
+
+func (m Model) fixFirstSummaryLines() []string {
+	lines := make([]string, 0)
+
+	if chaining := m.topChainingBlockers(2); len(chaining) > 0 {
+		parts := make([]string, 0, len(chaining))
+		for _, item := range chaining {
+			parts = append(parts, fmt.Sprintf("%s (%d)", item.label, item.count))
+		}
+		lines = append(lines, "Chaining blockers: "+strings.Join(parts, "; "))
+	}
+
+	if consistency := m.topConsistencyOutliers(2); len(consistency) > 0 {
+		parts := make([]string, 0, len(consistency))
+		for _, item := range consistency {
+			parts = append(parts, fmt.Sprintf("%s (%d)", item.label, item.count))
+		}
+		lines = append(lines, "Consistency outliers: "+strings.Join(parts, "; "))
+	}
+
+	if families := m.topPriorityEndpointFamilies(2); len(families) > 0 {
+		parts := make([]string, 0, len(families))
+		for _, item := range families {
+			parts = append(parts, fmt.Sprintf("%s (priority %d)", item.label, item.count))
+		}
+		lines = append(lines, "High-priority endpoint families: "+strings.Join(parts, "; "))
+	}
+
+	return lines
+}
+
+type labeledCount struct {
+	label string
+	count int
+}
+
+func (m Model) topChainingBlockers(limit int) []labeledCount {
+	if m.analysis == nil || limit <= 0 {
+		return nil
+	}
+	counts := map[string]int{}
+	for _, issue := range m.analysis.Issues {
+		switch issue.Code {
+		case "weak-follow-up-linkage", "weak-list-detail-linkage", "weak-action-follow-up-linkage", "weak-accepted-tracking-linkage":
+			counts[issue.Code]++
+		}
+	}
+	ordered := topCounts(counts, limit)
+	out := make([]labeledCount, 0, len(ordered))
+	for _, item := range ordered {
+		out = append(out, labeledCount{label: chainingBlockerLabel(item.key), count: item.count})
+	}
+	return out
+}
+
+func chainingBlockerLabel(code string) string {
+	switch code {
+	case "weak-follow-up-linkage":
+		return "follow-up identifier clarity"
+	case "weak-list-detail-linkage":
+		return "list-to-detail identifier clarity"
+	case "weak-action-follow-up-linkage":
+		return "action follow-up verification clarity"
+	case "weak-accepted-tracking-linkage":
+		return "accepted-response tracking clarity"
+	default:
+		return code
+	}
+}
+
+func (m Model) topConsistencyOutliers(limit int) []labeledCount {
+	if m.analysis == nil || limit <= 0 {
+		return nil
+	}
+	counts := map[string]int{}
+	for _, issue := range m.analysis.Issues {
+		if isConsistencyFindingCode(issue.Code) {
+			counts[issue.Code]++
+		}
+	}
+	ordered := topCounts(counts, limit)
+	out := make([]labeledCount, 0, len(ordered))
+	for _, item := range ordered {
+		out = append(out, labeledCount{label: consistencyFindingSummary(item.key), count: item.count})
+	}
+	return out
+}
+
+func (m Model) topPriorityEndpointFamilies(limit int) []labeledCount {
+	if m.analysis == nil || limit <= 0 || len(m.analysis.Operations) == 0 {
+		return nil
+	}
+	totals := map[string]int{}
+	counts := map[string]int{}
+	for _, op := range m.analysis.Operations {
+		family := pathFamily(op.Path)
+		totals[family] += m.endpointRiskScore(op)
+		counts[family]++
+	}
+	familyRisk := make([]labeledCount, 0, len(totals))
+	for family, total := range totals {
+		avg := 0
+		if counts[family] > 0 {
+			avg = total / counts[family]
+		}
+		familyRisk = append(familyRisk, labeledCount{label: family, count: avg})
+	}
+	sort.Slice(familyRisk, func(i, j int) bool {
+		if familyRisk[i].count != familyRisk[j].count {
+			return familyRisk[i].count > familyRisk[j].count
+		}
+		return familyRisk[i].label < familyRisk[j].label
+	})
+	if len(familyRisk) > limit {
+		return familyRisk[:limit]
+	}
+	return familyRisk
+}
+
+func isConsistencyFindingCode(code string) bool {
+	switch strings.TrimSpace(code) {
+	case "detail-path-parameter-name-drift", "endpoint-path-style-drift", "sibling-path-shape-drift", "inconsistent-response-shape":
+		return true
+	default:
+		return false
+	}
+}
+
+func consistencyFindingSummary(code string) string {
+	switch code {
+	case "detail-path-parameter-name-drift":
+		return "Related detail endpoints use different identifier parameter names for similar routes."
+	case "endpoint-path-style-drift":
+		return "Sibling endpoints mix static path naming styles (for example kebab-case vs snake_case)."
+	case "sibling-path-shape-drift":
+		return "A sibling endpoint uses a different path structure than the dominant family shape."
+	case "inconsistent-response-shape":
+		return "Similar endpoints return different response structures in success responses."
+	default:
+		return "Consistency issue detected across related endpoints."
+	}
+}
+
+func consistencyFindingImpact(code string) string {
+	switch code {
+	case "detail-path-parameter-name-drift":
+		return "Inconsistent identifier names increase client branching and make reusable request helpers harder to maintain."
+	case "endpoint-path-style-drift":
+		return "Mixed path naming styles make endpoint discovery and route conventions less predictable for integrators."
+	case "sibling-path-shape-drift":
+		return "Outlier sibling path shapes can break assumptions in generated clients and manual route exploration."
+	case "inconsistent-response-shape":
+		return "Different response shapes for similar endpoints force extra mapping logic and reduce confidence in shared handling."
+	default:
+		return "Consistency drift across related endpoints can lower trust and increase implementation overhead."
+	}
+}
+
+func consistencyFindingExplanation(code string) string {
+	switch code {
+	case "detail-path-parameter-name-drift":
+		return "Check similar detail routes and align identifier placeholder names (for example prefer one of id/orderId consistently)."
+	case "endpoint-path-style-drift":
+		return "Check sibling routes in the same family and unify static segment style (kebab-case or snake_case)."
+	case "sibling-path-shape-drift":
+		return "Compare this route to sibling routes for the same method/family and decide whether the path depth/segment pattern should be aligned."
+	case "inconsistent-response-shape":
+		return "Compare success response schemas for sibling endpoints and align top-level structure where practical."
+	default:
+		return "Review similar endpoints together and align naming/shape conventions."
+	}
+}
+
+func (m Model) consistencyFindingCounts() (int, int) {
+	if m.analysis == nil {
+		return 0, 0
+	}
+	total := 0
+	cats := map[string]bool{}
+	for _, issue := range m.analysis.Issues {
+		if !isConsistencyFindingCode(issue.Code) {
+			continue
+		}
+		total++
+		cats[issue.Code] = true
+	}
+	return total, len(cats)
 }

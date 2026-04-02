@@ -335,3 +335,31 @@ func TestFormatText_VerboseKeepsFullWeakFollowUpDetails(t *testing.T) {
 		t.Fatalf("expected verbose technical detail for follow-up issue, got: %s", out)
 	}
 }
+
+func TestFormatText_DefaultShowsShapeDetailForSiblingPathShapeDrift(t *testing.T) {
+	result := &model.AnalysisResult{
+		SpecFile: "spec.json",
+		Issues: []*model.Issue{
+			{
+				Code:        "sibling-path-shape-drift",
+				Severity:    "warning",
+				Path:        "/app-system/{appName}/privileges/accepted",
+				Operation:   "get getAcceptedPrivileges",
+				Message:     "Sibling endpoints in 'GET /app-system' mostly use shape '3 segments (static -> static -> static)', but this endpoint uses '4 segments (static -> param -> static -> static)'",
+				Description: "Sibling endpoints are easier to discover and automate when they follow one dominant path shape within a method and family.",
+			},
+		},
+	}
+
+	scores := make(map[string]*endpoint.EndpointScore)
+	out := FormatText(result, scores, false)
+	if !strings.Contains(out, "[WARNING] sibling-path-shape-drift") {
+		t.Fatalf("expected sibling-path-shape-drift warning entry, got: %s", out)
+	}
+	if !strings.Contains(out, "Shape detail: Sibling endpoints in 'GET /app-system' mostly use shape") {
+		t.Fatalf("expected dominant-vs-observed shape detail in default output, got: %s", out)
+	}
+	if strings.Contains(out, "Technical detail:") {
+		t.Fatalf("expected default output to remain non-verbose, got: %s", out)
+	}
+}

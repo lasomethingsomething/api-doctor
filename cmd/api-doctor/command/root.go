@@ -6,9 +6,9 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "api-doctor",
-	Short: "OpenAPI specification analyzer and validator",
-	Long: `api-doctor is a tool for analyzing OpenAPI specifications.
-It performs various checks on your OpenAPI specs to identify issues.`,
+	Short: "Local, deterministic OpenAPI quality checker",
+	Long: `api-doctor analyzes OpenAPI specs with deterministic local checks.
+It helps you review API quality, call chaining clarity, and breaking diff risk.`,
 }
 
 func Execute() error {

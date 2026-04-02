@@ -1,0 +1,119 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Detail Path Parameter Name Drift",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/weak-items/{id}": {
+      "get": {
+        "operationId": "getWeakItemById",
+        "responses": {
+          "200": {
+            "description": "Single item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/weak-items/{itemId}": {
+      "get": {
+        "operationId": "getWeakItemByItemId",
+        "responses": {
+          "200": {
+            "description": "Single item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/strong-items/{id}": {
+      "get": {
+        "operationId": "getStrongItemById",
+        "responses": {
+          "200": {
+            "description": "Single item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/strong-items": {
+      "post": {
+        "operationId": "createStrongItem",
+        "responses": {
+          "200": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{orderId}/items/{itemId}": {
+      "get": {
+        "operationId": "getNestedItem",
+        "responses": {
+          "200": {
+            "description": "Nested item",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

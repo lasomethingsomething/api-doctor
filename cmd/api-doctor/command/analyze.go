@@ -19,7 +19,7 @@ var analyzeCmd = &cobra.Command{
 
 Example:
   api-doctor analyze --spec ./adminapi.json
-  api-doctor analyze --spec ./openapi.yaml --json`,
+  api-doctor analyze --spec ./openapi.yaml --format json`,
 	RunE: runAnalyze,
 }
 
