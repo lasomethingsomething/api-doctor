@@ -103,3 +103,30 @@ func TestCompare_Fixture(t *testing.T) {
 		t.Fatalf("expected diff json output, got: %s", jsonOut)
 	}
 }
+
+func TestFormatMarkdown_WithChanges(t *testing.T) {
+	result := &Result{
+		OldSpec: "old.json",
+		NewSpec: "new.json",
+		Changes: []*Change{
+			{
+				Code:        "removed-path",
+				Severity:    "error",
+				Path:        "/products",
+				Description: "Path removed from new spec.",
+				Message:     "Path /products no longer exists",
+			},
+		},
+	}
+
+	out := FormatMarkdown(result)
+	if !strings.Contains(out, "# API Diff Report") || !strings.Contains(out, "## Summary") {
+		t.Fatalf("expected markdown diff header and summary, got: %s", out)
+	}
+	if !strings.Contains(out, "| Error | removed-path | 1 |") {
+		t.Fatalf("expected markdown summary row for removed-path, got: %s", out)
+	}
+	if !strings.Contains(out, "### `removed-path` (1)") || !strings.Contains(out, "**Path:** `/products`") {
+		t.Fatalf("expected markdown details for removed-path change, got: %s", out)
+	}
+}

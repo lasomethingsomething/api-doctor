@@ -580,3 +580,53 @@ func TestFormatJSON_IncludesChainScores(t *testing.T) {
 		t.Fatalf("expected chain score explanation in JSON output, got: %s", out)
 	}
 }
+
+func TestFormatMarkdown_IncludesWorkflowAndChainSections(t *testing.T) {
+	graph := &Graph{
+		Edges: []Edge{
+			{
+				Kind:   "create-to-detail",
+				From:   Node{Method: "post", Path: "/products"},
+				To:     Node{Method: "get", Path: "/products/{id}"},
+				Reason: "create response visibly exposes an id and a matching detail endpoint exists",
+			},
+		},
+		Chains: []Chain{
+			{
+				Kind: "order-detail-to-action",
+				Steps: []ChainStep{
+					{Role: "detail", Node: Node{Method: "get", Path: "/order/{id}"}},
+					{Role: "action", Node: Node{Method: "post", Path: "/_action/order/{orderId}/state/{transition}"}},
+				},
+				Reason: "strong",
+			},
+		},
+	}
+
+	scores := map[string]*WorkflowScore{
+		"0": {
+			UIIndependence:         5,
+			SchemaCompleteness:     4,
+			ClientGenerationQuality: 4,
+			Explanation:            "strong deterministic linkage",
+		},
+	}
+	chainScores := map[string]*ChainScore{
+		"0": {
+			UIIndependence:         4,
+			SchemaCompleteness:     5,
+			ClientGenerationQuality: 4,
+		},
+	}
+
+	out := FormatMarkdown("spec.json", 20, graph, scores, chainScores)
+	if !strings.Contains(out, "# API Workflows Report") || !strings.Contains(out, "## Summary") {
+		t.Fatalf("expected markdown workflow header and summary, got: %s", out)
+	}
+	if !strings.Contains(out, "## Create To Detail (1)") || !strings.Contains(out, "`post /products`") {
+		t.Fatalf("expected workflow section content, got: %s", out)
+	}
+	if !strings.Contains(out, "## Multi-step Chains") || !strings.Contains(out, "### Order Detail To Action (1)") {
+		t.Fatalf("expected markdown chain section content, got: %s", out)
+	}
+}

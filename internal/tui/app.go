@@ -6,10 +6,35 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	intdiff "github.com/lasomethingsomething/api-doctor/internal/diff"
 	"github.com/lasomethingsomething/api-doctor/internal/endpoint"
 	"github.com/lasomethingsomething/api-doctor/internal/model"
 	"github.com/lasomethingsomething/api-doctor/internal/workflow"
+)
+
+var (
+	styleTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230"))
+	styleHeader = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("63")).
+		Background(lipgloss.Color("236")).
+		Padding(0, 1)
+	styleFooter = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Foreground(lipgloss.Color("252")).
+		Padding(0, 1)
+	stylePanel = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("241")).
+		Padding(0, 1)
+	stylePanelTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("45"))
+	styleSelection = lipgloss.NewStyle().Foreground(lipgloss.Color("45")).Bold(true)
+	styleMuted = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	styleOK = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+	styleBad = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Bold(true)
 )
 
 type screen int
@@ -221,29 +246,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	header := "api-doctor TUI\n"
-	header += m.screenTabs() + "\n"
-	header += "Global keys: left/right/tab/[ ] switch, home/end jump, q quit\n"
-	header += m.dataStatusLine() + "\n"
-	header += m.screenHints() + "\n"
-	header += strings.Repeat("=", 90) + "\n\n"
+	header := styleHeader.Render(strings.Join([]string{
+		styleTitle.Render("api-doctor dashboard"),
+		m.screenTabs(),
+		"Global keys: left/right/tab/[ ] switch, home/end jump, q quit",
+		m.dataStatusLine(),
+		m.screenHints(),
+	}, "\n"))
 
+	body := ""
 	switch m.active {
 	case screenOverview:
-		return header + m.viewOverview()
+		body = m.viewOverview()
 	case screenHotspots:
-		return header + m.viewHotspots()
+		body = m.viewHotspots()
 	case screenEndpoints:
-		return header + m.viewEndpoints()
+		body = m.viewEndpoints()
 	case screenFindings:
-		return header + m.viewFindings()
+		body = m.viewFindings()
 	case screenWorkflows:
-		return header + m.viewWorkflows()
+		body = m.viewWorkflows()
 	case screenDiff:
-		return header + m.viewDiff()
+		body = m.viewDiff()
 	default:
-		return header + "Unknown screen\n"
+		body = stylePanel.Render("Unknown screen")
 	}
+
+	footer := styleFooter.Render("Tip: Enter/o opens detail, Esc closes detail, numbers jump screens")
+	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
 }
 
 func (m Model) screenTabs() string {
@@ -260,9 +290,9 @@ func (m Model) screenTabs() string {
 
 func (m Model) tabLabel(s screen, label string) string {
 	if m.active == s {
-		return "[" + label + "]"
+		return styleSelection.Render("[" + label + "]")
 	}
-	return label
+	return styleMuted.Render(label)
 }
 
 func (m Model) dataStatusLine() string {
@@ -278,7 +308,19 @@ func (m Model) dataStatusLine() string {
 	if m.diffResult == nil {
 		diffStatus = "diff:missing"
 	}
-	return "Data " + analysisStatus + " | " + workflowStatus + " | " + diffStatus
+	analysisText := styleOK.Render(analysisStatus)
+	workflowText := styleOK.Render(workflowStatus)
+	diffText := styleOK.Render(diffStatus)
+	if m.analysis == nil {
+		analysisText = styleWarn.Render(analysisStatus)
+	}
+	if m.workflowGraph == nil {
+		workflowText = styleWarn.Render(workflowStatus)
+	}
+	if m.diffResult == nil {
+		diffText = styleMuted.Render(diffStatus)
+	}
+	return "Data " + analysisText + " | " + workflowText + " | " + diffText
 }
 
 func (m Model) screenHints() string {
@@ -306,13 +348,9 @@ type hotspotItem struct {
 }
 
 func (m Model) viewHotspots() string {
-	out := "Hotspots\n\n"
-	out += "Worst areas first, ranked from deterministic findings/scores/workflow signals.\n"
-
 	items := m.hotspotItems()
 	if len(items) == 0 {
-		out += "\nNo hotspot data available for this run. Provide --spec to populate this view.\n"
-		return out
+		return m.panelSingle("Hotspots", "No hotspot data available for this run. Provide --spec to populate this view.")
 	}
 
 	idx := m.hotspotIndex
@@ -323,44 +361,49 @@ func (m Model) viewHotspots() string {
 		idx = len(items) - 1
 	}
 
-	out += fmt.Sprintf("Top hotspots: %d | Selected: %d/%d\n\n", len(items), idx+1, len(items))
+	list := "Hotspots\n"
+	list += styleMuted.Render("Worst areas first, ranked from deterministic signals.") + "\n\n"
+	list += fmt.Sprintf("Top hotspots: %d | Selected: %d/%d\n\n", len(items), idx+1, len(items))
 	for i, item := range items {
 		prefix := " "
 		if i == idx {
-			prefix = ">"
+			prefix = styleSelection.Render(">")
 		}
-		out += fmt.Sprintf("%s %2d) %-14s %-40s risk:%3d %s\n", prefix, i+1, item.kind, truncate(item.label, 40), item.risk, item.value)
+		riskText := styleWarn.Render(fmt.Sprintf("risk:%3d", item.risk))
+		if item.risk >= 10 {
+			riskText = styleBad.Render(fmt.Sprintf("risk:%3d", item.risk))
+		}
+		list += fmt.Sprintf("%s %2d) %-14s %-40s %s %s\n", prefix, i+1, item.kind, truncate(item.label, 40), riskText, item.value)
 	}
 
 	sel := items[idx]
-	out += "\nSelected hotspot\n"
-	out += fmt.Sprintf("- Type: %s\n", sel.kind)
-	out += fmt.Sprintf("- Label: %s\n", sel.label)
-	out += fmt.Sprintf("- Metric: %s\n", sel.value)
-	out += fmt.Sprintf("- Why risky: %s\n", sel.detail)
+	detail := "Selected hotspot\n\n"
+	detail += fmt.Sprintf("- Type: %s\n", sel.kind)
+	detail += fmt.Sprintf("- Label: %s\n", sel.label)
+	detail += fmt.Sprintf("- Metric: %s\n", sel.value)
+	detail += fmt.Sprintf("- Why risky: %s\n", sel.detail)
 	if sel.operation != nil {
-		out += fmt.Sprintf("- Example endpoint: %s %s\n", strings.ToUpper(sel.operation.Method), sel.operation.Path)
-		out += "- Action: press enter (or o) to open endpoint detail in context.\n"
+		detail += fmt.Sprintf("- Example endpoint: %s %s\n", strings.ToUpper(sel.operation.Method), sel.operation.Path)
+		detail += styleMuted.Render("- Action: press enter (or o) to open endpoint detail in context.") + "\n"
 	} else if sel.kind == "workflow-kind" || sel.kind == "chain-kind" {
-		out += "- Action: press enter (or o) to open workflow/chain detail in context.\n"
+		detail += styleMuted.Render("- Action: press enter (or o) to open workflow/chain detail in context.") + "\n"
 	} else {
-		out += "- Action: no direct endpoint jump for this row.\n"
+		detail += styleMuted.Render("- Action: no direct jump for this row.") + "\n"
 	}
 
-	return out
+	return m.panelSplit("Hotspot ranking", list, "Hotspot detail", detail)
 }
 
 func (m Model) viewEndpoints() string {
 	if m.analysis == nil {
-		return "Endpoints Browser\n\nNo analysis data available for this run. Provide --spec to populate this screen.\n"
+		return m.panelSingle("Endpoints", "No analysis data available for this run. Provide --spec to populate this screen.")
 	}
 
 	ops := m.endpointOperations()
-	out := "Endpoints Browser\n\n"
-	out += fmt.Sprintf("Total endpoints: %d\n", len(ops))
+	list := "Endpoints Browser\n\n"
+	list += fmt.Sprintf("Total endpoints: %d\n", len(ops))
 	if len(ops) == 0 {
-		out += "\nNo endpoints were parsed from this spec.\n"
-		return out
+		return m.panelSingle("Endpoints", "No endpoints were parsed from this spec.")
 	}
 
 	mx := m.endpointIndex
@@ -370,71 +413,72 @@ func (m Model) viewEndpoints() string {
 	if mx >= len(ops) {
 		mx = len(ops) - 1
 	}
-	out += fmt.Sprintf("Selected: %d/%d\n\n", mx+1, len(ops))
+	list += fmt.Sprintf("Selected: %d/%d\n\n", mx+1, len(ops))
 
 	start, end := listWindow(len(ops), mx, 10)
 	for i := start; i < end; i++ {
 		op := ops[i]
 		prefix := " "
 		if i == mx {
-			prefix = ">"
+			prefix = styleSelection.Render(">")
 		}
 		findings := len(m.findingsForOperation(op))
 		score := m.endpointScoreSummary(op)
-		out += fmt.Sprintf("%s %3d) %-6s %-44s f:%-3d s:%s\n", prefix, i+1, strings.ToUpper(op.Method), truncate(op.Path, 44), findings, score)
+		list += fmt.Sprintf("%s %3d) %-6s %-44s f:%-3d s:%s\n", prefix, i+1, strings.ToUpper(op.Method), truncate(op.Path, 44), findings, score)
 	}
 
+	detail := ""
 	if m.endpointDetailOpen {
 		op := ops[mx]
-		out += "\nEndpoint detail\n"
-		out += fmt.Sprintf("- Operation: %s %s\n", strings.ToUpper(op.Method), op.Path)
+		detail += "Endpoint detail\n\n"
+		detail += fmt.Sprintf("- Operation: %s %s\n", strings.ToUpper(op.Method), op.Path)
 		if strings.TrimSpace(op.OperationID) != "" {
-			out += fmt.Sprintf("- Operation ID: %s\n", op.OperationID)
+			detail += fmt.Sprintf("- Operation ID: %s\n", op.OperationID)
 		}
 		if strings.TrimSpace(op.Summary) != "" {
-			out += fmt.Sprintf("- Summary: %s\n", truncate(op.Summary, 90))
+			detail += fmt.Sprintf("- Summary: %s\n", truncate(op.Summary, 90))
 		}
 		if len(op.Tags) > 0 {
-			out += fmt.Sprintf("- Tags: %s\n", truncate(strings.Join(op.Tags, ", "), 90))
+			detail += fmt.Sprintf("- Tags: %s\n", truncate(strings.Join(op.Tags, ", "), 90))
 		}
 
 		s := m.endpointScoreForOperation(op)
 		if s != nil {
-			out += fmt.Sprintf("- Scores (Schema/Client/Versioning): %d/%d/%d\n", s.SchemaCompleteness, s.ClientGenerationQuality, s.VersioningSafety)
+			detail += fmt.Sprintf("- Scores (Schema/Client/Versioning): %d/%d/%d\n", s.SchemaCompleteness, s.ClientGenerationQuality, s.VersioningSafety)
 			if strings.TrimSpace(s.Explanation) != "" {
-				out += fmt.Sprintf("- Score note: %s\n", truncate(s.Explanation, 120))
+				detail += fmt.Sprintf("- Score note: %s\n", truncate(s.Explanation, 120))
 			}
 		}
 
 		matches := m.findingsForOperation(op)
 		if len(matches) == 0 {
-			out += "- Matching findings: none\n"
+			detail += "- Matching findings: none\n"
 		} else {
-			out += "- Matching findings (up to 8):\n"
+			detail += "- Matching findings (up to 8):\n"
 			for _, issue := range matches {
-				out += fmt.Sprintf("  - [%s/%s] %s\n", issue.Severity, issue.Code, truncate(issue.Message, 90))
+				detail += fmt.Sprintf("  - [%s/%s] %s\n", issue.Severity, issue.Code, truncate(issue.Message, 90))
 			}
 		}
 
 		edges, chains := m.workflowReferencesForOperation(op)
 		if len(edges) == 0 && len(chains) == 0 {
-			out += "- Related workflows: none\n"
+			detail += "- Related workflows: none\n"
 		} else {
-			out += "- Related workflows:\n"
+			detail += "- Related workflows:\n"
 			for _, line := range edges {
-				out += fmt.Sprintf("  - edge: %s\n", truncate(line, 100))
+				detail += fmt.Sprintf("  - edge: %s\n", truncate(line, 100))
 			}
 			for _, line := range chains {
-				out += fmt.Sprintf("  - chain: %s\n", truncate(line, 100))
+				detail += fmt.Sprintf("  - chain: %s\n", truncate(line, 100))
 			}
 		}
 
-		out += fmt.Sprintf("- Why this matters: %s\n", m.endpointWhyMatters(op, matches, edges, chains))
+		detail += fmt.Sprintf("- Why this matters: %s\n", m.endpointWhyMatters(op, matches, edges, chains))
 	} else {
-		out += "\nTip: press enter (or d) on an endpoint to open related details.\n"
+		detail += styleMuted.Render("Tip: press enter (or d) on an endpoint to open related details.")
 	}
 
-	return out
+	return m.panelSplit("Endpoint list", list, "Endpoint detail", detail)
 }
 
 func (m Model) viewOverview() string {
@@ -467,12 +511,12 @@ func (m Model) viewOverview() string {
 	} else {
 		out += "\nNo analysis data loaded for this run. Provide --spec to populate this screen.\n"
 	}
-	return out
+	return m.panelSingle("Overview", out)
 }
 
 func (m Model) viewFindings() string {
 	if m.analysis == nil {
-		return "Findings Summary\n\nNo findings data available for this run. Provide --spec to populate this screen.\n"
+		return m.panelSingle("Findings", "No findings data available for this run. Provide --spec to populate this screen.")
 	}
 
 	out := "Findings Summary\n\n"
@@ -522,20 +566,19 @@ func (m Model) viewFindings() string {
 		out += fmt.Sprintf("- Versioning: %s\n", endpointDist(m.endpointScores, "versioning"))
 	}
 
-	return out
+	return m.panelSingle("Findings", out)
 }
 
 func (m Model) viewWorkflows() string {
 	if m.workflowGraph == nil {
-		return "Workflows Summary\n\nNo workflow data available for this run. Provide --spec to populate this screen.\n"
+		return m.panelSingle("Workflows", "No workflow data available for this run. Provide --spec to populate this screen.")
 	}
 
-	out := "Workflows Summary\n\n"
-	out += fmt.Sprintf("Total pairwise workflows: %d\n", len(m.workflowGraph.Edges))
-	out += fmt.Sprintf("Total multi-step chains:  %d\n", len(m.workflowGraph.Chains))
+	list := "Workflows Summary\n\n"
+	list += fmt.Sprintf("Total pairwise workflows: %d\n", len(m.workflowGraph.Edges))
+	list += fmt.Sprintf("Total multi-step chains:  %d\n", len(m.workflowGraph.Chains))
 	if len(m.workflowGraph.Edges) == 0 && len(m.workflowGraph.Chains) == 0 {
-		out += "\nNo workflows detected in this run.\n"
-		return out
+		return m.panelSingle("Workflows", "No workflows detected in this run.")
 	}
 
 	edgeKinds := map[string]int{}
@@ -548,71 +591,75 @@ func (m Model) viewWorkflows() string {
 	}
 
 	if m.workflowSection == 0 {
-		out += "\nActive section: Pairwise\n"
+		list += "\nActive section: Pairwise\n"
 	} else {
-		out += "\nActive section: Chains\n"
+		list += "\nActive section: Chains\n"
 	}
 
-	out += "\nPairwise kind buckets\n"
+	list += "\nPairwise kind buckets\n"
 	edgeBuckets := topCounts(edgeKinds, 6)
 	totalEdges := len(m.workflowGraph.Edges)
 	for i, item := range edgeBuckets {
 		prefix := " "
 		if m.workflowSection == 0 && i == m.workflowBucketIndex {
-			prefix = ">"
+			prefix = styleSelection.Render(">")
 		}
-		out += fmt.Sprintf("%s %d) %-42s %4d (%2d%%)\n", prefix, i+1, item.key, item.count, percent(item.count, totalEdges))
+		list += fmt.Sprintf("%s %d) %-42s %4d (%2d%%)\n", prefix, i+1, item.key, item.count, percent(item.count, totalEdges))
 	}
 
-	out += "\nChain kind buckets\n"
+	list += "\nChain kind buckets\n"
 	chainBuckets := topCounts(chainKinds, 6)
 	totalChains := len(m.workflowGraph.Chains)
 	for i, item := range chainBuckets {
 		prefix := " "
 		if m.workflowSection == 1 && i == m.workflowBucketIndex {
-			prefix = ">"
+			prefix = styleSelection.Render(">")
 		}
-		out += fmt.Sprintf("%s %d) %-42s %4d (%2d%%)\n", prefix, i+1, item.key, item.count, percent(item.count, totalChains))
+		list += fmt.Sprintf("%s %d) %-42s %4d (%2d%%)\n", prefix, i+1, item.key, item.count, percent(item.count, totalChains))
 	}
 
+	detail := ""
 	if m.workflowDetailOpen {
 		active := m.workflowActiveBuckets()
 		if len(active) > 0 {
 			selected := active[m.workflowBucketIndex].key
 			if m.workflowSection == 0 {
-				out += fmt.Sprintf("\nPairwise details for %s (up to 5)\n", selected)
+				detail += fmt.Sprintf("Pairwise details for %s (up to 5)\n", selected)
 				for _, line := range m.workflowEdgeDetails(selected, 5) {
-					out += fmt.Sprintf("- %s\n", line)
+					detail += fmt.Sprintf("- %s\n", line)
 				}
 			} else {
-				out += fmt.Sprintf("\nChain details for %s (up to 5)\n", selected)
+				detail += fmt.Sprintf("Chain details for %s (up to 5)\n", selected)
 				for _, line := range m.workflowChainDetails(selected, 5) {
-					out += fmt.Sprintf("- %s\n", line)
+					detail += fmt.Sprintf("- %s\n", line)
 				}
 			}
 		}
 	} else {
-		out += "\nTip: press enter (or d) on the active section bucket for details.\n"
+		detail += styleMuted.Render("Tip: press enter (or d) on the active section bucket for details.") + "\n"
 	}
 
 	if len(m.chainScores) > 0 {
 		avg := averageChainScoresByKind(m.workflowGraph.Chains, m.chainScores)
-		out += "\nChain score summary\n"
+		list += "\nChain score summary\n"
 		for _, item := range topCounts(chainKinds, 4) {
 			a, ok := avg[item.key]
 			if !ok {
 				continue
 			}
-			out += fmt.Sprintf("- %s: %d/%d/%d\n", item.key, a.ui, a.schema, a.client)
+			list += fmt.Sprintf("- %s: %d/%d/%d\n", item.key, a.ui, a.schema, a.client)
 		}
 	}
 
 	if m.workflowItemDetailOpen {
-		out += "\nWorkflow item detail\n"
-		out += m.viewWorkflowItemDetail()
+		detail += "\nWorkflow item detail\n"
+		detail += m.viewWorkflowItemDetail()
 	}
 
-	return out
+	if strings.TrimSpace(detail) == "" {
+		detail = styleMuted.Render("No detail selected yet. Use Enter for bucket preview or o for item detail.")
+	}
+	return m.panelSplit("Workflow buckets", list, "Workflow detail", detail)
 }
 
 func (m Model) viewWorkflowItemDetail() string {
@@ -687,8 +734,7 @@ func (m Model) viewWorkflowItemDetail() string {
 func (m Model) viewDiff() string {
 	out := "Diff Summary\n\n"
 	if m.diffResult == nil {
-		out += "No diff data available for this run. Use --old and --new to populate this screen.\n"
-		return out
+		return m.panelSingle("Diff", "No diff data available for this run. Use --old and --new to populate this screen.")
 	}
 
 	out += fmt.Sprintf("Old spec: %s\n", m.diffResult.OldSpec)
@@ -712,7 +758,19 @@ func (m Model) viewDiff() string {
 		out += fmt.Sprintf("- %s: %d\n", item.key, item.count)
 	}
 
-	return out
+	return m.panelSingle("Diff", out)
+}
+
+func (m Model) panelSingle(title, content string) string {
+	width := 116
+	body := stylePanelTitle.Render(title) + "\n\n" + strings.TrimRight(content, "\n")
+	return stylePanel.Width(width).Render(body)
+}
+
+func (m Model) panelSplit(leftTitle, left, rightTitle, right string) string {
+	leftPanel := stylePanel.Width(66).Render(stylePanelTitle.Render(leftTitle) + "\n\n" + strings.TrimRight(left, "\n"))
+	rightPanel := stylePanel.Width(50).Render(stylePanelTitle.Render(rightTitle) + "\n\n" + strings.TrimRight(right, "\n"))
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 }
 
 type kvCount struct {

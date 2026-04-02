@@ -3,6 +3,7 @@
 This page explains each api-doctor command in a simple, practical way.
 
 Scope reminder:
+
 - Primary target today: Shopware Admin API OpenAPI spec
 - Included in that scope: Admin API action routes and Sync-related routes present in that spec
 - Broader API support should not be assumed unless validated in this repository
@@ -15,6 +16,7 @@ Scope reminder:
 analyze reads one Shopware Admin API spec and reports quality findings.
 
 It checks for things like:
+
 - missing request or response schema details
 - weak links between related endpoints
 - patterns that can make generated clients harder to use
@@ -24,6 +26,7 @@ It checks for things like:
 Use analyze when you want a quick quality health check for one spec file.
 
 Good moments to run it:
+
 - before sharing a spec with your team
 - before releasing a new API version
 - after making edits to endpoint schemas
@@ -39,7 +42,7 @@ go run . analyze --spec ./adminapi.json
 You get a summary of findings grouped by severity (for example, errors and warnings), plus score summaries.
 
 By default, output is text.
-You can also choose markdown or json with --format.
+You can also choose markdown or JSON with --format.
 
 ---
 
@@ -50,6 +53,7 @@ You can also choose markdown or json with --format.
 workflows infers likely endpoint flows from the spec.
 
 In plain words, it tries to show common API journeys, such as:
+
 - list to detail
 - create to detail
 - action to follow-up
@@ -61,6 +65,7 @@ It also includes selected multi-step chains.
 Use workflows when you want to understand whether the API looks easy to use as a sequence of calls.
 
 Good moments to run it:
+
 - when reviewing endpoint naming and shape consistency
 - when checking if follow-up links feel clear
 - when discussing API usability with backend and frontend teams
@@ -93,6 +98,7 @@ It flags breaking changes such as removed paths, removed operations, and removed
 Use diff before upgrading clients or publishing a new version.
 
 Good moments to run it:
+
 - in release checks
 - in CI before merge
 - when validating that a change is backward compatible
@@ -120,11 +126,18 @@ tui opens a read-only terminal interface for browsing results from analyze, work
 
 It is built with Bubble Tea, but the important part for daily use is that it helps you move from high-level summaries to concrete items faster.
 
+Current maturity:
+
+- This is an early dashboard-style browsing layer for triage and review.
+- It already supports practical drill-down flows, but remains intentionally read-only and scope-limited.
+- For strict automation and complete downstream processing, JSON command output is still the primary interface.
+
 ### Why you would use it
 
 Use tui when plain command output feels too dense and you want a quick visual summary without changing any data.
 
 Good moments to run it:
+
 - local review sessions
 - pair-review of findings and workflow signals
 - quick triage before digging into JSON output
@@ -145,10 +158,10 @@ go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2
 
 - Global screen navigation: left/right, tab, [, ], home, end
 - Direct screen jump: 1 Overview, 2 Hotspots, 3 Endpoints, 4 Findings, 5 Workflows, 6 Diff
-- Quit: q (or ctrl+c)
-- Open related detail: enter or o (context-dependent)
-- Open/close bucket preview: enter or d (Findings/Workflows buckets)
-- Close detail pane/preview: esc
+- Quit: q (or Ctrl+C)
+- Open related detail: Enter or o (context-dependent)
+- Open/close bucket preview: Enter or d (Findings/Workflows buckets)
+- Close detail pane/preview: Esc
 - Findings bucket move: up/down (or j/k)
 - Workflows bucket move: up/down (or j/k)
 - Workflows section toggle (pairwise vs chains): w or s
@@ -167,7 +180,7 @@ go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2
 - Endpoints: select an endpoint row, then open a detail pane with operation info, endpoint score summary, matching findings, related workflows/chains, and a short why-this-matters summary
 - Findings: select a finding-code bucket, open a short list of matching findings, or press o to jump to a related endpoint detail
 - Workflows: select pairwise or chain section, preview a kind bucket, then press o to open a specific workflow/chain item detail (kind, step sequence, scores, bottleneck summary, related endpoints/findings, why-this-matters)
-- Hotspots: select a hotspot row, then press enter or o to jump into related endpoint detail or workflow/chain detail when available
+- Hotspots: select a hotspot row, then press Enter or o to jump into related endpoint detail or workflow/chain detail when available
 
 ### Current limitations
 

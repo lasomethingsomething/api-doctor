@@ -63,6 +63,47 @@ func TestFormatJSON_WithIssues(t *testing.T) {
 	}
 }
 
+func TestFormatAnalysisMarkdown_IncludesSummaryAndIssueDetails(t *testing.T) {
+	result := &model.AnalysisResult{
+		SpecFile: "spec.json",
+		Operations: []*model.Operation{
+			{Method: "get", Path: "/products"},
+		},
+		Issues: []*model.Issue{
+			{
+				Code:        "deprecated-operation",
+				Severity:    "warning",
+				Path:        "/products/{id}",
+				Operation:   "PUT updateProduct",
+				Description: "Deprecated endpoint should be replaced.",
+				Message:     "Operation is marked as deprecated",
+			},
+		},
+	}
+
+	scores := map[string]*endpoint.EndpointScore{
+		"get|/products": {
+			SchemaCompleteness:       5,
+			ClientGenerationQuality: 4,
+			VersioningSafety:        3,
+		},
+	}
+
+	out := FormatAnalysisMarkdown(result, scores)
+	if !strings.Contains(out, "# API Analysis Report") {
+		t.Fatalf("expected markdown title, got: %s", out)
+	}
+	if !strings.Contains(out, "## Summary") || !strings.Contains(out, "| WARNING | 1 |") {
+		t.Fatalf("expected markdown summary table with warning count, got: %s", out)
+	}
+	if !strings.Contains(out, "## Endpoint Quality Summary") || !strings.Contains(out, "| Schema Completeness | 1 | 0 | 0 | 0 |") {
+		t.Fatalf("expected endpoint quality markdown section, got: %s", out)
+	}
+	if !strings.Contains(out, "### `deprecated-operation`") || !strings.Contains(out, "**Impact:** Deprecated endpoint should be replaced.") {
+		t.Fatalf("expected grouped issue details in markdown output, got: %s", out)
+	}
+}
+
 func TestFormatText_GroupsWeakAcceptedTrackingInDefaultOutput(t *testing.T) {
 	result := &model.AnalysisResult{
 		SpecFile: "spec.json",
