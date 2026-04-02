@@ -179,6 +179,12 @@ Good moments to run it:
 go run . tui --spec ./adminapi.json
 ```
 
+Diff mode in TUI (important):
+
+- Treat `./adminapi.json` as the current local spec.
+- To populate the Diff screen, you must provide both an older spec file and a newer spec file.
+- The TUI does not auto-discover spec versions in this mode; pass both flags explicitly.
+
 Optional: include diff data for the Diff screen:
 
 ```sh

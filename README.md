@@ -1,12 +1,10 @@
 # api-doctor
 
-api-doctor is a local command-line helper for checking the quality of Shopware Admin API OpenAPI specs.
+api-doctor is a local command-line helper for checking the quality of Shopware Admin API OpenAPI specs. What it does:
 
-Think of it like a spell-checker for API specs:
-
-- It points out things that may confuse API users.
-- It highlights risky changes between spec versions.
-- It gives quick summaries you can scan in the terminal.
+- points out things that may confuse API users.
+- highlights risky changes between spec versions.
+- gives quick summaries you can scan in the terminal.
 
 It is deterministic and local-only.
 
@@ -27,10 +25,10 @@ api-doctor helps you quickly answer:
 
 Current validated scope is intentionally narrow:
 
-- Primary target today: Shopware Admin API OpenAPI spec
-- Included in that scope: Admin API action routes and Sync-related routes present in that spec
+- Primary target today is Shopware Admin API OpenAPI spec
+- Included in that scope are Admin API action routes
 - Broader API support should not be assumed unless validated in this repository
-- Store API support is not claimed here
+- Store API support is not provided yet
 
 ## Prerequisites
 
@@ -120,6 +118,18 @@ How to launch:
 
 ```sh
 go run . tui --spec ./adminapi.json
+```
+
+Diff mode note:
+
+- `./adminapi.json` is your current local spec in this common workflow.
+- Diff mode requires two additional files: an older spec (`--old`) and a newer spec (`--new`).
+- Diff data is not auto-discovered in this TUI mode; you must pass both flags explicitly at launch.
+
+Example:
+
+```sh
+go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2.json
 ```
 
 The TUI is read-only. It does not edit specs or change analyzer logic.

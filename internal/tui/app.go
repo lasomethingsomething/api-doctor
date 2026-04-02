@@ -425,7 +425,10 @@ func (m Model) View() string {
 		m.renderPane(mainTitle, mainBody, paneMain, 54),
 		m.renderPane(detailTitle, detailBody, paneDetail, 46),
 	)
-	footer := styleFooter.Render("Pane move: Left/Right or Tab (Navigation -> Main -> Detail) | Select/open: Enter | Drill-down: o/d | Close detail: Esc | Quit: q")
+	footer := styleFooter.Render(strings.Join([]string{
+		"Move focus: Left/Right or Tab   |   Navigate list: Up/Down",
+		"Open/select: Enter   |   Drill-down: o / d   |   Close detail: Esc   |   Quit: q",
+	}, "\n"))
 	return lipgloss.JoinVertical(lipgloss.Left, header, layout, footer)
 }
 
@@ -558,18 +561,25 @@ func (m Model) currentPaneBodies() (string, string, string, string) {
 }
 
 func (m Model) paneOverview() (string, string, string, string) {
-	main := "Overview\n\n"
-	main += fmt.Sprintf("Operations: %d\n", len(m.endpointOperations()))
+	main := "\n"
+	main += fmt.Sprintf("Endpoints analyzed from spec: %d\n", len(m.endpointOperations()))
 	if m.analysis != nil {
-		main += fmt.Sprintf("Findings: %d\n", len(m.analysis.Issues))
-		main += fmt.Sprintf("Errors: %d | Warnings: %d | Info: %d\n", countSeverity(m.analysis.Issues, "error"), countSeverity(m.analysis.Issues, "warning"), countSeverity(m.analysis.Issues, "info"))
+		main += fmt.Sprintf("Total findings: %d\n", len(m.analysis.Issues))
+		errCount := countSeverity(m.analysis.Issues, "error")
+		warnCount := countSeverity(m.analysis.Issues, "warning")
+		infoCount := countSeverity(m.analysis.Issues, "info")
+		if infoCount > 0 {
+			main += fmt.Sprintf("Findings by severity: errors %d, warnings %d, info %d\n", errCount, warnCount, infoCount)
+		} else {
+			main += fmt.Sprintf("Findings by severity: errors %d, warnings %d\n", errCount, warnCount)
+		}
 	}
 	if m.workflowGraph != nil {
-		main += fmt.Sprintf("Workflows: %d\n", len(m.workflowGraph.Edges))
-		main += fmt.Sprintf("Chains: %d\n", len(m.workflowGraph.Chains))
+		main += fmt.Sprintf("Inferred pairwise workflow links: %d\n", len(m.workflowGraph.Edges))
+		main += fmt.Sprintf("Inferred multi-step workflow chains: %d\n", len(m.workflowGraph.Chains))
 	}
-	detail := "Use the left menu to choose a section.\n\nMove between panes with Left/Right or Tab.\n\nIn content panes, Enter/o/d opens drill-down details."
-	return "Overview", main, "How to navigate", detail
+	detail := "This overview summarizes parsed endpoints, finding severity, and inferred workflow coverage.\n\nUse the left menu to explore details in each section."
+	return "Overview", main, "What these numbers mean", detail
 }
 
 func (m Model) paneHotspots() (string, string, string, string) {
@@ -579,6 +589,7 @@ func (m Model) paneHotspots() (string, string, string, string) {
 	}
 	idx := wrapIndex(m.hotspotIndex, len(items))
 	list := fmt.Sprintf("Top hotspots: %d | Selected: %d/%d\n\n", len(items), idx+1, len(items))
+	list += "Move with Up/Down. Press Enter or o to open related detail.\n\n"
 	for i, item := range items {
 		prefix := " "
 		if i == idx {
@@ -588,14 +599,14 @@ func (m Model) paneHotspots() (string, string, string, string) {
 		if item.risk >= 10 {
 			riskText = styleBad.Render(fmt.Sprintf("risk:%3d", item.risk))
 		}
-		row := fmt.Sprintf("%s %2d) %-14s %-34s %s %s", prefix, i+1, item.kind, truncate(item.label, 34), riskText, item.value)
+		row := fmt.Sprintf("%s %2d) %-16s %-30s %s %s", prefix, i+1, hotspotKindLabel(item.kind), truncate(item.label, 30), riskText, hotspotMetricLabel(item.value))
 		if i == idx {
 			row = styleRowSelected.Render(row)
 		}
 		list += row + "\n"
 	}
 	sel := items[idx]
-	detail := fmt.Sprintf("Type: %s\nLabel: %s\nMetric: %s\n\nWhy risky:\n%s\n\n", sel.kind, sel.label, sel.value, sel.detail)
+	detail := fmt.Sprintf("Type: %s\nLabel: %s\nMetric: %s\n\nWhat this metric means:\n%s\n\nWhy this is a hotspot:\n%s\n\n", hotspotKindLabel(sel.kind), sel.label, hotspotMetricLabel(sel.value), hotspotMetricExplanation(sel.value), sel.detail)
 	if sel.operation != nil {
 		detail += "Press Enter or o in Main pane to jump to endpoint detail."
 	} else {
@@ -717,7 +728,7 @@ func (m Model) paneWorkflows() (string, string, string, string) {
 	if m.workflowGraph == nil {
 		return "Workflows", "No workflow data available.", "Detail", "Provide --spec to populate this section."
 	}
-	main := fmt.Sprintf("Pairwise workflows: %d\nChains: %d\n\n", len(m.workflowGraph.Edges), len(m.workflowGraph.Chains))
+	main := fmt.Sprintf("Inferred pairwise workflow links: %d\nInferred multi-step workflow chains: %d\n\n", len(m.workflowGraph.Edges), len(m.workflowGraph.Chains))
 	if m.workflowSection == 0 {
 		main += "Section: Pairwise edge families (route-to-route links)\n\n"
 	} else {
@@ -798,8 +809,8 @@ func workflowKindExplanation(kind string) string {
 
 func (m Model) paneDiff() (string, string, string, string) {
 	if m.diffResult == nil {
-		main := "Diff mode is currently inactive.\n\nThis TUI session was started without diff inputs."
-		detail := "To enable diff mode, relaunch TUI with both --old and --new.\n\nExample:\napi-doctor tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2.json"
+		main := "Diff mode is currently inactive.\n\nThis TUI session was started without --old and --new inputs."
+		detail := "Diff data is not auto-discovered in this mode.\n\nUse your current local spec as --spec (for example ./adminapi.json) and provide both comparison files explicitly.\n\nExample:\napi-doctor tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2.json"
 		return "Diff", main, "How to enable diff", detail
 	}
 	main := fmt.Sprintf("Old spec: %s\nNew spec: %s\nTotal changes: %d\n\n", m.diffResult.OldSpec, m.diffResult.NewSpec, len(m.diffResult.Changes))
@@ -1440,7 +1451,51 @@ func (m *Model) hotspotMove(delta int) {
 		m.hotspotIndex = 0
 		return
 	}
-	m.hotspotIndex = wrapIndex(m.hotspotIndex+delta, len(items))
+	next := m.hotspotIndex + delta
+	if next < 0 {
+		next = 0
+	}
+	if next >= len(items) {
+		next = len(items) - 1
+	}
+	m.hotspotIndex = next
+}
+
+func hotspotKindLabel(kind string) string {
+	switch kind {
+	case "finding-bucket":
+		return "finding group"
+	case "endpoint-family":
+		return "endpoint family"
+	case "workflow-kind":
+		return "workflow family"
+	case "chain-kind":
+		return "chain family"
+	default:
+		return kind
+	}
+}
+
+func hotspotMetricLabel(value string) string {
+	v := strings.TrimSpace(value)
+	v = strings.ReplaceAll(v, "count=", "affected=")
+	v = strings.ReplaceAll(v, "avg-risk=", "avg-risk=")
+	v = strings.ReplaceAll(v, "avg-score=", "avg-score=")
+	return v
+}
+
+func hotspotMetricExplanation(value string) string {
+	v := strings.TrimSpace(value)
+	if strings.HasPrefix(v, "count=") {
+		return "Count is how many findings in this grouped issue category were detected."
+	}
+	if strings.HasPrefix(v, "avg-risk=") {
+		return "Average risk is the mean endpoint risk score for this path family. Higher means more score gaps and/or repeated findings."
+	}
+	if strings.HasPrefix(v, "avg-score=") {
+		return "Average score is the mean workflow or chain score across this family. Lower averages indicate weaker automation clarity."
+	}
+	return "This value is a summary metric for the selected hotspot family."
 }
 
 func (m Model) endpointOperations() []*model.Operation {
