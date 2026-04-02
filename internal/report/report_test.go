@@ -414,6 +414,62 @@ func TestFormatText_GroupsPrerequisiteTaskBurdenInDefaultOutput(t *testing.T) {
 	}
 }
 
+func TestFormatText_GroupsContractShapeBurdenInDefaultOutput(t *testing.T) {
+	result := &model.AnalysisResult{
+		SpecFile: "spec.json",
+		Issues: []*model.Issue{
+			{
+				Code:        "contract-shape-workflow-guidance-burden",
+				Severity:    "warning",
+				Path:        "/products",
+				Operation:   "post createProduct (200)",
+				Message:     "high contract-shape/workflow-guidance burden appears likely: response appears snapshot-heavy (48 nested fields, depth 5); response exposes many incidental internal-looking fields (6 matches); response does not clearly communicate compact workflow outcome guidance; response emphasizes storage/model structure more than task-level meaning",
+				Description: "Response looks storage-shaped and may force extra manual workflow interpretation.",
+			},
+			{
+				Code:        "contract-shape-workflow-guidance-burden",
+				Severity:    "warning",
+				Path:        "/products/{id}",
+				Operation:   "patch updateProduct (200)",
+				Message:     "medium contract-shape/workflow-guidance burden appears likely: response appears snapshot-heavy (30 nested fields, depth 4); response exposes many incidental internal-looking fields (4 matches); response emphasizes storage/model structure more than task-level meaning",
+				Description: "Response looks storage-shaped and may force extra manual workflow interpretation.",
+			},
+			{
+				Code:        "deprecated-operation",
+				Severity:    "warning",
+				Path:        "/legacy/products/{id}",
+				Operation:   "put updateLegacyProduct",
+				Message:     "Operation is marked as deprecated",
+				Description: "Deprecated endpoint should be replaced.",
+			},
+		},
+	}
+
+	scores := make(map[string]*endpoint.EndpointScore)
+	out := FormatText(result, scores, false)
+	if !strings.Contains(out, "[WARNING] contract-shape-workflow-guidance-burden (contract-shape workflow burden signal)") {
+		t.Fatalf("expected grouped contract-shape summary, got: %s", out)
+	}
+	if !strings.Contains(out, "Contract-shape burden: 2 endpoints within one endpoint family.") {
+		t.Fatalf("expected contract-shape endpoint/family summary, got: %s", out)
+	}
+	if !strings.Contains(out, "Patterns seen: snapshot-heavy=2; internal-field exposure=2; unclear outcome guidance=1; storage-first shape=2") {
+		t.Fatalf("expected contract-shape pattern summary, got: %s", out)
+	}
+	if !strings.Contains(out, "Representative endpoints: post createProduct (200) /products; patch updateProduct (200) /products/{id}") {
+		t.Fatalf("expected representative endpoints in grouped summary, got: %s", out)
+	}
+	if strings.Contains(out, "Endpoint: post createProduct (200) /products") {
+		t.Fatalf("expected grouped contract-shape issues to be summarized in default output, got: %s", out)
+	}
+	if !strings.Contains(out, "Why it matters: These responses appear closer to internal model snapshots") {
+		t.Fatalf("expected plain-language why-it-matters explanation, got: %s", out)
+	}
+	if !strings.Contains(out, "[WARNING] deprecated-operation") {
+		t.Fatalf("expected non-contract-shape warning to remain itemized, got: %s", out)
+	}
+}
+
 func TestFormatAnalysisMarkdown_UsesTaskBurdenLabel(t *testing.T) {
 	result := &model.AnalysisResult{
 		SpecFile: "spec.json",

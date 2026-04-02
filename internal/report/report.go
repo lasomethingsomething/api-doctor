@@ -48,7 +48,8 @@ func FormatText(result *model.AnalysisResult, scores map[string]*endpoint.Endpoi
 			acceptedIssues := filterIssuesByCode(issues, "weak-accepted-tracking-linkage")
 			followUpIssues := filterIssuesByCode(issues, "weak-follow-up-linkage")
 			burdenIssues := filterIssuesByCode(issues, "prerequisite-task-burden")
-			for _, issue := range filterIssuesWithoutCodes(issues, "weak-accepted-tracking-linkage", "weak-follow-up-linkage", "prerequisite-task-burden") {
+			contractShapeIssues := filterIssuesByCode(issues, "contract-shape-workflow-guidance-burden")
+			for _, issue := range filterIssuesWithoutCodes(issues, "weak-accepted-tracking-linkage", "weak-follow-up-linkage", "prerequisite-task-burden", "contract-shape-workflow-guidance-burden") {
 				// Default mode is scan-friendly first: severity + code + endpoint.
 				out += fmt.Sprintf("  [%s] %s\n", strings.ToUpper(issue.Severity), issueDisplayCode(issue.Code))
 				out += fmt.Sprintf("      Endpoint: %s %s\n", issue.Operation, issue.Path)
@@ -71,6 +72,11 @@ func FormatText(result *model.AnalysisResult, scores map[string]*endpoint.Endpoi
 
 			if len(burdenIssues) > 0 {
 				out += formatTaskBurdenSummary(burdenIssues)
+				out += "\n"
+			}
+
+			if len(contractShapeIssues) > 0 {
+				out += formatContractShapeBurdenSummary(contractShapeIssues)
 				out += "\n"
 			}
 
@@ -459,6 +465,9 @@ func issueDisplayCode(code string) string {
 	if strings.TrimSpace(code) == "prerequisite-task-burden" {
 		return "prerequisite-task-burden (task burden signal)"
 	}
+	if strings.TrimSpace(code) == "contract-shape-workflow-guidance-burden" {
+		return "contract-shape-workflow-guidance-burden (contract shape burden signal)"
+	}
 	return code
 }
 
@@ -478,10 +487,7 @@ func formatTaskBurdenSummary(issues []*model.Issue) string {
 	}
 
 	sampleEndpoints := make([]string, 0, groupedWorkflowSampleLimit)
-	for i, issue := range issues {
-		if i >= groupedWorkflowSampleLimit {
-			break
-		}
+	for _, issue := range representativeContractShapeIssues(issues, groupedWorkflowSampleLimit) {
 		sampleEndpoints = append(sampleEndpoints, fmt.Sprintf("%s %s", issue.Operation, issue.Path))
 	}
 
@@ -498,6 +504,82 @@ func formatTaskBurdenSummary(issues []*model.Issue) string {
 	return out
 }
 
+func formatContractShapeBurdenSummary(issues []*model.Issue) string {
+	if len(issues) == 0 {
+		return ""
+	}
+
+	familySet := map[string]bool{}
+	patternCounts := map[string]int{
+		"snapshot-heavy responses":                0,
+		"internal-looking field exposure":         0,
+		"missing workflow outcome guidance":       0,
+		"storage-first structure emphasis":        0,
+	}
+	levelCounts := map[string]int{"high": 0, "medium": 0, "low": 0}
+
+	for _, issue := range issues {
+		familySet[endpointFamily(issue.Path)] = true
+		for _, pattern := range contractShapePatterns(issue.Message) {
+			patternCounts[pattern]++
+		}
+		level := contractShapeLevel(issue.Message)
+		if _, ok := levelCounts[level]; ok {
+			levelCounts[level]++
+		}
+	}
+
+	sort.Slice(issues, func(i, j int) bool {
+		if issues[i].Path != issues[j].Path {
+			return issues[i].Path < issues[j].Path
+		}
+		return issues[i].Operation < issues[j].Operation
+	})
+
+	sampleEndpoints := make([]string, 0, groupedWorkflowSampleLimit)
+	for i, issue := range issues {
+		if i >= groupedWorkflowSampleLimit {
+			break
+		}
+		sampleEndpoints = append(sampleEndpoints, fmt.Sprintf("%s %s", issue.Operation, issue.Path))
+	}
+
+	patternParts := make([]string, 0, len(patternCounts))
+	for _, name := range []string{
+		"snapshot-heavy responses",
+		"internal-looking field exposure",
+		"missing workflow outcome guidance",
+		"storage-first structure emphasis",
+	} {
+		if patternCounts[name] == 0 {
+			continue
+		}
+		patternParts = append(patternParts, fmt.Sprintf("%s=%d", contractShapePatternLabel(name), patternCounts[name]))
+	}
+
+	out := ""
+	out += "  [WARNING] contract-shape-workflow-guidance-burden (contract-shape workflow burden signal)\n"
+	// Keep family breadth qualitative for now: numeric family counts for this signal can drift
+	// because the selected finding subset can vary across runs (signature dedup + capped
+	// selection over non-stable traversal order). Revisit when upstream selection is deterministic.
+	familyScope := "across multiple endpoint families"
+	if len(familySet) == 1 {
+		familyScope = "within one endpoint family"
+	}
+	out += fmt.Sprintf("      Contract-shape burden: %d endpoints %s.\n", len(issues), familyScope)
+	out += "      Why it matters: These responses appear closer to internal model snapshots and may not clearly show task outcomes or next actions.\n"
+	out += fmt.Sprintf("      Level mix: high=%d, medium=%d, low=%d\n", levelCounts["high"], levelCounts["medium"], levelCounts["low"])
+	if len(patternParts) > 0 {
+		out += fmt.Sprintf("      Patterns seen: %s\n", strings.Join(patternParts, "; "))
+	}
+	out += fmt.Sprintf("      Representative endpoints: %s\n", strings.Join(sampleEndpoints, "; "))
+	if len(issues) > groupedWorkflowSampleLimit {
+		out += fmt.Sprintf("      More endpoints: %d more in this group; use --verbose or --json for the full list.\n", len(issues)-groupedWorkflowSampleLimit)
+	}
+
+	return out
+}
+
 func taskBurdenLevel(message string) string {
 	lower := strings.ToLower(strings.TrimSpace(message))
 	switch {
@@ -508,6 +590,134 @@ func taskBurdenLevel(message string) string {
 	default:
 		return "low"
 	}
+}
+
+func contractShapeLevel(message string) string {
+	lower := strings.ToLower(strings.TrimSpace(message))
+	switch {
+	case strings.HasPrefix(lower, "high contract-shape/workflow-guidance burden"):
+		return "high"
+	case strings.HasPrefix(lower, "medium contract-shape/workflow-guidance burden"):
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func contractShapePatterns(message string) []string {
+	lower := strings.ToLower(message)
+	out := make([]string, 0, 4)
+	if strings.Contains(lower, "snapshot-heavy") {
+		out = append(out, "snapshot-heavy responses")
+	}
+	if strings.Contains(lower, "internal-looking fields") {
+		out = append(out, "internal-looking field exposure")
+	}
+	if strings.Contains(lower, "workflow outcome guidance") {
+		out = append(out, "missing workflow outcome guidance")
+	}
+	if strings.Contains(lower, "storage/model structure") {
+		out = append(out, "storage-first structure emphasis")
+	}
+	return out
+}
+
+func contractShapePatternLabel(name string) string {
+	switch strings.TrimSpace(name) {
+	case "snapshot-heavy responses":
+		return "snapshot-heavy"
+	case "internal-looking field exposure":
+		return "internal-field exposure"
+	case "missing workflow outcome guidance":
+		return "unclear outcome guidance"
+	case "storage-first structure emphasis":
+		return "storage-first shape"
+	default:
+		return name
+	}
+}
+
+func representativeContractShapeIssues(issues []*model.Issue, limit int) []*model.Issue {
+	if limit <= 0 || len(issues) == 0 {
+		return nil
+	}
+
+	chosen := make([]*model.Issue, 0, limit)
+	seenFamily := map[string]bool{}
+	seenShape := map[string]bool{}
+
+	for _, issue := range issues {
+		if issue == nil {
+			continue
+		}
+		family := endpointFamily(issue.Path)
+		shape := contractShapePathPattern(issue.Path)
+		if seenFamily[family] || seenShape[shape] {
+			continue
+		}
+		chosen = append(chosen, issue)
+		seenFamily[family] = true
+		seenShape[shape] = true
+		if len(chosen) >= limit {
+			return chosen
+		}
+	}
+
+	for _, issue := range issues {
+		if issue == nil || containsIssue(chosen, issue) {
+			continue
+		}
+		family := endpointFamily(issue.Path)
+		if seenFamily[family] {
+			continue
+		}
+		chosen = append(chosen, issue)
+		seenFamily[family] = true
+		if len(chosen) >= limit {
+			return chosen
+		}
+	}
+
+	for _, issue := range issues {
+		if issue == nil || containsIssue(chosen, issue) {
+			continue
+		}
+		chosen = append(chosen, issue)
+		if len(chosen) >= limit {
+			return chosen
+		}
+	}
+
+	return chosen
+}
+
+func contractShapePathPattern(path string) string {
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+	if len(segments) == 1 && segments[0] == "" {
+		return "root"
+	}
+	staticCount := 0
+	paramCount := 0
+	for _, segment := range segments {
+		if segment == "" {
+			continue
+		}
+		if strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}") {
+			paramCount++
+			continue
+		}
+		staticCount++
+	}
+	return fmt.Sprintf("segments=%d;static=%d;params=%d", len(segments), staticCount, paramCount)
+}
+
+func containsIssue(issues []*model.Issue, target *model.Issue) bool {
+	for _, issue := range issues {
+		if issue == target {
+			return true
+		}
+	}
+	return false
 }
 
 func FormatAnalysisMarkdown(result *model.AnalysisResult, scores map[string]*endpoint.EndpointScore) string {

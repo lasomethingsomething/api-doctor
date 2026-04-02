@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -80,6 +81,12 @@ type Model struct {
 	active screen
 	menuIndex int
 	focusPane paneFocus
+	width int
+	height int
+	detailScroll int
+	filterText string
+	filterMode bool
+	filterInput string
 
 	helpModel help.Model
 	keys     tuiKeyMap
@@ -118,6 +125,7 @@ type tuiKeyMap struct {
 	FocusPane key.Binding
 	Open      key.Binding
 	Close     key.Binding
+	Filter    key.Binding
 	Section   key.Binding
 	QuickJump key.Binding
 	Quit      key.Binding
@@ -149,6 +157,10 @@ func defaultKeyMap() tuiKeyMap {
 			key.WithKeys("esc"),
 			key.WithHelp("esc", "close detail"),
 		),
+		Filter: key.NewBinding(
+			key.WithKeys("/"),
+			key.WithHelp("/", "filter"),
+		),
 		Section: key.NewBinding(
 			key.WithKeys("w", "s"),
 			key.WithHelp("w/s", "toggle section"),
@@ -165,7 +177,7 @@ func defaultKeyMap() tuiKeyMap {
 }
 
 func (k tuiKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.NavUp, k.NavDown, k.Select, k.FocusPane, k.Open, k.Close, k.QuickJump, k.Quit}
+	return []key.Binding{k.NavUp, k.NavDown, k.Select, k.FocusPane, k.Open, k.Close, k.Filter, k.QuickJump, k.Quit}
 }
 
 func (k tuiKeyMap) FullHelp() [][]key.Binding {
@@ -207,9 +219,88 @@ func (m Model) Init() tea.Cmd { return nil }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
 	case tea.KeyMsg:
+		if m.filterMode {
+			switch msg.Type {
+			case tea.KeyEsc:
+				m.filterMode = false
+				m.filterInput = ""
+				m.filterText = ""
+				m.resetScreenSelectionAfterFilter()
+				return m, nil
+			case tea.KeyEnter:
+				m.filterMode = false
+				m.filterText = strings.TrimSpace(m.filterInput)
+				m.filterInput = ""
+				m.resetScreenSelectionAfterFilter()
+				return m, nil
+			case tea.KeyBackspace:
+				if len(m.filterInput) > 0 {
+					_, size := utf8.DecodeLastRuneInString(m.filterInput)
+					m.filterInput = m.filterInput[:len(m.filterInput)-size]
+				}
+				return m, nil
+			case tea.KeyCtrlH:
+				if len(m.filterInput) > 0 {
+					_, size := utf8.DecodeLastRuneInString(m.filterInput)
+					m.filterInput = m.filterInput[:len(m.filterInput)-size]
+				}
+				return m, nil
+			case tea.KeyRunes:
+				m.filterInput += string(msg.Runes)
+				return m, nil
+			default:
+				return m, nil
+			}
+		}
+
 		if key.Matches(msg, m.keys.Quit) {
 			return m, tea.Quit
+		}
+
+		if key.Matches(msg, m.keys.Filter) {
+			m.filterMode = true
+			m.filterInput = m.filterText
+			return m, nil
+		}
+
+		if m.focusPane == paneDetail {
+			_, _, _, detailBody := m.currentPaneBodies()
+			maxScroll := m.maxDetailScroll(detailBody)
+			switch msg.String() {
+			case "up", "k":
+				if m.detailScroll > 0 {
+					m.detailScroll--
+				}
+				return m, nil
+			case "down", "j":
+				if m.detailScroll < maxScroll {
+					m.detailScroll++
+				}
+				return m, nil
+			case "pgup":
+				m.detailScroll -= m.detailViewportHeight() / 2
+				if m.detailScroll < 0 {
+					m.detailScroll = 0
+				}
+				return m, nil
+			case "pgdown":
+				m.detailScroll += m.detailViewportHeight() / 2
+				if m.detailScroll > maxScroll {
+					m.detailScroll = maxScroll
+				}
+				return m, nil
+			case "home":
+				m.detailScroll = 0
+				return m, nil
+			case "end":
+				m.detailScroll = maxScroll
+				return m, nil
+			}
 		}
 
 		if key.Matches(msg, m.keys.FocusPane) {
@@ -253,6 +344,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter", "d":
 				if len(m.findingCodeBuckets()) > 0 {
 					m.findingsDetailOpen = !m.findingsDetailOpen
+					m.detailScroll = 0
 				}
 				return m, nil
 			case "o":
@@ -291,6 +383,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.workflowActiveBuckets()) > 0 {
 					m.workflowDetailOpen = !m.workflowDetailOpen
 					m.workflowItemDetailOpen = false
+					m.detailScroll = 0
 				}
 				return m, nil
 			case "o":
@@ -324,8 +417,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.endpointDetailOpen = false
 				return m, nil
 			case "enter", "d":
-				if len(m.endpointOperations()) > 0 {
+				if len(m.filteredEndpointOperations()) > 0 {
 					m.endpointDetailOpen = !m.endpointDetailOpen
+					m.detailScroll = 0
 				}
 				return m, nil
 			case "esc":
@@ -376,37 +470,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "[", "h", "shift+tab":
-			if m.active == 0 {
-				m.setActive(screenDiff)
-			} else {
-				m.setActive(m.active - 1)
-			}
+			m.setActive(m.stepScreen(-1))
 		case "]", "l":
-			if m.active == screenDiff {
-				m.setActive(screenOverview)
-			} else {
-				m.setActive(m.active + 1)
-			}
+			m.setActive(m.stepScreen(1))
 		case "home":
-			m.setActive(screenOverview)
+			m.setActive(m.firstAvailableScreen())
 		case "end":
-			m.setActive(screenDiff)
-		case "1":
-			m.setActive(screenOverview)
-		case "2":
-			m.setActive(screenHotspots)
-		case "3":
-			m.setActive(screenEndpoints)
-			m.endpointDetailOpen = false
-		case "4":
-			m.setActive(screenFindings)
-			m.findingsDetailOpen = false
-		case "5":
-			m.setActive(screenWorkflows)
-			m.workflowDetailOpen = false
-			m.workflowItemDetailOpen = false
-		case "6":
-			m.setActive(screenDiff)
+			m.setActive(m.lastAvailableScreen())
+		case "1", "2", "3", "4", "5", "6":
+			if target, ok := m.quickJumpScreen(msg.String()); ok {
+				m.setActive(target)
+				switch target {
+				case screenEndpoints:
+					m.endpointDetailOpen = false
+				case screenFindings:
+					m.findingsDetailOpen = false
+				case screenWorkflows:
+					m.workflowDetailOpen = false
+					m.workflowItemDetailOpen = false
+				}
+			}
 		}
 	}
 	return m, nil
@@ -416,6 +499,7 @@ func (m Model) View() string {
 	header := styleHeader.Render(strings.Join([]string{
 		styleTitle.Render("api-doctor dashboard"),
 		fmt.Sprintf("Section: %s | %s", m.activeTitle(), styleFocusBadge.Render("Focus: "+m.focusTitle())),
+		fmt.Sprintf("Filter: %s", m.filterStatusText()),
 		m.dataStatusLine(),
 	}, "\n"))
 
@@ -426,8 +510,8 @@ func (m Model) View() string {
 		m.renderPane(detailTitle, detailBody, paneDetail, 46),
 	)
 	footer := styleFooter.Render(strings.Join([]string{
-		"Move focus: Left/Right or Tab   |   Navigate list: Up/Down",
-		"Open/select: Enter   |   Drill-down: o / d   |   Close detail: Esc   |   Quit: q",
+		"Move focus: Left/Right or Tab   |   Navigate list: Up/Down   |   Filter: /",
+		"Open/select: Enter   |   Drill-down: o / d   |   Detail scroll: Up/Down, PgUp/PgDn   |   Close detail: Esc   |   Quit: q",
 	}, "\n"))
 	return lipgloss.JoinVertical(lipgloss.Left, header, layout, footer)
 }
@@ -468,8 +552,12 @@ func (m Model) activeTitle() string {
 }
 
 func (m *Model) setActive(s screen) {
+	if !m.isScreenAvailable(s) {
+		s = m.firstAvailableScreen()
+	}
 	m.active = s
 	m.menuIndex = int(s)
+	m.detailScroll = 0
 }
 
 func (m *Model) moveMenu(delta int) {
@@ -495,14 +583,11 @@ type menuItem struct {
 }
 
 func (m Model) menuItems() []menuItem {
-	return []menuItem{
-		{id: screenOverview, label: "Overview"},
-		{id: screenHotspots, label: "Hotspots"},
-		{id: screenEndpoints, label: "Endpoints"},
-		{id: screenFindings, label: "Issue categories"},
-		{id: screenWorkflows, label: "Workflows"},
-		{id: screenDiff, label: "Diff"},
+	items := make([]menuItem, 0, 6)
+	for _, s := range m.availableScreens() {
+		items = append(items, menuItem{id: s, label: m.screenLabel(s)})
 	}
+	return items
 }
 
 func (m Model) viewSidebar() string {
@@ -538,6 +623,9 @@ func (m Model) renderPane(title, body string, p paneFocus, width int) string {
 		base = styleFocusedPanel
 		title = styleFocus.Render(title + " - You are here")
 	}
+	if p == paneDetail {
+		body = m.renderDetailViewport(body)
+	}
 	return base.Width(width).Render(stylePanelTitle.Render(title) + "\n\n" + strings.TrimRight(body, "\n"))
 }
 
@@ -564,14 +652,14 @@ func (m Model) paneOverview() (string, string, string, string) {
 	main := "\n"
 	main += fmt.Sprintf("Endpoints analyzed from spec: %d\n", len(m.endpointOperations()))
 	if m.analysis != nil {
-		main += fmt.Sprintf("Total warnings/quality issues detected: %d\n", len(m.analysis.Issues))
+		main += fmt.Sprintf("Total burden/consistency/risk signals detected: %d\n", len(m.analysis.Issues))
 		errCount := countSeverity(m.analysis.Issues, "error")
 		warnCount := countSeverity(m.analysis.Issues, "warning")
 		infoCount := countSeverity(m.analysis.Issues, "info")
 		if infoCount > 0 {
-			main += fmt.Sprintf("Issues by severity: errors %d, warnings %d, informational %d\n", errCount, warnCount, infoCount)
+			main += fmt.Sprintf("Signals by severity: errors %d, warnings %d, informational %d\n", errCount, warnCount, infoCount)
 		} else {
-			main += fmt.Sprintf("Issues by severity: errors %d, warnings %d\n", errCount, warnCount)
+			main += fmt.Sprintf("Signals by severity: errors %d, warnings %d\n", errCount, warnCount)
 		}
 	}
 	if m.workflowGraph != nil {
@@ -585,17 +673,21 @@ func (m Model) paneOverview() (string, string, string, string) {
 			main += fmt.Sprintf("- %s\n", line)
 		}
 	}
-	detail := "This dashboard summarizes what was detected in the API spec: endpoint quality issues, workflow patterns, and optional diff results.\n\nUse the left menu to inspect each area in plain detail."
+	detail := "This overview summarizes workflow burden, contract-shape burden, endpoint consistency outliers, and change-risk context from the API spec.\n\nUse the left menu to inspect each area in plain detail."
 	return "Overview", main, "What these numbers mean", detail
 }
 
 func (m Model) paneHotspots() (string, string, string, string) {
 	items := m.hotspotItems()
 	if len(items) == 0 {
+		if strings.TrimSpace(m.activeFilterText()) != "" {
+			return "Hotspots", "No hotspots match the current filter.", "Detail", "Press / and then Esc to clear filter."
+		}
 		return "Hotspots", "No hotspot data available.", "Detail", "Provide --spec to populate this section."
 	}
 	idx := wrapIndex(m.hotspotIndex, len(items))
 	list := fmt.Sprintf("Top hotspots shown: %d (ranked summary, not every issue) | Selected: %d/%d\n\n", len(items), idx+1, len(items))
+	list += m.screenFilterBanner("Hotspots")
 	list += "Move with Up/Down. Press Enter or o to open related detail.\n\n"
 	for i, item := range items {
 		prefix := " "
@@ -629,12 +721,16 @@ func (m Model) paneEndpoints() (string, string, string, string) {
 	if m.analysis == nil {
 		return "Endpoints", "No analysis data available.", "Detail", "Provide --spec to populate this section."
 	}
-	ops := m.endpointOperations()
+	ops := m.filteredEndpointOperations()
 	if len(ops) == 0 {
+		if strings.TrimSpace(m.activeFilterText()) != "" {
+			return "Endpoints", "No endpoints match the current filter.", "Detail", "Press / and then Esc to clear filter."
+		}
 		return "Endpoints", "No endpoints were parsed from this spec.", "Detail", "No detail available."
 	}
 	idx := wrapIndex(m.endpointIndex, len(ops))
 	list := fmt.Sprintf("Total endpoints: %d | Selected: %d/%d\n", len(ops), idx+1, len(ops))
+	list += m.screenFilterBanner("Endpoints")
 	list += fmt.Sprintf("Sort: %s (press r to toggle)\n", m.endpointSortLabel())
 	list += "Quality score dimensions: schema completeness / client generation / versioning safety (1=low, 5=high)\n"
 	triples := m.endpointScoreTriples(3)
@@ -680,11 +776,11 @@ func (m Model) paneEndpoints() (string, string, string, string) {
 		} else {
 			detail += "Matching findings:\n"
 			for _, issue := range matches {
-				label := findingDisplayName(issue.Code)
+				label := endpointFindingLabel(issue.Code)
 				if isConsistencyFindingCode(issue.Code) {
-					label = "consistency: " + findingDisplayName(issue.Code)
+					label = "consistency: " + endpointFindingLabel(issue.Code)
 				}
-				detail += fmt.Sprintf("- [%s/%s] %s\n", issue.Severity, label, truncate(issue.Message, 70))
+				detail += fmt.Sprintf("- [%s/%s] %s\n", issue.Severity, label, strings.TrimSpace(issue.Message))
 			}
 		}
 
@@ -694,7 +790,16 @@ func (m Model) paneEndpoints() (string, string, string, string) {
 			detail += "- none detected for this endpoint\n"
 		} else {
 			detail += "- this task likely requires extra prerequisite coordination\n"
-			detail += fmt.Sprintf("- evidence: %s\n", truncate(burdenFindings[0].Message, 85))
+			detail += fmt.Sprintf("- evidence: %s\n", strings.TrimSpace(burdenFindings[0].Message))
+		}
+
+		contractShapeFindings := m.findingsByCodeForOperation(op, "contract-shape-workflow-guidance-burden")
+		detail += "\nContract-shape burden signal:\n"
+		if len(contractShapeFindings) == 0 {
+			detail += "- none detected for this endpoint\n"
+		} else {
+			detail += "- this response appears more workflow-heavy than task-focused\n"
+			detail += fmt.Sprintf("- evidence: %s\n", strings.TrimSpace(contractShapeFindings[0].Message))
 		}
 
 		detail += "\nLikely next calls:\n"
@@ -706,7 +811,7 @@ func (m Model) paneEndpoints() (string, string, string, string) {
 				if reason == "" {
 					reason = "detected workflow link"
 				}
-				detail += fmt.Sprintf("- %s %s (%s)\n", strings.ToUpper(next.method), next.path, truncate(reason, 62))
+				detail += fmt.Sprintf("- %s %s (%s)\n", strings.ToUpper(next.method), next.path, reason)
 			}
 		}
 
@@ -735,14 +840,23 @@ func (m Model) paneFindings() (string, string, string, string) {
 	}
 	buckets := m.findingCodeBuckets()
 	if len(buckets) == 0 {
+		if strings.TrimSpace(m.activeFilterText()) != "" {
+			return "Findings", "No finding buckets match the current filter.", "Detail", "Press / and then Esc to clear filter."
+		}
 		return "Findings", "No findings detected in this run.", "Detail", "No detail available."
 	}
 	idx := wrapIndex(m.findingsBucketIndex, len(buckets))
-	main := fmt.Sprintf("Total findings: %d | Buckets: %d\n\n", len(m.analysis.Issues), len(buckets))
+	main := fmt.Sprintf("Total findings: %d | Buckets: %d\n\n", len(m.filteredFindingIssues()), len(buckets))
+	main += m.screenFilterBanner("Findings")
 	taskBurdenTotal := len(m.findingIssuesByCode("prerequisite-task-burden"))
 	if taskBurdenTotal > 0 {
 		main += fmt.Sprintf("Task burden signals flagged: %d endpoints\n", taskBurdenTotal)
 		main += "Look for rows marked with [task burden].\n\n"
+	}
+	contractShapeTotal := len(m.findingIssuesByCode("contract-shape-workflow-guidance-burden"))
+	if contractShapeTotal > 0 {
+		main += fmt.Sprintf("Contract-shape burden signals flagged: %d endpoints\n", contractShapeTotal)
+		main += "Look for rows marked with [workflow burden].\n\n"
 	}
 	consistencyTotal, consistencyCategories := m.consistencyFindingCounts()
 	if consistencyTotal > 0 {
@@ -765,7 +879,7 @@ func (m Model) paneFindings() (string, string, string, string) {
 	if m.findingsDetailOpen {
 		code := buckets[idx].key
 		issues := m.findingIssuesByCode(code)
-		detail = fmt.Sprintf("Issue category: %s\n", findingDisplayName(code))
+		detail = fmt.Sprintf("Issue category: %s\n", findingCategoryLabel(code))
 		detail += fmt.Sprintf("Rule code: %s\n", code)
 		if isConsistencyFindingCode(code) {
 			detail += "Category type: consistency problem\n"
@@ -773,6 +887,9 @@ func (m Model) paneFindings() (string, string, string, string) {
 		} else if isTaskBurdenFindingCode(code) {
 			detail += "Category type: task burden signal\n"
 			detail += "Task burden meaning: This task appears to require extra prerequisite coordination to complete a basic flow.\n"
+		} else if isContractShapeBurdenFindingCode(code) {
+			detail += "Category type: workflow/contract burden signal\n"
+			detail += "Contract-shape meaning: Responses may look snapshot-heavy and may not clearly show task outcomes or next actions.\n"
 		}
 		detail += "\n"
 		detail += fmt.Sprintf("Summary: %s\n", m.findingSummary(code))
@@ -787,7 +904,7 @@ func (m Model) paneFindings() (string, string, string, string) {
 			if endpoint == "" {
 				endpoint = "(no endpoint context)"
 			}
-			detail += fmt.Sprintf("- %s\n  %s\n", truncate(endpoint, 72), truncate(strings.TrimSpace(issue.Message), 72))
+			detail += fmt.Sprintf("- %s\n  %s\n", endpoint, strings.TrimSpace(issue.Message))
 		}
 		detail += "\nWhy it matters:\n"
 		detail += fmt.Sprintf("%s\n", m.findingWhyItMatters(code))
@@ -802,7 +919,10 @@ func (m Model) paneWorkflows() (string, string, string, string) {
 	if m.workflowGraph == nil {
 		return "Workflows", "No workflow data available.", "Detail", "Provide --spec to populate this section."
 	}
-	main := fmt.Sprintf("Single-step workflow handoffs found: %d\nMulti-step workflow paths found: %d\n\n", len(m.workflowGraph.Edges), len(m.workflowGraph.Chains))
+	edges := m.filteredWorkflowEdges()
+	chains := m.filteredWorkflowChains()
+	main := fmt.Sprintf("Single-step workflow handoffs found: %d\nMulti-step workflow paths found: %d\n\n", len(edges), len(chains))
+	main += m.screenFilterBanner("Workflows")
 	if m.workflowSection == 0 {
 		main += "Workflow pattern types (single-step):\n\n"
 	} else {
@@ -810,6 +930,9 @@ func (m Model) paneWorkflows() (string, string, string, string) {
 	}
 	buckets := m.workflowActiveBuckets()
 	if len(buckets) == 0 {
+		if strings.TrimSpace(m.activeFilterText()) != "" {
+			return "Workflows", main + "No workflow buckets match the current filter.", "Workflow detail", "Press / and then Esc to clear filter."
+		}
 		return "Workflows", main + "No workflow buckets available.", "Workflow detail", "No detail available."
 	}
 	idx := wrapIndex(m.workflowBucketIndex, len(buckets))
@@ -923,13 +1046,9 @@ func (m Model) paneDiff() (string, string, string, string) {
 }
 
 func (m Model) screenTabs() string {
-	labels := []string{
-		m.tabLabel(screenOverview, "1 Overview"),
-		m.tabLabel(screenHotspots, "2 Hotspots"),
-		m.tabLabel(screenEndpoints, "3 Endpoints"),
-		m.tabLabel(screenFindings, "4 Issue categories"),
-		m.tabLabel(screenWorkflows, "5 Workflows"),
-		m.tabLabel(screenDiff, "6 Diff"),
+	labels := make([]string, 0, 6)
+	for i, s := range m.availableScreens() {
+		labels = append(labels, m.tabLabel(s, fmt.Sprintf("%d %s", i+1, m.screenLabel(s))))
 	}
 	return strings.Join(labels, "  ")
 }
@@ -939,6 +1058,86 @@ func (m Model) tabLabel(s screen, label string) string {
 		return styleSelection.Render("[" + label + "]")
 	}
 	return styleMuted.Render(label)
+}
+
+func (m Model) availableScreens() []screen {
+	screens := []screen{screenOverview, screenHotspots, screenEndpoints, screenFindings, screenWorkflows}
+	if m.diffResult != nil {
+		screens = append(screens, screenDiff)
+	}
+	return screens
+}
+
+func (m Model) isScreenAvailable(target screen) bool {
+	for _, s := range m.availableScreens() {
+		if s == target {
+			return true
+		}
+	}
+	return false
+}
+
+func (m Model) firstAvailableScreen() screen {
+	screens := m.availableScreens()
+	if len(screens) == 0 {
+		return screenOverview
+	}
+	return screens[0]
+}
+
+func (m Model) lastAvailableScreen() screen {
+	screens := m.availableScreens()
+	if len(screens) == 0 {
+		return screenOverview
+	}
+	return screens[len(screens)-1]
+}
+
+func (m Model) stepScreen(delta int) screen {
+	screens := m.availableScreens()
+	if len(screens) == 0 {
+		return screenOverview
+	}
+
+	idx := 0
+	for i, s := range screens {
+		if s == m.active {
+			idx = i
+			break
+		}
+	}
+	return screens[wrapIndex(idx+delta, len(screens))]
+}
+
+func (m Model) quickJumpScreen(key string) (screen, bool) {
+	if len(key) != 1 || key[0] < '1' || key[0] > '9' {
+		return screenOverview, false
+	}
+	idx := int(key[0] - '1')
+	screens := m.availableScreens()
+	if idx < 0 || idx >= len(screens) {
+		return screenOverview, false
+	}
+	return screens[idx], true
+}
+
+func (m Model) screenLabel(s screen) string {
+	switch s {
+	case screenOverview:
+		return "Overview"
+	case screenHotspots:
+		return "Hotspots"
+	case screenEndpoints:
+		return "Endpoints"
+	case screenFindings:
+		return "Issue categories"
+	case screenWorkflows:
+		return "Workflows"
+	case screenDiff:
+		return "Diff"
+	default:
+		return "Unknown"
+	}
 }
 
 func (m Model) dataStatusLine() string {
@@ -996,6 +1195,9 @@ type hotspotItem struct {
 func (m Model) viewHotspots() string {
 	items := m.hotspotItems()
 	if len(items) == 0 {
+		if strings.TrimSpace(m.activeFilterText()) != "" {
+			return m.panelSingle("Hotspots", "No hotspots match the current filter. Press / and then Esc to clear filter.")
+		}
 		return m.panelSingle("Hotspots", "No hotspot data available for this run. Provide --spec to populate this view.")
 	}
 
@@ -1009,6 +1211,7 @@ func (m Model) viewHotspots() string {
 
 	list := "Hotspots\n"
 	list += styleMuted.Render("Worst areas first, ranked from deterministic signals.") + "\n\n"
+	list += m.screenFilterBanner("Hotspots")
 	list += fmt.Sprintf("Top hotspots: %d | Selected: %d/%d\n\n", len(items), idx+1, len(items))
 	for i, item := range items {
 		prefix := " "
@@ -1045,10 +1248,14 @@ func (m Model) viewEndpoints() string {
 		return m.panelSingle("Endpoints", "No analysis data available for this run. Provide --spec to populate this screen.")
 	}
 
-	ops := m.endpointOperations()
+	ops := m.filteredEndpointOperations()
 	list := "Endpoints Browser\n\n"
 	list += fmt.Sprintf("Total endpoints: %d\n", len(ops))
+	list += m.screenFilterBanner("Endpoints")
 	if len(ops) == 0 {
+		if strings.TrimSpace(m.activeFilterText()) != "" {
+			return m.panelSingle("Endpoints", "No endpoints match the current filter. Press / and then Esc to clear filter.")
+		}
 		return m.panelSingle("Endpoints", "No endpoints were parsed from this spec.")
 	}
 
@@ -1102,7 +1309,7 @@ func (m Model) viewEndpoints() string {
 		} else {
 			detail += "- Matching findings (up to 8):\n"
 			for _, issue := range matches {
-				detail += fmt.Sprintf("  - [%s/%s] %s\n", issue.Severity, findingDisplayName(issue.Code), truncate(issue.Message, 90))
+				detail += fmt.Sprintf("  - [%s/%s] %s\n", issue.Severity, endpointFindingLabel(issue.Code), truncate(issue.Message, 90))
 			}
 		}
 
@@ -1112,6 +1319,14 @@ func (m Model) viewEndpoints() string {
 		} else {
 			detail += "- Task burden signal: likely extra prerequisite coordination\n"
 			detail += fmt.Sprintf("  - Evidence: %s\n", truncate(burdenFindings[0].Message, 100))
+		}
+
+		contractShapeFindings := m.findingsByCodeForOperation(op, "contract-shape-workflow-guidance-burden")
+		if len(contractShapeFindings) == 0 {
+			detail += "- Contract-shape burden signal: none\n"
+		} else {
+			detail += "- Contract-shape burden signal: response appears workflow-heavy vs task-focused\n"
+			detail += fmt.Sprintf("  - Evidence: %s\n", truncate(contractShapeFindings[0].Message, 100))
 		}
 
 		edges, chains := m.workflowReferencesForOperation(op)
@@ -1158,7 +1373,7 @@ func (m Model) viewOverview() string {
 	out := "Overview Summary\n\n"
 	out += fmt.Sprintf("Totals  ops:%d  findings:%d  edges:%d  chains:%d  diff:%s\n", ops, issues, edges, chains, diffChanges)
 	if m.analysis != nil {
-		out += "\nSeverity Summary\n"
+		out += "\nSignal Severity\n"
 		out += fmt.Sprintf("- Errors:   %d\n", countSeverity(m.analysis.Issues, "error"))
 		out += fmt.Sprintf("- Warnings: %d\n", countSeverity(m.analysis.Issues, "warning"))
 		out += fmt.Sprintf("- Info:     %d\n", countSeverity(m.analysis.Issues, "info"))
@@ -1175,15 +1390,21 @@ func (m Model) viewFindings() string {
 
 	out := "Findings Summary\n\n"
 	out += fmt.Sprintf("Spec: %s\n", m.analysis.SpecFile)
-	out += fmt.Sprintf("Total findings: %d\n\n", len(m.analysis.Issues))
-	if len(m.analysis.Issues) == 0 {
+	filteredIssues := m.filteredFindingIssues()
+	out += fmt.Sprintf("Total findings: %d\n\n", len(filteredIssues))
+	out += m.screenFilterBanner("Findings")
+	if len(filteredIssues) == 0 {
+		if strings.TrimSpace(m.activeFilterText()) != "" {
+			out += "No findings match the current filter.\n"
+			return out
+		}
 		out += "No findings detected in this run.\n"
 		return out
 	}
 
 	summary := map[string]int{}
 	codes := map[string]int{}
-	for _, issue := range m.analysis.Issues {
+	for _, issue := range filteredIssues {
 		summary[issue.Severity]++
 		codes[issue.Code]++
 	}
@@ -1197,7 +1418,7 @@ func (m Model) viewFindings() string {
 
 	out += "\nTop finding code buckets\n"
 	buckets := m.findingCodeBuckets()
-	total := len(m.analysis.Issues)
+	total := len(filteredIssues)
 	for i, item := range buckets {
 		prefix := " "
 		if i == m.findingsBucketIndex {
@@ -1232,19 +1453,25 @@ func (m Model) viewWorkflows() string {
 		return m.panelSingle("Workflows", "No workflow data available for this run. Provide --spec to populate this screen.")
 	}
 
+	edges := m.filteredWorkflowEdges()
+	chains := m.filteredWorkflowChains()
 	list := "Workflows Summary\n\n"
-	list += fmt.Sprintf("Total pairwise workflows: %d\n", len(m.workflowGraph.Edges))
-	list += fmt.Sprintf("Total multi-step chains:  %d\n", len(m.workflowGraph.Chains))
-	if len(m.workflowGraph.Edges) == 0 && len(m.workflowGraph.Chains) == 0 {
+	list += fmt.Sprintf("Total pairwise workflows: %d\n", len(edges))
+	list += fmt.Sprintf("Total multi-step chains:  %d\n", len(chains))
+	list += "\n" + m.screenFilterBanner("Workflows")
+	if len(edges) == 0 && len(chains) == 0 {
+		if strings.TrimSpace(m.activeFilterText()) != "" {
+			return m.panelSingle("Workflows", "No workflows match the current filter. Press / and then Esc to clear filter.")
+		}
 		return m.panelSingle("Workflows", "No workflows detected in this run.")
 	}
 
 	edgeKinds := map[string]int{}
-	for _, edge := range m.workflowGraph.Edges {
+	for _, edge := range edges {
 		edgeKinds[edge.Kind]++
 	}
 	chainKinds := map[string]int{}
-	for _, chain := range m.workflowGraph.Chains {
+	for _, chain := range chains {
 		chainKinds[chain.Kind]++
 	}
 
@@ -1256,7 +1483,7 @@ func (m Model) viewWorkflows() string {
 
 	list += "\nPairwise kind buckets\n"
 	edgeBuckets := topCounts(edgeKinds, 6)
-	totalEdges := len(m.workflowGraph.Edges)
+	totalEdges := len(edges)
 	for i, item := range edgeBuckets {
 		prefix := " "
 		if m.workflowSection == 0 && i == m.workflowBucketIndex {
@@ -1267,7 +1494,7 @@ func (m Model) viewWorkflows() string {
 
 	list += "\nChain kind buckets\n"
 	chainBuckets := topCounts(chainKinds, 6)
-	totalChains := len(m.workflowGraph.Chains)
+	totalChains := len(chains)
 	for i, item := range chainBuckets {
 		prefix := " "
 		if m.workflowSection == 1 && i == m.workflowBucketIndex {
@@ -1533,10 +1760,11 @@ func (m *Model) findingsMove(delta int) {
 	}
 	m.findingsBucketIndex = wrapIndex(m.findingsBucketIndex+delta, len(buckets))
 	m.findingsDetailOpen = false
+	m.detailScroll = 0
 }
 
 func (m *Model) endpointMove(delta int) {
-	ops := m.endpointOperations()
+	ops := m.filteredEndpointOperations()
 	if len(ops) == 0 {
 		m.endpointIndex = 0
 		m.endpointDetailOpen = false
@@ -1544,6 +1772,7 @@ func (m *Model) endpointMove(delta int) {
 	}
 	m.endpointIndex = wrapIndex(m.endpointIndex+delta, len(ops))
 	m.endpointDetailOpen = false
+	m.detailScroll = 0
 }
 
 func (m *Model) hotspotMove(delta int) {
@@ -1560,6 +1789,7 @@ func (m *Model) hotspotMove(delta int) {
 		next = len(items) - 1
 	}
 	m.hotspotIndex = next
+	m.detailScroll = 0
 }
 
 func hotspotKindLabel(kind string) string {
@@ -1603,9 +1833,39 @@ func hotspotMetricExplanation(value string) string {
 
 func hotspotDisplayLabel(item hotspotItem) string {
 	if item.kind == "finding-bucket" || item.kind == "consistency-bucket" {
-		return findingDisplayName(item.label)
+		return hotspotFindingLabel(item.label)
 	}
 	return item.label
+}
+
+func hotspotFindingLabel(code string) string {
+	if isContractShapeBurdenFindingCode(code) {
+		return "Contract-shape workflow burden signal"
+	}
+	if isTaskBurdenFindingCode(code) {
+		return "Prerequisite task burden signal"
+	}
+	return findingDisplayName(code)
+}
+
+func endpointFindingLabel(code string) string {
+	if isContractShapeBurdenFindingCode(code) {
+		return "contract-shape workflow burden signal"
+	}
+	if isTaskBurdenFindingCode(code) {
+		return "task burden signal"
+	}
+	return findingDisplayName(code)
+}
+
+func findingBucketHotspotDetail(code string) string {
+	if isContractShapeBurdenFindingCode(code) {
+		return "Contract-shape workflow burden appears across multiple endpoints; some responses look snapshot-heavy or do not clearly show task outcomes."
+	}
+	if isTaskBurdenFindingCode(code) {
+		return "Task burden appears across multiple endpoints, which can indicate extra prerequisite coordination before or after the main call."
+	}
+	return "Frequent issue category across endpoints, which suggests a repeated schema or usability gap."
 }
 
 func (m Model) endpointOperations() []*model.Operation {
@@ -1634,6 +1894,25 @@ func (m Model) endpointOperations() []*model.Operation {
 		return strings.ToUpper(ops[i].Method) < strings.ToUpper(ops[j].Method)
 	})
 	return ops
+}
+
+func (m Model) filteredEndpointOperations() []*model.Operation {
+	ops := m.endpointOperations()
+	filter := m.activeFilterText()
+	if filter == "" {
+		return ops
+	}
+	filtered := make([]*model.Operation, 0, len(ops))
+	for _, op := range ops {
+		if op == nil {
+			continue
+		}
+		combined := strings.Join([]string{strings.ToUpper(op.Method), op.Path, op.OperationID, op.Summary}, " ")
+		if containsFold(combined, filter) {
+			filtered = append(filtered, op)
+		}
+	}
+	return filtered
 }
 
 func (m Model) endpointSortLabel() string {
@@ -1753,19 +2032,39 @@ func isTaskBurdenFindingCode(code string) bool {
 	return strings.TrimSpace(code) == "prerequisite-task-burden"
 }
 
+func isContractShapeBurdenFindingCode(code string) bool {
+	return strings.TrimSpace(code) == "contract-shape-workflow-guidance-burden"
+}
+
 func findingDisplayName(code string) string {
 	if isTaskBurdenFindingCode(code) {
 		return "prerequisite-task-burden (task burden signal)"
+	}
+	if isContractShapeBurdenFindingCode(code) {
+		return "contract-shape-workflow-guidance-burden (contract shape burden signal)"
 	}
 	return code
 }
 
 func findingBucketLabel(code string) string {
 	if isConsistencyFindingCode(code) {
-		return "[consistency] " + findingDisplayName(code)
+		return "[consistency] " + findingCategoryLabel(code)
 	}
 	if isTaskBurdenFindingCode(code) {
-		return "[task burden] " + findingDisplayName(code)
+		return "[task burden] " + findingCategoryLabel(code)
+	}
+	if isContractShapeBurdenFindingCode(code) {
+		return "[workflow burden] " + findingCategoryLabel(code)
+	}
+	return findingCategoryLabel(code)
+}
+
+func findingCategoryLabel(code string) string {
+	if isContractShapeBurdenFindingCode(code) {
+		return "Contract-shape workflow burden signal"
+	}
+	if isTaskBurdenFindingCode(code) {
+		return "Task burden signal"
 	}
 	return findingDisplayName(code)
 }
@@ -1818,7 +2117,7 @@ func (m Model) hotspotItems() []hotspotItem {
 				label:  item.key,
 				value:  fmt.Sprintf("count=%d", item.count),
 				risk:   item.count * 3,
-				detail: "Frequent issue category across endpoints, which suggests a repeated schema or usability gap.",
+				detail: findingBucketHotspotDetail(item.key),
 				operation: codeOp[item.key],
 			})
 		}
@@ -1929,6 +2228,18 @@ func (m Model) hotspotItems() []hotspotItem {
 				})
 			}
 		}
+	}
+
+	filter := m.activeFilterText()
+	if filter != "" {
+		filtered := make([]hotspotItem, 0, len(items))
+		for _, item := range items {
+			combined := strings.Join([]string{item.kind, hotspotDisplayLabel(item), item.value, item.detail}, " ")
+			if containsFold(combined, filter) {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
 	}
 
 	sort.Slice(items, func(i, j int) bool {
@@ -2388,12 +2699,52 @@ func (m Model) workflowReferencesForOperation(op *model.Operation) ([]string, []
 	return edges, chains
 }
 
+func (m Model) filteredWorkflowEdges() []workflow.Edge {
+	if m.workflowGraph == nil {
+		return nil
+	}
+	filter := m.activeFilterText()
+	if filter == "" {
+		return m.workflowGraph.Edges
+	}
+	filtered := make([]workflow.Edge, 0, len(m.workflowGraph.Edges))
+	for _, edge := range m.workflowGraph.Edges {
+		combined := strings.Join([]string{edge.Kind, edge.From.Method, edge.From.Path, edge.To.Method, edge.To.Path, edge.Reason}, " ")
+		if containsFold(combined, filter) {
+			filtered = append(filtered, edge)
+		}
+	}
+	return filtered
+}
+
+func (m Model) filteredWorkflowChains() []workflow.Chain {
+	if m.workflowGraph == nil {
+		return nil
+	}
+	filter := m.activeFilterText()
+	if filter == "" {
+		return m.workflowGraph.Chains
+	}
+	filtered := make([]workflow.Chain, 0, len(m.workflowGraph.Chains))
+	for _, chain := range m.workflowGraph.Chains {
+		parts := []string{chain.Kind, chain.Reason}
+		for _, step := range chain.Steps {
+			parts = append(parts, step.Node.Method, step.Node.Path)
+		}
+		if containsFold(strings.Join(parts, " "), filter) {
+			filtered = append(filtered, chain)
+		}
+	}
+	return filtered
+}
+
 func (m Model) findingCodeBuckets() []kvCount {
-	if m.analysis == nil {
+	issues := m.filteredFindingIssues()
+	if len(issues) == 0 {
 		return nil
 	}
 	codes := map[string]int{}
-	for _, issue := range m.analysis.Issues {
+	for _, issue := range issues {
 		codes[issue.Code]++
 	}
 	return topCounts(codes, 6)
@@ -2428,11 +2779,8 @@ func (m Model) findingDetails(code string, limit int) []string {
 }
 
 func (m Model) findingIssuesByCode(code string) []*model.Issue {
-	if m.analysis == nil {
-		return nil
-	}
 	issues := make([]*model.Issue, 0)
-	for _, issue := range m.analysis.Issues {
+	for _, issue := range m.filteredFindingIssues() {
 		if issue.Code == code {
 			issues = append(issues, issue)
 		}
@@ -2446,12 +2794,36 @@ func (m Model) findingIssuesByCode(code string) []*model.Issue {
 	return issues
 }
 
+func (m Model) filteredFindingIssues() []*model.Issue {
+	if m.analysis == nil {
+		return nil
+	}
+	filter := m.activeFilterText()
+	if filter == "" {
+		return m.analysis.Issues
+	}
+	filtered := make([]*model.Issue, 0, len(m.analysis.Issues))
+	for _, issue := range m.analysis.Issues {
+		if issue == nil {
+			continue
+		}
+		combined := strings.Join([]string{issue.Code, issue.Path, issue.Operation, issue.Message, issue.Description}, " ")
+		if containsFold(combined, filter) {
+			filtered = append(filtered, issue)
+		}
+	}
+	return filtered
+}
+
 func (m Model) findingSummary(code string) string {
 	if isConsistencyFindingCode(code) {
 		return consistencyFindingSummary(code)
 	}
 	if isTaskBurdenFindingCode(code) {
 		return "Task likely requires too much prerequisite coordination before or after the main call."
+	}
+	if isContractShapeBurdenFindingCode(code) {
+		return "Response appears storage-shaped and may not clearly communicate workflow outcome or next valid actions."
 	}
 	issues := m.findingIssuesByCode(code)
 	for _, issue := range issues {
@@ -2473,6 +2845,9 @@ func (m Model) findingWhyItMatters(code string) string {
 	}
 	if isTaskBurdenFindingCode(code) {
 		return "Higher prerequisite burden can make simple product or order/media tasks feel like managing internal IDs and state handoffs."
+	}
+	if isContractShapeBurdenFindingCode(code) {
+		return "Storage-shaped responses can force developers to infer what changed, which state is authoritative, and what they should do next."
 	}
 	issues := m.findingIssuesByCode(code)
 	for _, issue := range issues {
@@ -2497,6 +2872,7 @@ func (m *Model) workflowMove(delta int) {
 	m.workflowBucketIndex = wrapIndex(m.workflowBucketIndex+delta, len(buckets))
 	m.workflowDetailOpen = false
 	m.workflowItemDetailOpen = false
+	m.detailScroll = 0
 }
 
 func (m Model) workflowActiveBuckets() []kvCount {
@@ -2506,18 +2882,14 @@ func (m Model) workflowActiveBuckets() []kvCount {
 func (m Model) workflowBuckets(section int) []kvCount {
 	if section == 0 {
 		kinds := map[string]int{}
-		if m.workflowGraph != nil {
-			for _, edge := range m.workflowGraph.Edges {
+		for _, edge := range m.filteredWorkflowEdges() {
 				kinds[edge.Kind]++
-			}
 		}
 		return topCounts(kinds, 6)
 	}
 	kinds := map[string]int{}
-	if m.workflowGraph != nil {
-		for _, chain := range m.workflowGraph.Chains {
+	for _, chain := range m.filteredWorkflowChains() {
 			kinds[chain.Kind]++
-		}
 	}
 	return topCounts(kinds, 6)
 }
@@ -2553,7 +2925,7 @@ func (m Model) workflowEdgeDetails(kind string, limit int) []string {
 		return nil
 	}
 	lines := make([]string, 0)
-	for _, edge := range m.workflowGraph.Edges {
+	for _, edge := range m.filteredWorkflowEdges() {
 		if edge.Kind != kind {
 			continue
 		}
@@ -2573,7 +2945,7 @@ func (m Model) workflowChainDetails(kind string, limit int) []string {
 		return nil
 	}
 	lines := make([]string, 0)
-	for _, chain := range m.workflowGraph.Chains {
+	for _, chain := range m.filteredWorkflowChains() {
 		if chain.Kind != kind {
 			continue
 		}
@@ -2584,7 +2956,7 @@ func (m Model) workflowChainDetails(kind string, limit int) []string {
 			last := chain.Steps[len(chain.Steps)-1].Node
 			summary := fmt.Sprintf("%d steps: %s %s -> %s %s", len(chain.Steps), first.Method, first.Path, last.Method, last.Path)
 			if strings.TrimSpace(chain.Reason) != "" {
-				summary += " | " + truncate(chain.Reason, 60)
+				summary += " | " + chain.Reason
 			}
 			lines = append(lines, summary)
 		}
@@ -2611,6 +2983,119 @@ func wrapIndex(v, size int) int {
 	return v
 }
 
+func (m *Model) resetScreenSelectionAfterFilter() {
+	m.detailScroll = 0
+	switch m.active {
+	case screenEndpoints:
+		m.endpointIndex = 0
+		m.endpointDetailOpen = false
+	case screenFindings:
+		m.findingsBucketIndex = 0
+		m.findingsDetailOpen = false
+	case screenWorkflows:
+		m.workflowBucketIndex = 0
+		m.workflowDetailOpen = false
+		m.workflowItemDetailOpen = false
+	case screenHotspots:
+		m.hotspotIndex = 0
+	}
+}
+
+func (m Model) filterStatusText() string {
+	if m.filterMode {
+		return "typing: " + m.filterInput + "_"
+	}
+	if strings.TrimSpace(m.filterText) == "" {
+		return "none (press /)"
+	}
+	return m.filterText
+}
+
+func (m Model) detailViewportHeight() int {
+	if m.height <= 0 {
+		return 20
+	}
+	h := m.height - 14
+	if h < 6 {
+		return 6
+	}
+	return h
+}
+
+func (m Model) maxDetailScroll(body string) int {
+	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
+	max := len(lines) - m.detailViewportHeight()
+	if max < 0 {
+		return 0
+	}
+	return max
+}
+
+func (m Model) renderDetailViewport(body string) string {
+	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
+	visible := m.detailViewportHeight()
+	if len(lines) <= visible {
+		return body
+	}
+
+	start := m.detailScroll
+	if start < 0 {
+		start = 0
+	}
+	maxStart := len(lines) - visible
+	if maxStart < 0 {
+		maxStart = 0
+	}
+	if start > maxStart {
+		start = maxStart
+	}
+	end := start + visible
+	if end > len(lines) {
+		end = len(lines)
+	}
+
+	out := make([]string, 0, visible+2)
+	if start > 0 {
+		out = append(out, styleMuted.Render(fmt.Sprintf("↑ more (%d lines)", start)))
+	}
+	out = append(out, lines[start:end]...)
+	if end < len(lines) {
+		out = append(out, styleMuted.Render(fmt.Sprintf("↓ more (%d lines)", len(lines)-end)))
+	}
+	return strings.Join(out, "\n")
+}
+
+func containsFold(haystack, needle string) bool {
+	if strings.TrimSpace(needle) == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(haystack), strings.ToLower(needle))
+}
+
+func (m Model) activeFilterText() string {
+	return strings.TrimSpace(m.filterText)
+}
+
+func (m Model) screenFilterBanner(scope string) string {
+	if strings.TrimSpace(scope) == "" {
+		scope = "items"
+	}
+
+	if !m.filterMode && strings.TrimSpace(m.filterText) == "" {
+		return ""
+	}
+
+	query := strings.TrimSpace(m.filterText)
+	if m.filterMode {
+		query = m.filterInput + "_"
+	}
+	if strings.TrimSpace(query) == "" {
+		query = "..."
+	}
+
+	return fmt.Sprintf("Filtering %s by: %s (Esc clears filter)\n\n", scope, query)
+}
+
 func percent(part, total int) int {
 	if total <= 0 || part <= 0 {
 		return 0
@@ -2634,7 +3119,15 @@ func (m Model) fixFirstSummaryLines() []string {
 		for _, item := range chaining {
 			parts = append(parts, fmt.Sprintf("%s (%d)", item.label, item.count))
 		}
-		lines = append(lines, "Chaining blockers: "+strings.Join(parts, "; "))
+		lines = append(lines, "Workflow burden: "+strings.Join(parts, "; "))
+	}
+
+	if endpoints, families := m.contractShapeBurdenFootprint(); endpoints > 0 {
+		scope := "across multiple families"
+		if families == 1 {
+			scope = "within one family"
+		}
+		lines = append(lines, fmt.Sprintf("Contract-shape burden: appears in %d endpoints %s; some responses look snapshot-heavy or do not clearly show task outcomes.", endpoints, scope))
 	}
 
 	if consistency := m.topConsistencyOutliers(2); len(consistency) > 0 {
@@ -2654,6 +3147,36 @@ func (m Model) fixFirstSummaryLines() []string {
 	}
 
 	return lines
+}
+
+func (m Model) contractShapeBurdenFootprint() (int, int) {
+	if m.analysis == nil {
+		return 0, 0
+	}
+
+	endpointSet := map[string]bool{}
+	familySet := map[string]bool{}
+	for _, issue := range m.analysis.Issues {
+		if issue == nil || !isContractShapeBurdenFindingCode(issue.Code) {
+			continue
+		}
+		key := strings.ToUpper(strings.TrimSpace(issue.Operation)) + "|" + strings.TrimSpace(issue.Path)
+		endpointSet[key] = true
+		familySet[contractShapeSummaryFamily(issue.Path)] = true
+	}
+
+	return len(endpointSet), len(familySet)
+}
+
+func contractShapeSummaryFamily(path string) string {
+	segments := strings.Split(strings.Trim(path, "/"), "/")
+	for _, segment := range segments {
+		if segment == "" || strings.HasPrefix(segment, "{") {
+			continue
+		}
+		return "/" + segment
+	}
+	return "/"
 }
 
 type labeledCount struct {
