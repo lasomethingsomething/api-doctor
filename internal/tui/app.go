@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	styleTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("57"))
+	styleTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("24"))
 	styleHeader = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("81")).
@@ -35,10 +35,10 @@ var (
 		Background(lipgloss.Color("255")).
 		Foreground(lipgloss.Color("236")).
 		Padding(0, 1)
-	stylePanelTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("57"))
+	stylePanelTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("24"))
 	styleSelection = lipgloss.NewStyle().Foreground(lipgloss.Color("198")).Bold(true)
 	styleMuted = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	styleOK = lipgloss.NewStyle().Foreground(lipgloss.Color("121"))
+	styleOK = lipgloss.NewStyle().Foreground(lipgloss.Color("28"))
 	styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
 	styleBad = lipgloss.NewStyle().Foreground(lipgloss.Color("204")).Bold(true)
 	styleNav = lipgloss.NewStyle().
@@ -51,9 +51,10 @@ var (
 		Foreground(lipgloss.Color("236")).
 		Background(lipgloss.Color("189")).
 		Bold(true)
-	styleFocus = lipgloss.NewStyle().Foreground(lipgloss.Color("57")).Bold(true)
+	styleFocus = lipgloss.NewStyle().Foreground(lipgloss.Color("22")).Bold(true)
 	styleFocusedPanel = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("198")).Background(lipgloss.Color("255")).Foreground(lipgloss.Color("236")).Padding(0, 1)
 	styleRowSelected = lipgloss.NewStyle().Foreground(lipgloss.Color("236")).Background(lipgloss.Color("189")).Bold(true)
+	styleFocusBadge = lipgloss.NewStyle().Foreground(lipgloss.Color("236")).Background(lipgloss.Color("189")).Bold(true).Padding(0, 1)
 )
 
 type paneFocus int
@@ -87,6 +88,7 @@ type Model struct {
 
 	endpointIndex      int
 	endpointDetailOpen bool
+	endpointSortMode   int // 0=risk, 1=path
 
 	findingsBucketIndex int
 	findingsDetailOpen  bool
@@ -188,12 +190,18 @@ func NewModel(
 		keys:           defaultKeyMap(),
 		analysis:       analysis,
 		endpointScores: endpointScores,
+		endpointSortMode: 0,
 		workflowGraph:  workflowGraph,
 		workflowScores: workflowScores,
 		chainScores:    chainScores,
 		diffResult:     diffResult,
 	}
 }
+
+const (
+	endpointSortRisk = iota
+	endpointSortPath
+)
 
 func (m Model) Init() tea.Cmd { return nil }
 
@@ -306,6 +314,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "down", "j":
 				m.endpointMove(1)
 				return m, nil
+			case "r":
+				if m.endpointSortMode == endpointSortRisk {
+					m.endpointSortMode = endpointSortPath
+				} else {
+					m.endpointSortMode = endpointSortRisk
+				}
+				m.endpointIndex = 0
+				m.endpointDetailOpen = false
+				return m, nil
 			case "enter", "d":
 				if len(m.endpointOperations()) > 0 {
 					m.endpointDetailOpen = !m.endpointDetailOpen
@@ -398,7 +415,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	header := styleHeader.Render(strings.Join([]string{
 		styleTitle.Render("api-doctor dashboard"),
-		fmt.Sprintf("Section: %s | Focus: %s", m.activeTitle(), m.focusTitle()),
+		fmt.Sprintf("Section: %s | %s", m.activeTitle(), styleFocusBadge.Render("Focus: "+m.focusTitle())),
 		m.dataStatusLine(),
 	}, "\n"))
 
@@ -488,7 +505,7 @@ func (m Model) menuItems() []menuItem {
 func (m Model) viewSidebar() string {
 	lines := []string{stylePanelTitle.Render("Navigation")}
 	if m.focusPane == paneNav {
-		lines[0] = styleFocus.Render("Navigation [focused]")
+		lines[0] = styleFocus.Render("Navigation - You are here")
 	}
 	for i, item := range m.menuItems() {
 		prefix := "  "
@@ -516,7 +533,7 @@ func (m Model) renderPane(title, body string, p paneFocus, width int) string {
 	base := stylePanel
 	if m.focusPane == p {
 		base = styleFocusedPanel
-		title = styleFocus.Render(title + " [focused]")
+		title = styleFocus.Render(title + " - You are here")
 	}
 	return base.Width(width).Render(stylePanelTitle.Render(title) + "\n\n" + strings.TrimRight(body, "\n"))
 }
@@ -596,7 +613,17 @@ func (m Model) paneEndpoints() (string, string, string, string) {
 		return "Endpoints", "No endpoints were parsed from this spec.", "Detail", "No detail available."
 	}
 	idx := wrapIndex(m.endpointIndex, len(ops))
-	list := fmt.Sprintf("Total endpoints: %d | Selected: %d/%d\n\n", len(ops), idx+1, len(ops))
+	list := fmt.Sprintf("Total endpoints: %d | Selected: %d/%d\n", len(ops), idx+1, len(ops))
+	list += fmt.Sprintf("Sort: %s (press r to toggle)\n", m.endpointSortLabel())
+	triples := m.endpointScoreTriples(3)
+	if len(triples) > 0 {
+		parts := make([]string, 0, len(triples))
+		for _, item := range triples {
+			parts = append(parts, fmt.Sprintf("%s=%d", item.key, item.count))
+		}
+		list += fmt.Sprintf("Common scores: %s\n", strings.Join(parts, ", "))
+	}
+	list += "\n"
 	start, end := listWindow(len(ops), idx, 12)
 	for i := start; i < end; i++ {
 		op := ops[i]
@@ -604,21 +631,26 @@ func (m Model) paneEndpoints() (string, string, string, string) {
 		if i == idx {
 			prefix = styleSelection.Render(">")
 		}
-		row := fmt.Sprintf("%s %3d) %-6s %-36s f:%-2d s:%s", prefix, i+1, strings.ToUpper(op.Method), truncate(op.Path, 36), len(m.findingsForOperation(op)), m.endpointScoreSummary(op))
+		findings := len(m.findingsForOperation(op))
+		score := m.endpointScoreSummary(op)
+		risk := m.endpointRiskScore(op)
+		row := fmt.Sprintf("%s %3d) %-6s %-28s findings:%-2d scores:%-5s risk:%-2d", prefix, i+1, strings.ToUpper(op.Method), truncate(op.Path, 28), findings, score, risk)
 		if i == idx {
 			row = styleRowSelected.Render(row)
 		}
 		list += row + "\n"
 	}
 
-	detail := styleMuted.Render("Press Enter or d in Main pane to open endpoint detail.")
+	detail := styleMuted.Render("Press Enter or d in Main pane to open endpoint detail.\nRows show findings, score triplet, and risk to make clean vs problematic endpoints easier to trust.")
 	if m.endpointDetailOpen {
 		op := ops[idx]
 		detail = fmt.Sprintf("Operation: %s %s\n", strings.ToUpper(op.Method), op.Path)
 		if op.OperationID != "" {
 			detail += fmt.Sprintf("Operation ID: %s\n", op.OperationID)
 		}
-		detail += fmt.Sprintf("Scores: %s\n\n", m.endpointScoreSummary(op))
+		detail += fmt.Sprintf("Scores (schema/client/versioning): %s\n", m.endpointScoreSummary(op))
+		detail += fmt.Sprintf("Findings count: %d\n", len(m.allFindingsForOperation(op)))
+		detail += fmt.Sprintf("Risk score: %d\n\n", m.endpointRiskScore(op))
 		matches := m.findingsForOperation(op)
 		if len(matches) == 0 {
 			detail += "Matching findings: none\n"
@@ -655,9 +687,27 @@ func (m Model) paneFindings() (string, string, string, string) {
 	}
 	detail := styleMuted.Render("Press Enter or d in Main pane to preview finding details.\nPress o to jump to endpoint detail.")
 	if m.findingsDetailOpen {
-		detail = fmt.Sprintf("Details for %s\n\n", buckets[idx].key)
-		for _, line := range m.findingDetails(buckets[idx].key, 8) {
-			detail += fmt.Sprintf("- %s\n", line)
+		code := buckets[idx].key
+		issues := m.findingIssuesByCode(code)
+		detail = fmt.Sprintf("Finding: %s\n\n", code)
+		detail += fmt.Sprintf("Summary: %s\n", m.findingSummary(code))
+		detail += fmt.Sprintf("Affected endpoints: %d\n\n", len(issues))
+		detail += "Representative examples:\n"
+		exampleLimit := 4
+		for i, issue := range issues {
+			if i >= exampleLimit {
+				break
+			}
+			endpoint := strings.TrimSpace(strings.Join([]string{strings.ToUpper(strings.TrimSpace(issue.Operation)), issue.Path}, " "))
+			if endpoint == "" {
+				endpoint = "(no endpoint context)"
+			}
+			detail += fmt.Sprintf("- %s\n  %s\n", truncate(endpoint, 72), truncate(strings.TrimSpace(issue.Message), 72))
+		}
+		detail += "\nWhy it matters:\n"
+		detail += fmt.Sprintf("%s\n", m.findingWhyItMatters(code))
+		if len(issues) > exampleLimit {
+			detail += fmt.Sprintf("\nMore items: %d additional endpoints are hidden here. Use JSON output for full details.\n", len(issues)-exampleLimit)
 		}
 	}
 	return "Findings", main, "Finding detail", detail
@@ -668,6 +718,11 @@ func (m Model) paneWorkflows() (string, string, string, string) {
 		return "Workflows", "No workflow data available.", "Detail", "Provide --spec to populate this section."
 	}
 	main := fmt.Sprintf("Pairwise workflows: %d\nChains: %d\n\n", len(m.workflowGraph.Edges), len(m.workflowGraph.Chains))
+	if m.workflowSection == 0 {
+		main += "Section: Pairwise edge families (route-to-route links)\n\n"
+	} else {
+		main += "Section: Multi-step chain families\n\n"
+	}
 	buckets := m.workflowActiveBuckets()
 	if len(buckets) == 0 {
 		return "Workflows", main + "No workflow buckets available.", "Workflow detail", "No detail available."
@@ -678,7 +733,8 @@ func (m Model) paneWorkflows() (string, string, string, string) {
 		if i == idx {
 			prefix = styleSelection.Render(">")
 		}
-		row := fmt.Sprintf("%s %2d) %-40s %4d", prefix, i+1, b.key, b.count)
+		expl := workflowKindExample(b.key)
+		row := fmt.Sprintf("%s %2d) %-22s %4d  %s", prefix, i+1, b.key, b.count, truncate(expl, 34))
 		if i == idx {
 			row = styleRowSelected.Render(row)
 		}
@@ -689,6 +745,7 @@ func (m Model) paneWorkflows() (string, string, string, string) {
 	detail := styleMuted.Render("Press Enter or d for bucket preview.\nPress o for workflow/chain item detail.")
 	if m.workflowDetailOpen {
 		detail = fmt.Sprintf("Bucket: %s\n\n", buckets[idx].key)
+		detail += fmt.Sprintf("What this kind means: %s\n\n", workflowKindExplanation(buckets[idx].key))
 		if m.workflowSection == 0 {
 			for _, line := range m.workflowEdgeDetails(buckets[idx].key, 7) {
 				detail += fmt.Sprintf("- %s\n", line)
@@ -702,12 +759,48 @@ func (m Model) paneWorkflows() (string, string, string, string) {
 	if m.workflowItemDetailOpen {
 		detail += "\nItem detail\n\n" + m.viewWorkflowItemDetail()
 	}
+	if m.workflowSection == 0 {
+		detail += "\nNote\n"
+		detail += "Equal counts between create-to-detail and list-to-detail can happen naturally when many resource families expose both flows. This indicates parallel coverage, not duplicate entries.\n"
+	}
 	return "Workflows", main, "Workflow detail", detail
+}
+
+func workflowKindExample(kind string) string {
+	switch kind {
+	case "create-to-detail":
+		return "POST /x -> GET /x/{id}"
+	case "list-to-detail":
+		return "GET /x -> GET /x/{id}"
+	case "action-to-detail":
+		return "POST /_action/... -> GET /resource/{id}"
+	case "accepted-to-tracking":
+		return "POST /x (202) -> GET /x/status/{id}"
+	default:
+		return "deterministic workflow family"
+	}
+}
+
+func workflowKindExplanation(kind string) string {
+	switch kind {
+	case "create-to-detail":
+		return "Entity creation flow where the create response links to a follow-up detail read. Example: POST /x -> GET /x/{id}."
+	case "list-to-detail":
+		return "Collection browsing flow where a list/search endpoint links to per-item detail reads. Example: GET /x -> GET /x/{id}."
+	case "action-to-detail":
+		return "Action-triggered flow where a state-changing action links to a detail endpoint for verification."
+	case "accepted-to-tracking":
+		return "Async accepted flow where the initial endpoint should expose tracking linkage for status follow-up."
+	default:
+		return "A deterministic inferred workflow family grouped by kind."
+	}
 }
 
 func (m Model) paneDiff() (string, string, string, string) {
 	if m.diffResult == nil {
-		return "Diff", "No diff data available.", "Detail", "Use --old and --new to populate this section."
+		main := "Diff mode is currently inactive.\n\nThis TUI session was started without diff inputs."
+		detail := "To enable diff mode, relaunch TUI with both --old and --new.\n\nExample:\napi-doctor tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2.json"
+		return "Diff", main, "How to enable diff", detail
 	}
 	main := fmt.Sprintf("Old spec: %s\nNew spec: %s\nTotal changes: %d\n\n", m.diffResult.OldSpec, m.diffResult.NewSpec, len(m.diffResult.Changes))
 	sev := map[string]int{}
@@ -1356,6 +1449,18 @@ func (m Model) endpointOperations() []*model.Operation {
 	}
 	ops := append([]*model.Operation(nil), m.analysis.Operations...)
 	sort.Slice(ops, func(i, j int) bool {
+		if m.endpointSortMode == endpointSortRisk {
+			leftRisk := m.endpointRiskScore(ops[i])
+			rightRisk := m.endpointRiskScore(ops[j])
+			if leftRisk != rightRisk {
+				return leftRisk > rightRisk
+			}
+			leftFindings := len(m.allFindingsForOperation(ops[i]))
+			rightFindings := len(m.allFindingsForOperation(ops[j]))
+			if leftFindings != rightFindings {
+				return leftFindings > rightFindings
+			}
+		}
 		leftPath := ops[i].Path
 		rightPath := ops[j].Path
 		if leftPath != rightPath {
@@ -1364,6 +1469,22 @@ func (m Model) endpointOperations() []*model.Operation {
 		return strings.ToUpper(ops[i].Method) < strings.ToUpper(ops[j].Method)
 	})
 	return ops
+}
+
+func (m Model) endpointSortLabel() string {
+	if m.endpointSortMode == endpointSortRisk {
+		return "risk-first"
+	}
+	return "path"
+}
+
+func (m Model) endpointScoreTriples(limit int) []kvCount {
+	ops := m.endpointOperations()
+	counts := map[string]int{}
+	for _, op := range ops {
+		counts[m.endpointScoreSummary(op)]++
+	}
+	return topCounts(counts, limit)
 }
 
 func listWindow(total, selected, size int) (int, int) {
@@ -1963,6 +2084,53 @@ func (m Model) findingDetails(code string, limit int) []string {
 		return []string{"No issue details available."}
 	}
 	return lines
+}
+
+func (m Model) findingIssuesByCode(code string) []*model.Issue {
+	if m.analysis == nil {
+		return nil
+	}
+	issues := make([]*model.Issue, 0)
+	for _, issue := range m.analysis.Issues {
+		if issue.Code == code {
+			issues = append(issues, issue)
+		}
+	}
+	sort.Slice(issues, func(i, j int) bool {
+		if issues[i].Path != issues[j].Path {
+			return issues[i].Path < issues[j].Path
+		}
+		return strings.ToLower(issues[i].Operation) < strings.ToLower(issues[j].Operation)
+	})
+	return issues
+}
+
+func (m Model) findingSummary(code string) string {
+	issues := m.findingIssuesByCode(code)
+	for _, issue := range issues {
+		if strings.TrimSpace(issue.Description) != "" {
+			return truncate(strings.TrimSpace(issue.Description), 120)
+		}
+	}
+	for _, issue := range issues {
+		if strings.TrimSpace(issue.Message) != "" {
+			return truncate(strings.TrimSpace(issue.Message), 120)
+		}
+	}
+	return "No summary text available for this finding code."
+}
+
+func (m Model) findingWhyItMatters(code string) string {
+	issues := m.findingIssuesByCode(code)
+	for _, issue := range issues {
+		if strings.TrimSpace(issue.Description) != "" {
+			return truncate(strings.TrimSpace(issue.Description), 180)
+		}
+	}
+	if len(issues) > 0 {
+		return "This finding appears repeatedly and can reduce schema clarity and integration confidence if left unresolved."
+	}
+	return "No impact summary available."
 }
 
 func (m *Model) workflowMove(delta int) {

@@ -193,6 +193,7 @@ go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2
 - Legacy quick cycling: [ and ] (or h/l)
 - Quit: q (or Ctrl+C)
 - Open related detail: Enter or o (context-dependent)
+- Endpoints sort mode: r toggles risk-first and path order
 - Open/close bucket preview: Enter or d (Findings/Workflows buckets)
 - Close detail pane/preview: Esc
 - Findings bucket move: up/down (or j/k)
@@ -217,16 +218,16 @@ Recommended first-run navigation:
 
 - Overview: totals and severity summary
 - Hotspots: worst-first ranking across finding buckets, endpoint families, and workflow/chain categories
-- Endpoints: browsable endpoint list with score summary and finding counts
-- Findings: finding-code bucket summary with short detail list and endpoint jump option
-- Workflows: pairwise/chain bucket summary with short bucket preview and item-level detail pane
-- Diff: change summary (only populated when --old and --new are both provided)
+- Endpoints: browsable endpoint list with explicit row labels (`findings`, `scores`, `risk`) and sort toggle (`r`: risk-first/path)
+- Findings: finding-code buckets with structured detail (summary, affected count, representative examples, why it matters, plus hidden-items note)
+- Workflows: pairwise/chain bucket summary with inline kind examples so equal counts are easier to interpret
+- Diff: change summary when started with --old and --new; otherwise the pane explains how to relaunch with diff flags and shows an example
 
 ### Drill-down supported today
 
 - Endpoints: select an endpoint row, then open a detail pane with operation info, endpoint score summary, matching findings, related workflows/chains, and a short why-this-matters summary
-- Findings: select a finding-code bucket, open a short list of matching findings, or press o to jump to a related endpoint detail
-- Workflows: select pairwise or chain section, preview a kind bucket, then press o to open a specific workflow/chain item detail (kind, step sequence, scores, bottleneck summary, related endpoints/findings, why-this-matters)
+- Findings: select a finding-code bucket to open structured detail (meaning, affected count, representative examples, why it matters), or press o to jump to a related endpoint detail
+- Workflows: select pairwise or chain section, preview a kind bucket with explanation/examples, then press o to open a specific workflow/chain item detail (kind, step sequence, scores, bottleneck summary, related endpoints/findings, why-this-matters)
 - Hotspots: select a hotspot row, then press Enter or o to jump into related endpoint detail or workflow/chain detail when available
 
 ### Current limitations

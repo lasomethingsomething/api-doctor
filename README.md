@@ -128,10 +128,10 @@ Current high-level screens:
 
 - Overview: top-level totals and severity summary
 - Hotspots: worst areas first across findings, endpoint families, and workflow categories
-- Endpoints: browsable endpoint list with related score and finding detail
-- Findings: finding-code buckets and short detail preview
-- Workflows: workflow/chain buckets with both bucket preview and item-level detail
-- Diff: diff summary when launched with --old and --new
+- Endpoints: browsable endpoint list with explicit labels (`findings`, `scores`, `risk`) and risk/path sort toggle
+- Findings: finding-code buckets with structured detail (summary, affected count, representative examples, why it matters)
+- Workflows: workflow/chain buckets with inline kind examples (for example `create-to-detail: POST /x -> GET /x/{id}`)
+- Diff: diff summary when launched with --old and --new; otherwise shows how to enable diff mode with an example command
 
 Common keybindings:
 
@@ -140,6 +140,7 @@ Common keybindings:
 - Quick section shortcuts: number keys 1..6 (secondary)
 - Legacy section cycling: [ and ] (or h/l)
 - Open related detail: Enter or o (context-dependent)
+- Endpoints sort mode: r toggles risk-first and path order
 - Close detail pane: Esc
 
 First-time flow:
@@ -147,6 +148,7 @@ First-time flow:
 - Move in the left menu with up/down.
 - Press Enter to open a section in the Main pane.
 - Use Tab or right arrow to move to the Detail pane when a drill-down is open.
+
 
 ## Command overview
 
