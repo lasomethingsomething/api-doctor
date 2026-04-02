@@ -144,10 +144,11 @@ go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2
 ### Navigation keys
 
 - Global screen navigation: left/right, tab, [, ], home, end
-- Direct screen jump: 1 Overview, 2 Endpoints, 3 Findings, 4 Workflows, 5 Diff
+- Direct screen jump: 1 Overview, 2 Hotspots, 3 Endpoints, 4 Findings, 5 Workflows, 6 Diff
 - Quit: q (or ctrl+c)
-- Open/close detail preview on selected row: enter or d
-- Close detail preview: esc
+- Open related detail: enter or o (context-dependent)
+- Open/close bucket preview: enter or d (Findings/Workflows buckets)
+- Close detail pane/preview: esc
 - Findings bucket move: up/down (or j/k)
 - Workflows bucket move: up/down (or j/k)
 - Workflows section toggle (pairwise vs chains): w or s
@@ -155,16 +156,18 @@ go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2
 ### Current screens and views
 
 - Overview: totals and severity summary
+- Hotspots: worst-first ranking across finding buckets, endpoint families, and workflow/chain categories
 - Endpoints: browsable endpoint list with score summary and finding counts
-- Findings: finding-code bucket summary with short detail list
-- Workflows: pairwise/chain bucket summary with short detail list
+- Findings: finding-code bucket summary with short detail list and endpoint jump option
+- Workflows: pairwise/chain bucket summary with short bucket preview and item-level detail pane
 - Diff: change summary (only populated when --old and --new are both provided)
 
 ### Drill-down supported today
 
-- Endpoints: select an endpoint row, then open a detail pane with operation info, endpoint score summary, and matching findings
-- Findings: select a finding-code bucket, then open a short list of matching finding entries
-- Workflows: select pairwise or chain section, select a kind bucket, then open a short list of matching workflow or chain entries
+- Endpoints: select an endpoint row, then open a detail pane with operation info, endpoint score summary, matching findings, related workflows/chains, and a short why-this-matters summary
+- Findings: select a finding-code bucket, open a short list of matching findings, or press o to jump to a related endpoint detail
+- Workflows: select pairwise or chain section, preview a kind bucket, then press o to open a specific workflow/chain item detail (kind, step sequence, scores, bottleneck summary, related endpoints/findings, why-this-matters)
+- Hotspots: select a hotspot row, then press enter or o to jump into related endpoint detail or workflow/chain detail when available
 
 ### Current limitations
 

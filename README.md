@@ -82,10 +82,16 @@ The TUI is read-only. It does not edit specs or change analyzer logic.
 
 Current high-level screens:
 - Overview: top-level totals and severity summary
+- Hotspots: worst areas first across findings, endpoint families, and workflow categories
 - Endpoints: browsable endpoint list with related score and finding detail
 - Findings: finding-code buckets and short detail preview
-- Workflows: workflow/chain buckets and short detail preview
+- Workflows: workflow/chain buckets with both bucket preview and item-level detail
 - Diff: diff summary when launched with --old and --new
+
+Common keybindings:
+- Screen switching: left/right, tab, [, ], home, end, and number keys
+- Open related detail: Enter or o (context-dependent)
+- Close detail pane: Esc
 
 ## Command overview
 
