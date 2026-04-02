@@ -44,6 +44,15 @@
     el.sortBy.addEventListener("change", function (e) { state.filters.sortBy = e.target.value; render(); });
   }
 
+  function syncControls() {
+    el.searchInput.value = state.filters.search;
+    el.severityFilter.value = state.filters.severity;
+    el.categoryFilter.value = state.filters.category;
+    el.burdenFilter.value = state.filters.burden;
+    el.hasFindingsOnly.checked = state.filters.findingsOnly;
+    el.sortBy.value = state.filters.sortBy;
+  }
+
   function renderFilters() {
     setOptions(el.severityFilter, [
       { value: "all", label: "severity: all" },
@@ -133,11 +142,11 @@
         state.filters.category = item.filter.category || "all";
         state.filters.burden = item.filter.burdenFocus || "all";
         state.filters.search = item.filter.query || "";
-        el.searchInput.value = state.filters.search;
-        el.severityFilter.value = state.filters.severity;
-        el.categoryFilter.value = state.filters.category;
-        el.burdenFilter.value = state.filters.burden;
+        state.filters.findingsOnly = item.id !== 'families';
+        state.filters.sortBy = item.id === 'families' ? 'findings' : 'priority';
         state.selectionSource = "fix-first";
+        syncControls();
+        state.selectedEndpointId = firstVisibleEndpointId(filteredRows(), { preferFindings: true });
         render();
       });
     });
@@ -148,12 +157,13 @@
     if (el.evidenceScope) {
       el.evidenceScope.textContent = rows.length + ' endpoints match current lens' + formatLensSuffix(state.filters) + '.';
     }
-    if (rows.length > 0 && !rows.find(function (r) { return r.id === state.selectedEndpointId; })) {
-      state.selectedEndpointId = rows[0].id;
-    }
     if (rows.length === 0) {
+      state.selectedEndpointId = "";
       el.endpointRows.innerHTML = '<tr><td colspan="4" class="subtle">No endpoints match this lens. Clear one filter to widen investigation scope.</td></tr>';
       return;
+    }
+    if (rows.length > 0 && !rows.find(function (r) { return r.id === state.selectedEndpointId; })) {
+      state.selectedEndpointId = firstVisibleEndpointId(rows, { preferFindings: state.filters.findingsOnly || state.selectionSource !== 'endpoint-list' });
     }
     el.endpointRows.innerHTML = rows.map(function (row) {
       var selected = row.id === state.selectedEndpointId ? 'active' : '';
@@ -166,8 +176,11 @@
         state.selectionSource = 'endpoint-list';
         renderEndpointRows();
         renderEndpointDetail();
+        focusSelectedRow();
       });
     });
+
+    focusSelectedRow();
   }
 
   function filteredRows() {
@@ -201,9 +214,21 @@
   }
 
   function renderEndpointDetail() {
+    var visibleRows = filteredRows();
+    if (visibleRows.length === 0) {
+      if (el.detailHelp) {
+        el.detailHelp.textContent = 'No endpoint detail is shown because the current lens matches no endpoints.';
+      }
+      el.endpointDetail.innerHTML = "<div class='empty-state'><strong>No endpoint detail in this lens.</strong><p class='subtle'>Clear one or more filters to restore endpoint evidence and inspection detail.</p></div>";
+      return;
+    }
+
     var detail = state.payload.endpointDetails[state.selectedEndpointId];
-    if (!detail) {
-      el.endpointDetail.innerHTML = "<div class='empty-state'><p class='subtle'>Select an endpoint to inspect contract/workflow evidence and related paths.</p></div>";
+    if (!detail || !visibleRows.find(function (row) { return row.id === state.selectedEndpointId; })) {
+      if (el.detailHelp) {
+        el.detailHelp.textContent = 'Select an endpoint from the visible evidence list to inspect its detail.';
+      }
+      el.endpointDetail.innerHTML = "<div class='empty-state'><strong>Select an endpoint.</strong><p class='subtle'>Pick a row from the visible evidence list to inspect contract, workflow, and change-risk detail here.</p></div>";
       return;
     }
 
@@ -234,7 +259,7 @@
       return '<li>' + d.code + ': ' + escapeHtml(d.message) + '</li>';
     }).join('') + '</ul>' : '';
 
-    el.endpointDetail.innerHTML = '<div class="detail-header"><div class="detail-title"><span class="eyebrow">Selected endpoint</span><span class="detail-path">' + detail.endpoint.method + ' ' + detail.endpoint.path + '</span></div><div class="detail-meta"><span class="badge ' + detail.endpoint.priority + '">' + detail.endpoint.priority + '</span><span class="endpoint-chip">' + detail.endpoint.family + '</span><span class="risk-copy">' + detail.endpoint.riskSummary + '</span></div><div class="detail-context">' + escapeHtml(detailContextText()) + '</div></div><div class="investigation-summary"><h3>Why this needs attention</h3><p>' + escapeHtml(summary.why) + '</p><p class="subtle">Inspect next: ' + escapeHtml(summary.next) + '</p></div>' + findings + workflows + chains + diffs;
+    el.endpointDetail.innerHTML = '<div class="detail-header"><div class="detail-title"><span class="eyebrow">Selected endpoint</span><span class="detail-path">' + detail.endpoint.method + ' ' + detail.endpoint.path + '</span></div><div class="detail-meta"><span class="badge ' + detail.endpoint.priority + '">' + detail.endpoint.priority + '</span><span class="endpoint-chip">' + detail.endpoint.family + '</span><span class="risk-copy">' + detail.endpoint.riskSummary + '</span></div><div class="detail-context">' + escapeHtml(detailContextText(detail)) + '</div></div><div class="investigation-summary"><h3>Why this needs attention</h3><p>' + escapeHtml(summary.why) + '</p><p class="subtle">Inspect next: ' + escapeHtml(summary.next) + '</p></div>' + findings + workflows + chains + diffs;
   }
 
   function renderWorkflowPanel() {
@@ -282,21 +307,34 @@
 
   function jumpToEndpoint(id) {
     if (!id || !state.payload.endpointDetails[id]) return;
+    var visible = filteredRows().some(function (row) { return row.id === id; });
+    if (!visible) {
+      var endpoint = state.payload.endpointDetails[id].endpoint;
+      state.filters.search = '';
+      state.filters.severity = 'all';
+      state.filters.category = 'all';
+      state.filters.burden = 'all';
+      state.filters.findingsOnly = endpoint.findings > 0;
+      state.filters.sortBy = endpoint.findings > 0 ? 'findings' : 'priority';
+      syncControls();
+    }
     state.selectedEndpointId = id;
     state.selectionSource = 'family-workflow';
     renderEndpointRows();
     renderEndpointDetail();
+    focusSelectedRow();
   }
 
-  function detailContextText() {
+  function detailContextText(detail) {
+    var hasEvidence = detail && detail.findings && detail.findings.length > 0;
     var base = 'Current lens' + formatLensSuffix(state.filters) + '. ';
     if (state.selectionSource === 'family-workflow') {
-      return base + 'Opened from family/workflow context. Use evidence below to confirm why this endpoint is concerning and what to inspect next.';
+      return hasEvidence ? base + 'Opened from family/workflow context. Evidence is rendered in this panel so you can confirm why this endpoint is concerning and what to inspect next.' : base + 'Opened from family/workflow context. This endpoint has no direct findings in the current lens, so use related workflow and family context rendered here.';
     }
     if (state.selectionSource === 'fix-first') {
-      return base + 'Opened from fix-first prioritization. Use evidence below to validate urgency and related workflow impact.';
+      return hasEvidence ? base + 'Opened from fix-first prioritization. Evidence is rendered in this panel to validate urgency and related workflow impact.' : base + 'Opened from fix-first prioritization. No direct findings are attached to this endpoint in the current lens.';
     }
-    return base + 'Use evidence below to confirm why this endpoint is concerning and what to inspect next.';
+    return hasEvidence ? base + 'Evidence is rendered in this panel so you can confirm why this endpoint is concerning and what to inspect next.' : base + 'No direct findings are attached to this endpoint in the current lens; related workflow context is rendered here when available.';
   }
 
   function buildEndpointFamilySummaries(rows) {
@@ -332,12 +370,16 @@
   function buildWorkflowKindSummaries(entries) {
     var byKind = {};
     entries.forEach(function (w) {
+      var targetID = betterWorkflowTarget(w);
       if (!byKind[w.kind]) {
-        byKind[w.kind] = { kind: w.kind, count: 0, example: w.fromLabel + ' -> ' + w.toLabel, score: w.score || '', targetID: w.fromId || w.toId || '' };
+        byKind[w.kind] = { kind: w.kind, count: 0, example: w.fromLabel + ' -> ' + w.toLabel, score: w.score || '', targetID: targetID };
       }
       byKind[w.kind].count += 1;
       if (!byKind[w.kind].score && w.score) {
         byKind[w.kind].score = w.score;
+      }
+      if (endpointFindingCount(targetID) > endpointFindingCount(byKind[w.kind].targetID)) {
+        byKind[w.kind].targetID = targetID;
       }
     });
     var kinds = Object.values(byKind);
@@ -352,6 +394,38 @@
     if (p === 'high') return 0;
     if (p === 'medium') return 1;
     return 2;
+  }
+
+  function endpointFindingCount(id) {
+    if (!id) return -1;
+    var detail = state.payload.endpointDetails[id];
+    if (!detail || !detail.findings) return -1;
+    return detail.findings.length;
+  }
+
+  function betterWorkflowTarget(entry) {
+    if (!entry) return '';
+    var fromCount = endpointFindingCount(entry.fromId);
+    var toCount = endpointFindingCount(entry.toId);
+    if (fromCount >= toCount) return entry.fromId || entry.toId || '';
+    return entry.toId || entry.fromId || '';
+  }
+
+  function firstVisibleEndpointId(rows, options) {
+    if (!rows || rows.length === 0) return '';
+    var preferFindings = options && options.preferFindings;
+    if (preferFindings) {
+      var withFindings = rows.find(function (row) { return row.findings > 0; });
+      if (withFindings) return withFindings.id;
+    }
+    return rows[0].id;
+  }
+
+  function focusSelectedRow() {
+    if (!state.selectedEndpointId || !el.endpointRows) return;
+    var row = el.endpointRows.querySelector('tr[data-id="' + state.selectedEndpointId + '"]');
+    if (!row) return;
+    row.scrollIntoView({ block: 'nearest' });
   }
 
   function fixFirstRank(id) {
