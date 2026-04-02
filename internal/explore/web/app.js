@@ -99,16 +99,18 @@
     var topWorkflowKind = topWorkflowFamily(state.payload.workflows || {});
     var burdenSummary = dominantBurdenFocus(rows);
     var cards = [
-      ["Contract trust pressure", trustPressure],
-      ["Workflow burden concentration", burdenSummary],
-      ["Fix-first load", String(s.totalFindings) + " findings | " + highPriorityCount + " high-priority endpoints"],
-      ["Family concentration", topFamily],
-      ["Severity split", "E " + (s.severityCounts.error || 0) + " / W " + (s.severityCounts.warning || 0) + " / I " + (s.severityCounts.info || 0)],
-      ["Workflow coverage", s.workflowsInferred + " paths / " + s.chainsInferred + " chains"],
-      ["Dominant workflow kind", topWorkflowKind],
-      ["Endpoints in scope", String(s.endpointsAnalyzed)]
+      { label: "Contract trust pressure", value: trustPressure, meta: "Endpoints currently carrying direct burden, contract-shape, consistency, or change-risk evidence.", tone: "tone-trust" },
+      { label: "Workflow burden concentration", value: burdenSummary, meta: "Dominant burden focus across evidence-bearing endpoints in the current run.", tone: "tone-workflow" },
+      { label: "Fix-first load", value: String(s.totalFindings) + " findings", meta: highPriorityCount + " high-priority endpoints currently rise to the top of the queue.", tone: "tone-fix" },
+      { label: "Family concentration", value: topFamily, meta: "Highest-density endpoint family based on current finding distribution.", tone: "tone-family" },
+      { label: "Severity split", value: "E " + (s.severityCounts.error || 0) + " / W " + (s.severityCounts.warning || 0) + " / I " + (s.severityCounts.info || 0), meta: "Current analysis mix across error, warning, and informational signals.", tone: "tone-trust" },
+      { label: "Workflow coverage", value: s.workflowsInferred + " paths / " + s.chainsInferred + " chains", meta: "Spec-derived handoffs and larger chains inferred from the current contract.", tone: "tone-workflow" },
+      { label: "Dominant workflow kind", value: topWorkflowKind, meta: "Most common inferred path type, useful for deciding where to inspect first.", tone: "tone-family" },
+      { label: "Endpoints in scope", value: String(s.endpointsAnalyzed), meta: "Total endpoints analyzed from the current spec payload.", tone: "tone-fix" }
     ];
-    el.summaryCards.innerHTML = cards.map(function (pair) { return '<article class="card"><h3>' + pair[0] + '</h3><p>' + pair[1] + '</p></article>'; }).join("");
+    el.summaryCards.innerHTML = cards.map(function (card) {
+      return '<article class="card ' + card.tone + '"><p class="card-label">' + card.label + '</p><p class="card-value">' + card.value + '</p><p class="card-meta">' + card.meta + '</p></article>';
+    }).join("");
   }
 
   function renderFixFirst() {
@@ -119,7 +121,8 @@
       el.fixFirstHelp.textContent = 'Use these priorities first, then verify endpoint-level evidence. Current concentration: ' + topFamily + '. Dominant workflow kind: ' + topWorkflowKind + '.';
     }
     el.fixFirstList.innerHTML = state.payload.fixFirst.map(function (item) {
-      return '<button class="fix-item" data-id="' + item.id + '"><strong>' + item.label + ': ' + item.value + '</strong><span>' + item.description + '</span></button>';
+      var rank = fixFirstRank(item.id);
+      return '<button class="fix-item" data-id="' + item.id + '"><span class="fix-rank">' + rank + '</span><span class="fix-copy"><strong>' + item.label + '</strong><span class="fix-value">' + item.value + '</span><span>' + item.description + '</span></span></button>';
     }).join("");
     Array.prototype.forEach.call(el.fixFirstList.querySelectorAll("button"), function (btn) {
       btn.addEventListener("click", function () {
@@ -154,7 +157,7 @@
     }
     el.endpointRows.innerHTML = rows.map(function (row) {
       var selected = row.id === state.selectedEndpointId ? 'active' : '';
-      return '<tr class="' + selected + '" data-id="' + row.id + '"><td><strong>' + row.method + '</strong> ' + row.path + '<br><span class="subtle">' + row.family + ' | ' + rowProblemSummary(row) + '</span></td><td>' + row.findings + '</td><td><span class="badge ' + row.priority + '">' + row.priority + '</span></td><td>' + row.riskSummary + '</td></tr>';
+      return '<tr class="' + selected + '" data-id="' + row.id + '"><td><div class="endpoint-main"><strong>' + row.method + ' ' + row.path + '</strong><div class="endpoint-sub"><span class="endpoint-chip">' + row.family + '</span><span class="subtle">' + rowProblemSummary(row) + '</span></div></div></td><td><span class="findings-count">' + row.findings + '</span></td><td><span class="badge ' + row.priority + '">' + row.priority + '</span></td><td><span class="risk-copy">' + row.riskSummary + '</span></td></tr>';
     }).join('');
 
     Array.prototype.forEach.call(el.endpointRows.querySelectorAll('tr'), function (tr) {
@@ -200,7 +203,7 @@
   function renderEndpointDetail() {
     var detail = state.payload.endpointDetails[state.selectedEndpointId];
     if (!detail) {
-      el.endpointDetail.innerHTML = "<p class='subtle'>Select an endpoint to inspect contract/workflow evidence and related paths.</p>";
+      el.endpointDetail.innerHTML = "<div class='empty-state'><p class='subtle'>Select an endpoint to inspect contract/workflow evidence and related paths.</p></div>";
       return;
     }
 
@@ -231,7 +234,7 @@
       return '<li>' + d.code + ': ' + escapeHtml(d.message) + '</li>';
     }).join('') + '</ul>' : '';
 
-    el.endpointDetail.innerHTML = '<p><strong>' + detail.endpoint.method + '</strong> ' + detail.endpoint.path + '</p><p><span class="badge ' + detail.endpoint.priority + '">' + detail.endpoint.priority + '</span> ' + detail.endpoint.riskSummary + '</p><div class="investigation-summary"><h3>Why this needs attention</h3><p>' + escapeHtml(summary.why) + '</p><p class="subtle">Inspect next: ' + escapeHtml(summary.next) + '</p></div>' + findings + workflows + chains + diffs;
+    el.endpointDetail.innerHTML = '<div class="detail-header"><div class="detail-title"><span class="eyebrow">Selected endpoint</span><span class="detail-path">' + detail.endpoint.method + ' ' + detail.endpoint.path + '</span></div><div class="detail-meta"><span class="badge ' + detail.endpoint.priority + '">' + detail.endpoint.priority + '</span><span class="endpoint-chip">' + detail.endpoint.family + '</span><span class="risk-copy">' + detail.endpoint.riskSummary + '</span></div><div class="detail-context">' + escapeHtml(detailContextText()) + '</div></div><div class="investigation-summary"><h3>Why this needs attention</h3><p>' + escapeHtml(summary.why) + '</p><p class="subtle">Inspect next: ' + escapeHtml(summary.next) + '</p></div>' + findings + workflows + chains + diffs;
   }
 
   function renderWorkflowPanel() {
@@ -264,7 +267,7 @@
       return '<li class="workflow-click" data-id="' + id + '"><strong>' + c.kind + '</strong><br>' + escapeHtml(c.summary) + '</li>';
     }).join('');
 
-    el.workflowPanel.innerHTML = '<h3>Family summaries (by findings)</h3><ul id="familyList">' + (families || "<li class='subtle'>No family summaries in this run.</li>") + '</ul><h3>Workflow path summaries (by kind)</h3><ul id="workflowKindList">' + (paths || "<li class='subtle'>No workflow paths.</li>") + '</ul><h3>Representative chains (click to jump)</h3><ul id="chainList">' + (reps || "<li class='subtle'>No chains.</li>") + '</ul>';
+    el.workflowPanel.innerHTML = '<div class="workflow-sections"><section class="workflow-group"><h3>Family summaries (by findings)</h3><ul id="familyList">' + (families || "<li class='subtle'>No family summaries in this run.</li>") + '</ul></section><section class="workflow-group"><h3>Workflow path summaries (by kind)</h3><ul id="workflowKindList">' + (paths || "<li class='subtle'>No workflow paths.</li>") + '</ul></section><section class="workflow-group"><h3>Representative chains (click to jump)</h3><ul id="chainList">' + (reps || "<li class='subtle'>No chains.</li>") + '</ul></section></div>';
 
     ['familyList', 'workflowKindList', 'chainList'].forEach(function (listID) {
       var list = document.getElementById(listID);
@@ -349,6 +352,12 @@
     if (p === 'high') return 0;
     if (p === 'medium') return 1;
     return 2;
+  }
+
+  function fixFirstRank(id) {
+    var order = ['workflow-burden', 'contract-shape', 'consistency', 'families'];
+    var idx = order.indexOf(id);
+    return idx === -1 ? '•' : String(idx + 1);
   }
 
   function dominantBurdenFocus(rows) {
