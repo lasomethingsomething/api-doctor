@@ -116,12 +116,9 @@ That makes it useful in CI pipelines.
 
 ### What it does
 
-tui opens a read-only terminal interface for quick browsing.
+tui opens a read-only terminal interface for browsing results from analyze, workflows, and optional diff data.
 
-Current UI includes:
-- four summary screens: Overview, Findings, Workflows, Diff
-- keyboard navigation across screens
-- lightweight drill-down on finding-code buckets and workflow-kind buckets
+It is built with Bubble Tea, but the important part for daily use is that it helps you move from high-level summaries to concrete items faster.
 
 ### Why you would use it
 
@@ -132,11 +129,49 @@ Good moments to run it:
 - pair-review of findings and workflow signals
 - quick triage before digging into JSON output
 
-### One example command
+### Launch command
 
 ```sh
 go run . tui --spec ./adminapi.json
 ```
+
+Optional: include diff data for the Diff screen:
+
+```sh
+go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2.json
+```
+
+### Navigation keys
+
+- Global screen navigation: left/right, tab, [, ], home, end
+- Direct screen jump: 1 Overview, 2 Endpoints, 3 Findings, 4 Workflows, 5 Diff
+- Quit: q (or ctrl+c)
+- Open/close detail preview on selected row: enter or d
+- Close detail preview: esc
+- Findings bucket move: up/down (or j/k)
+- Workflows bucket move: up/down (or j/k)
+- Workflows section toggle (pairwise vs chains): w or s
+
+### Current screens and views
+
+- Overview: totals and severity summary
+- Endpoints: browsable endpoint list with score summary and finding counts
+- Findings: finding-code bucket summary with short detail list
+- Workflows: pairwise/chain bucket summary with short detail list
+- Diff: change summary (only populated when --old and --new are both provided)
+
+### Drill-down supported today
+
+- Endpoints: select an endpoint row, then open a detail pane with operation info, endpoint score summary, and matching findings
+- Findings: select a finding-code bucket, then open a short list of matching finding entries
+- Workflows: select pairwise or chain section, select a kind bucket, then open a short list of matching workflow or chain entries
+
+### Current limitations
+
+- Read-only only: no editing, no inline spec changes, no live fetching
+- No graph rendering yet
+- Uses existing analyzer/workflow/diff outputs only; it does not add new inference logic
+- Best suited for Shopware Admin API specs within the validated project scope
 
 ### What kind of output to expect
 

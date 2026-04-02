@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	intdiff "github.com/lasomethingsomething/api-doctor/internal/diff"
+	"github.com/lasomethingsomething/api-doctor/internal/endpoint"
 	"github.com/lasomethingsomething/api-doctor/internal/model"
 	"github.com/lasomethingsomething/api-doctor/internal/workflow"
 )
@@ -23,7 +26,7 @@ func TestViewOverview(t *testing.T) {
 		&intdiff.Result{Changes: []*intdiff.Change{{Severity: "error", Code: "removed-path"}}},
 	)
 	out := m.viewOverview()
-	if !strings.Contains(out, "Overview Summary") || !strings.Contains(out, "Total workflow chains") {
+	if !strings.Contains(out, "Overview Summary") || !strings.Contains(out, "Totals  ops") {
 		t.Fatalf("expected overview summary, got: %s", out)
 	}
 }
@@ -84,5 +87,83 @@ func TestViewWorkflows_EmptyState(t *testing.T) {
 	out := m.viewWorkflows()
 	if !strings.Contains(out, "No workflows detected in this run") {
 		t.Fatalf("expected workflow empty state, got: %s", out)
+	}
+}
+
+func TestViewEndpoints_DetailWithRelatedData(t *testing.T) {
+	op := &model.Operation{Path: "/orders/{id}", Method: "get", OperationID: "getOrder", Summary: "Get order by id"}
+	analysis := &model.AnalysisResult{
+		SpecFile:   "spec.json",
+		Operations: []*model.Operation{op},
+		Issues: []*model.Issue{
+			{Severity: "warning", Code: "weak-follow-up-linkage", Path: "/orders/{id}", Message: "follow-up linkage is weak"},
+		},
+	}
+	scores := map[string]*endpoint.EndpointScore{
+		fmt.Sprintf("%s|%s", op.Method, op.Path): {SchemaCompleteness: 4, ClientGenerationQuality: 5, VersioningSafety: 5, Explanation: "Schema 4/5"},
+	}
+	g := &workflow.Graph{
+		Edges: []workflow.Edge{{Kind: "list-to-detail", From: workflow.Node{Method: "get", Path: "/orders"}, To: workflow.Node{Method: "get", Path: "/orders/{id}"}}},
+		Chains: []workflow.Chain{{Kind: "order-detail-to-action", Steps: []workflow.ChainStep{{Node: workflow.Node{Method: "get", Path: "/orders"}}, {Node: workflow.Node{Method: "get", Path: "/orders/{id}"}}}}},
+	}
+	m := NewModel(analysis, scores, g, nil, nil, nil)
+	m.endpointDetailOpen = true
+	out := m.viewEndpoints()
+	if !strings.Contains(out, "Endpoints Browser") || !strings.Contains(out, "Scores (Schema/Client/Versioning): 4/5/5") || !strings.Contains(out, "weak-follow-up-linkage") || !strings.Contains(out, "Related workflows") {
+		t.Fatalf("expected endpoint detail with related data, got: %s", out)
+	}
+}
+
+func TestFindingsKeyOpenEndpoint(t *testing.T) {
+	op := &model.Operation{Path: "/orders/{id}", Method: "get"}
+	analysis := &model.AnalysisResult{
+		Operations: []*model.Operation{op},
+		Issues: []*model.Issue{
+			{Severity: "warning", Code: "weak-follow-up-linkage", Path: "/orders/{id}", Operation: "get", Message: "follow-up linkage is weak"},
+		},
+	}
+	m := NewModel(analysis, nil, nil, nil, nil, nil)
+	m.active = screenFindings
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
+	next := updated.(Model)
+	if next.active != screenEndpoints || !next.endpointDetailOpen {
+		t.Fatalf("expected findings key 'o' to open endpoint detail, got active=%v detail=%v", next.active, next.endpointDetailOpen)
+	}
+}
+
+func TestViewHotspots(t *testing.T) {
+	op := &model.Operation{Path: "/orders/{id}", Method: "get"}
+	analysis := &model.AnalysisResult{
+		Operations: []*model.Operation{op},
+		Issues: []*model.Issue{
+			{Severity: "warning", Code: "weak-follow-up-linkage", Path: "/orders/{id}", Operation: "get", Message: "follow-up linkage is weak"},
+		},
+	}
+	scores := map[string]*endpoint.EndpointScore{
+		fmt.Sprintf("%s|%s", op.Method, op.Path): {SchemaCompleteness: 3, ClientGenerationQuality: 4, VersioningSafety: 5},
+	}
+	m := NewModel(analysis, scores, nil, nil, nil, nil)
+	out := m.viewHotspots()
+	if !strings.Contains(out, "Hotspots") || !strings.Contains(out, "finding-bucket") {
+		t.Fatalf("expected hotspots output, got: %s", out)
+	}
+}
+
+func TestHotspotsKeyOpenEndpoint(t *testing.T) {
+	op := &model.Operation{Path: "/orders/{id}", Method: "get"}
+	analysis := &model.AnalysisResult{
+		Operations: []*model.Operation{op},
+		Issues: []*model.Issue{
+			{Severity: "warning", Code: "weak-follow-up-linkage", Path: "/orders/{id}", Operation: "get", Message: "follow-up linkage is weak"},
+		},
+	}
+	m := NewModel(analysis, nil, nil, nil, nil, nil)
+	m.active = screenHotspots
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
+	next := updated.(Model)
+	if next.active != screenEndpoints || !next.endpointDetailOpen {
+		t.Fatalf("expected hotspots key 'o' to open endpoint detail, got active=%v detail=%v", next.active, next.endpointDetailOpen)
 	}
 }

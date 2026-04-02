@@ -63,6 +63,30 @@ If that works, try the read-only terminal UI:
 go run . tui --spec ./adminapi.json
 ```
 
+## TUI (interactive, read-only)
+
+The TUI is an interactive terminal view over the same analysis data that the CLI commands produce.
+
+Why use it instead of plain CLI output:
+- easier to scan large result sets quickly
+- easier to move from summary to concrete endpoint/finding/workflow context
+- useful for triage sessions before exporting or scripting against JSON output
+
+How to launch:
+
+```sh
+go run . tui --spec ./adminapi.json
+```
+
+The TUI is read-only. It does not edit specs or change analyzer logic.
+
+Current high-level screens:
+- Overview: top-level totals and severity summary
+- Endpoints: browsable endpoint list with related score and finding detail
+- Findings: finding-code buckets and short detail preview
+- Workflows: workflow/chain buckets and short detail preview
+- Diff: diff summary when launched with --old and --new
+
 ## Command overview
 
 Use one command at a time based on what you need:
