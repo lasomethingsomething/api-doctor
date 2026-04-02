@@ -37,6 +37,10 @@ type Model struct {
 	workflowSection     int // 0=pairwise, 1=chain
 	workflowBucketIndex int
 	workflowDetailOpen  bool
+	workflowItemDetailOpen bool
+	workflowItemSection    int // 0=pairwise, 1=chain
+	workflowItemKind       string
+	workflowItemIndex      int
 
 	analysis       *model.AnalysisResult
 	endpointScores map[string]*endpoint.EndpointScore
@@ -115,14 +119,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.workflowBucketIndex = 0
 				m.workflowDetailOpen = false
+				m.workflowItemDetailOpen = false
 				return m, nil
 			case "enter", "d":
 				if len(m.workflowActiveBuckets()) > 0 {
 					m.workflowDetailOpen = !m.workflowDetailOpen
+					m.workflowItemDetailOpen = false
 				}
 				return m, nil
+			case "o":
+				m.openWorkflowItemDetailForCurrentBucket()
+				return m, nil
 			case "esc":
-				m.workflowDetailOpen = false
+				if m.workflowItemDetailOpen {
+					m.workflowItemDetailOpen = false
+				} else {
+					m.workflowDetailOpen = false
+				}
 				return m, nil
 			}
 		}
@@ -160,6 +173,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.active = screenEndpoints
 					m.endpointIndex = m.indexOfOperation(op)
 					m.endpointDetailOpen = true
+				} else if m.openWorkflowDetailFromSelectedHotspot() {
+					m.active = screenWorkflows
 				}
 				return m, nil
 			}
@@ -197,6 +212,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "5":
 			m.active = screenWorkflows
 			m.workflowDetailOpen = false
+			m.workflowItemDetailOpen = false
 		case "6":
 			m.active = screenDiff
 		}
@@ -268,13 +284,13 @@ func (m Model) dataStatusLine() string {
 func (m Model) screenHints() string {
 	switch m.active {
 	case screenHotspots:
-		return "Hotspots keys: up/down move, enter or o open endpoint detail"
+		return "Hotspots keys: up/down move, enter or o open related detail"
 	case screenEndpoints:
 		return "Endpoints keys: up/down move endpoint, enter or d details, esc back"
 	case screenFindings:
 		return "Findings keys: up/down move bucket, enter or d details, o open endpoint, esc back"
 	case screenWorkflows:
-		return "Workflows keys: up/down move bucket, w or s section, enter or d details, esc back"
+		return "Workflows keys: up/down move bucket, w or s section, enter or d bucket preview, o item detail, esc back"
 	default:
 		return "Screen keys: none"
 	}
@@ -325,6 +341,8 @@ func (m Model) viewHotspots() string {
 	if sel.operation != nil {
 		out += fmt.Sprintf("- Example endpoint: %s %s\n", strings.ToUpper(sel.operation.Method), sel.operation.Path)
 		out += "- Action: press enter (or o) to open endpoint detail in context.\n"
+	} else if sel.kind == "workflow-kind" || sel.kind == "chain-kind" {
+		out += "- Action: press enter (or o) to open workflow/chain detail in context.\n"
 	} else {
 		out += "- Action: no direct endpoint jump for this row.\n"
 	}
@@ -589,6 +607,80 @@ func (m Model) viewWorkflows() string {
 		}
 	}
 
+	if m.workflowItemDetailOpen {
+		out += "\nWorkflow item detail\n"
+		out += m.viewWorkflowItemDetail()
+	}
+
+	return out
+}
+
+func (m Model) viewWorkflowItemDetail() string {
+	if m.workflowGraph == nil {
+		return "No workflow graph available.\n"
+	}
+
+	if m.workflowItemSection == 0 {
+		if m.workflowItemIndex < 0 || m.workflowItemIndex >= len(m.workflowGraph.Edges) {
+			return "No pairwise workflow selected.\n"
+		}
+		edge := m.workflowGraph.Edges[m.workflowItemIndex]
+		out := ""
+		out += fmt.Sprintf("- Kind: %s\n", edge.Kind)
+		out += fmt.Sprintf("- Step sequence: %s %s -> %s %s\n", edge.From.Method, edge.From.Path, edge.To.Method, edge.To.Path)
+
+		score := m.workflowScoreForIndex(m.workflowItemIndex)
+		if score != nil {
+			out += fmt.Sprintf("- Scores (UI/Schema/Client): %d/%d/%d\n", score.UIIndependence, score.SchemaCompleteness, score.ClientGenerationQuality)
+			out += fmt.Sprintf("- Bottleneck: %s\n", workflowBottleneckSummary(score))
+		} else {
+			out += "- Scores (UI/Schema/Client): n/a\n"
+			out += "- Bottleneck: score data not available\n"
+		}
+
+		fromOp := m.findOperationByMethodPath(edge.From.Method, edge.From.Path)
+		toOp := m.findOperationByMethodPath(edge.To.Method, edge.To.Path)
+		out += "- Related endpoints/findings:\n"
+		out += fmt.Sprintf("  - %s %s findings:%d\n", edge.From.Method, edge.From.Path, len(m.allFindingsForOperation(fromOp)))
+		out += fmt.Sprintf("  - %s %s findings:%d\n", edge.To.Method, edge.To.Path, len(m.allFindingsForOperation(toOp)))
+		out += fmt.Sprintf("- Why this matters: %s\n", workflowWhyMatters(score, len(m.allFindingsForOperation(fromOp))+len(m.allFindingsForOperation(toOp))))
+		return out
+	}
+
+	if m.workflowItemIndex < 0 || m.workflowItemIndex >= len(m.workflowGraph.Chains) {
+		return "No chain selected.\n"
+	}
+	chain := m.workflowGraph.Chains[m.workflowItemIndex]
+	out := ""
+	out += fmt.Sprintf("- Kind: %s\n", chain.Kind)
+	steps := make([]string, 0, len(chain.Steps))
+	for _, step := range chain.Steps {
+		steps = append(steps, fmt.Sprintf("%s %s", step.Node.Method, step.Node.Path))
+	}
+	if len(steps) == 0 {
+		out += "- Step sequence: (empty)\n"
+	} else {
+		out += fmt.Sprintf("- Step sequence: %s\n", truncate(strings.Join(steps, " -> "), 180))
+	}
+
+	chainScore := m.chainScoreForIndex(m.workflowItemIndex)
+	if chainScore != nil {
+		out += fmt.Sprintf("- Scores (UI/Schema/Client): %d/%d/%d\n", chainScore.UIIndependence, chainScore.SchemaCompleteness, chainScore.ClientGenerationQuality)
+		out += fmt.Sprintf("- Bottleneck: %s\n", chainBottleneckSummary(chainScore))
+	} else {
+		out += "- Scores (UI/Schema/Client): n/a\n"
+		out += "- Bottleneck: score data not available\n"
+	}
+
+	totalFindings := 0
+	out += "- Related endpoints/findings:\n"
+	for _, step := range chain.Steps {
+		op := m.findOperationByMethodPath(step.Node.Method, step.Node.Path)
+		count := len(m.allFindingsForOperation(op))
+		totalFindings += count
+		out += fmt.Sprintf("  - %s %s findings:%d\n", step.Node.Method, step.Node.Path, count)
+	}
+	out += fmt.Sprintf("- Why this matters: %s\n", chainWhyMatters(chainScore, totalFindings))
 	return out
 }
 
@@ -1025,6 +1117,93 @@ func (m Model) selectedHotspotOperation() *model.Operation {
 	return nil
 }
 
+func (m Model) selectedHotspotWorkflowTarget() (int, string, bool) {
+	items := m.hotspotItems()
+	if len(items) == 0 {
+		return 0, "", false
+	}
+	idx := m.hotspotIndex
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(items) {
+		idx = len(items) - 1
+	}
+	s := items[idx]
+	if s.kind == "workflow-kind" {
+		return 0, s.label, true
+	}
+	if s.kind == "chain-kind" {
+		return 1, s.label, true
+	}
+	return 0, "", false
+}
+
+func (m *Model) openWorkflowDetailFromSelectedHotspot() bool {
+	section, kind, ok := m.selectedHotspotWorkflowTarget()
+	if !ok {
+		return false
+	}
+	m.workflowSection = section
+	buckets := m.workflowBuckets(section)
+	for i, b := range buckets {
+		if b.key == kind {
+			m.workflowBucketIndex = i
+			break
+		}
+	}
+	m.workflowDetailOpen = true
+	return m.openWorkflowItemDetail(section, kind)
+}
+
+func (m *Model) openWorkflowItemDetailForCurrentBucket() bool {
+	buckets := m.workflowActiveBuckets()
+	if len(buckets) == 0 {
+		m.workflowItemDetailOpen = false
+		return false
+	}
+	idx := m.workflowBucketIndex
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(buckets) {
+		idx = len(buckets) - 1
+	}
+	return m.openWorkflowItemDetail(m.workflowSection, buckets[idx].key)
+}
+
+func (m *Model) openWorkflowItemDetail(section int, kind string) bool {
+	if m.workflowGraph == nil {
+		m.workflowItemDetailOpen = false
+		return false
+	}
+	index := -1
+	if section == 0 {
+		for i, edge := range m.workflowGraph.Edges {
+			if edge.Kind == kind {
+				index = i
+				break
+			}
+		}
+	} else {
+		for i, chain := range m.workflowGraph.Chains {
+			if chain.Kind == kind {
+				index = i
+				break
+			}
+		}
+	}
+	if index == -1 {
+		m.workflowItemDetailOpen = false
+		return false
+	}
+	m.workflowItemDetailOpen = true
+	m.workflowItemSection = section
+	m.workflowItemKind = kind
+	m.workflowItemIndex = index
+	return true
+}
+
 func (m Model) endpointWhyMatters(op *model.Operation, findings []*model.Issue, edges []string, chains []string) string {
 	reasons := make([]string, 0)
 	score := m.endpointScoreForOperation(op)
@@ -1052,6 +1231,87 @@ func (m Model) endpointWhyMatters(op *model.Operation, findings []*model.Issue, 
 		return "currently low risk from deterministic signals"
 	}
 	return strings.Join(reasons, "; ")
+}
+
+func workflowBottleneckSummary(score *workflow.WorkflowScore) string {
+	if score == nil {
+		return "score data not available"
+	}
+	parts := []string{}
+	min := score.UIIndependence
+	label := "UI independence"
+	if score.SchemaCompleteness < min {
+		min = score.SchemaCompleteness
+		label = "schema completeness"
+	}
+	if score.ClientGenerationQuality < min {
+		min = score.ClientGenerationQuality
+		label = "client generation quality"
+	}
+	parts = append(parts, fmt.Sprintf("weakest dimension is %s (%d/5)", label, min))
+	if strings.TrimSpace(score.Explanation) != "" {
+		parts = append(parts, truncate(score.Explanation, 100))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func chainBottleneckSummary(score *workflow.ChainScore) string {
+	if score == nil {
+		return "score data not available"
+	}
+	min := score.UIIndependence
+	label := "UI independence"
+	if score.SchemaCompleteness < min {
+		min = score.SchemaCompleteness
+		label = "schema completeness"
+	}
+	if score.ClientGenerationQuality < min {
+		min = score.ClientGenerationQuality
+		label = "client generation quality"
+	}
+	summary := fmt.Sprintf("weakest dimension is %s (%d/5)", label, min)
+	if score.ContinuityPenalty > 0 {
+		summary += fmt.Sprintf("; continuity penalty %d", score.ContinuityPenalty)
+	}
+	if strings.TrimSpace(score.Explanation) != "" {
+		summary += "; " + truncate(score.Explanation, 100)
+	}
+	return summary
+}
+
+func workflowWhyMatters(score *workflow.WorkflowScore, findings int) string {
+	parts := []string{}
+	if score != nil {
+		if score.UIIndependence <= 3 || score.SchemaCompleteness <= 3 || score.ClientGenerationQuality <= 3 {
+			parts = append(parts, fmt.Sprintf("low score %d/%d/%d", score.UIIndependence, score.SchemaCompleteness, score.ClientGenerationQuality))
+		}
+	}
+	if findings > 0 {
+		parts = append(parts, fmt.Sprintf("touches endpoints with %d findings", findings))
+	}
+	if len(parts) == 0 {
+		return "workflow path is currently low risk from deterministic signals"
+	}
+	return strings.Join(parts, "; ")
+}
+
+func chainWhyMatters(score *workflow.ChainScore, findings int) string {
+	parts := []string{}
+	if score != nil {
+		if score.UIIndependence <= 3 || score.SchemaCompleteness <= 3 || score.ClientGenerationQuality <= 3 {
+			parts = append(parts, fmt.Sprintf("low score %d/%d/%d", score.UIIndependence, score.SchemaCompleteness, score.ClientGenerationQuality))
+		}
+		if score.ContinuityPenalty > 0 {
+			parts = append(parts, fmt.Sprintf("continuity penalty %d", score.ContinuityPenalty))
+		}
+	}
+	if findings > 0 {
+		parts = append(parts, fmt.Sprintf("touches endpoints with %d findings", findings))
+	}
+	if len(parts) == 0 {
+		return "chain path is currently low risk from deterministic signals"
+	}
+	return strings.Join(parts, "; ")
 }
 
 func (m Model) firstOperationForSelectedFindingBucket() *model.Operation {
@@ -1199,14 +1459,20 @@ func (m *Model) workflowMove(delta int) {
 	if len(buckets) == 0 {
 		m.workflowBucketIndex = 0
 		m.workflowDetailOpen = false
+		m.workflowItemDetailOpen = false
 		return
 	}
 	m.workflowBucketIndex = wrapIndex(m.workflowBucketIndex+delta, len(buckets))
 	m.workflowDetailOpen = false
+	m.workflowItemDetailOpen = false
 }
 
 func (m Model) workflowActiveBuckets() []kvCount {
-	if m.workflowSection == 0 {
+	return m.workflowBuckets(m.workflowSection)
+}
+
+func (m Model) workflowBuckets(section int) []kvCount {
+	if section == 0 {
 		kinds := map[string]int{}
 		if m.workflowGraph != nil {
 			for _, edge := range m.workflowGraph.Edges {
@@ -1222,6 +1488,32 @@ func (m Model) workflowActiveBuckets() []kvCount {
 		}
 	}
 	return topCounts(kinds, 6)
+}
+
+func (m Model) findOperationByMethodPath(method, path string) *model.Operation {
+	if m.analysis == nil {
+		return nil
+	}
+	for _, op := range m.analysis.Operations {
+		if op.Path == path && strings.EqualFold(op.Method, method) {
+			return op
+		}
+	}
+	return nil
+}
+
+func (m Model) workflowScoreForIndex(index int) *workflow.WorkflowScore {
+	if index < 0 || len(m.workflowScores) == 0 {
+		return nil
+	}
+	return m.workflowScores[fmt.Sprintf("%d", index)]
+}
+
+func (m Model) chainScoreForIndex(index int) *workflow.ChainScore {
+	if index < 0 || len(m.chainScores) == 0 {
+		return nil
+	}
+	return m.chainScores[fmt.Sprintf("%d", index)]
 }
 
 func (m Model) workflowEdgeDetails(kind string, limit int) []string {

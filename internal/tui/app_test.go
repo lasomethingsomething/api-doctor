@@ -167,3 +167,33 @@ func TestHotspotsKeyOpenEndpoint(t *testing.T) {
 		t.Fatalf("expected hotspots key 'o' to open endpoint detail, got active=%v detail=%v", next.active, next.endpointDetailOpen)
 	}
 }
+
+func TestViewWorkflows_ItemDetail(t *testing.T) {
+	g := &workflow.Graph{
+		Edges: []workflow.Edge{{Kind: "list-to-detail", From: workflow.Node{Method: "get", Path: "/orders"}, To: workflow.Node{Method: "get", Path: "/orders/{id}"}}},
+	}
+	analysis := &model.AnalysisResult{
+		Operations: []*model.Operation{{Method: "get", Path: "/orders"}, {Method: "get", Path: "/orders/{id}"}},
+		Issues:     []*model.Issue{{Severity: "warning", Code: "weak-follow-up-linkage", Path: "/orders/{id}", Message: "follow-up linkage is weak"}},
+	}
+	m := NewModel(analysis, nil, g, map[string]*workflow.WorkflowScore{"0": {UIIndependence: 3, SchemaCompleteness: 4, ClientGenerationQuality: 5, Explanation: "UI depends on list context"}}, nil, nil)
+	m.workflowItemDetailOpen = true
+	m.workflowItemSection = 0
+	m.workflowItemIndex = 0
+	out := m.viewWorkflows()
+	if !strings.Contains(out, "Workflow item detail") || !strings.Contains(out, "Bottleneck") || !strings.Contains(out, "Why this matters") {
+		t.Fatalf("expected workflow item detail pane, got: %s", out)
+	}
+}
+
+func TestHotspotsKeyOpenWorkflowDetail(t *testing.T) {
+	g := &workflow.Graph{Edges: []workflow.Edge{{Kind: "list-to-detail", From: workflow.Node{Method: "get", Path: "/orders"}, To: workflow.Node{Method: "get", Path: "/orders/{id}"}}}}
+	m := NewModel(&model.AnalysisResult{}, nil, g, map[string]*workflow.WorkflowScore{"0": {UIIndependence: 3, SchemaCompleteness: 4, ClientGenerationQuality: 5}}, nil, nil)
+	m.active = screenHotspots
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
+	next := updated.(Model)
+	if next.active != screenWorkflows || !next.workflowItemDetailOpen {
+		t.Fatalf("expected hotspots key 'o' to open workflow detail, got active=%v detail=%v", next.active, next.workflowItemDetailOpen)
+	}
+}
