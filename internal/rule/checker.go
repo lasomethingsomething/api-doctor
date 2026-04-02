@@ -44,6 +44,7 @@ func NewChecker() *Checker {
 			NewWeakAcceptedTrackingLinkageRule(),
 			NewWeakActionFollowUpLinkageRule(),
 			NewPrerequisiteTaskBurdenRule(),
+			NewContractShapeWorkflowGuidanceBurdenRule(),
 		},
 	}
 }
@@ -470,7 +471,7 @@ func (r *PrerequisiteTaskBurdenRule) CheckAll(operations []*model.Operation) []*
 
 	issues := make([]*model.Issue, 0)
 	for _, op := range operations {
-		if !isLikelyTaskBurdenTarget(op) {
+		if !isLikelyContractShapeTarget(op) {
 			continue
 		}
 
@@ -514,6 +515,138 @@ func (r *PrerequisiteTaskBurdenRule) CheckAll(operations []*model.Operation) []*
 	}
 
 	return issues
+}
+
+func isLikelyContractShapeTarget(op *model.Operation) bool {
+	if op == nil {
+		return false
+	}
+
+	method := strings.ToUpper(op.Method)
+	switch method {
+	case "POST", "PUT", "PATCH":
+		return true
+	default:
+		return false
+	}
+}
+
+type ContractShapeWorkflowGuidanceBurdenRule struct{}
+
+const contractShapeIssueLimit = 20
+
+func NewContractShapeWorkflowGuidanceBurdenRule() *ContractShapeWorkflowGuidanceBurdenRule {
+	return &ContractShapeWorkflowGuidanceBurdenRule{}
+}
+
+func (r *ContractShapeWorkflowGuidanceBurdenRule) Name() string {
+	return "contract-shape-workflow-guidance-burden"
+}
+
+func (r *ContractShapeWorkflowGuidanceBurdenRule) CheckAll(operations []*model.Operation) []*model.Issue {
+	type candidate struct {
+		issue *model.Issue
+		score int
+	}
+	candidates := make([]candidate, 0)
+	seenSignatures := map[string]bool{}
+	for _, op := range operations {
+		if !isLikelyTaskBurdenTarget(op) {
+			continue
+		}
+
+		code, schema, ok := successfulJSONResponseSchema(op)
+		if !ok || schema == nil {
+			continue
+		}
+
+		stats := inspectSchemaShape(schema, 0)
+		snapshotHeavy := isSnapshotHeavyShape(stats)
+		internalExposure := isInternalStateExposure(stats)
+		missingOutcomeGuidance := isMissingWorkflowOutcomeGuidance(stats)
+		storageShaped := isStorageShapedOverTaskMeaning(stats)
+		if !snapshotHeavy || !internalExposure {
+			continue
+		}
+
+		signature := contractShapeSignature(stats)
+		if seenSignatures[signature] {
+			continue
+		}
+		seenSignatures[signature] = true
+
+		signalCount := 0
+		if snapshotHeavy {
+			signalCount++
+		}
+		if internalExposure {
+			signalCount++
+		}
+		if missingOutcomeGuidance {
+			signalCount++
+		}
+		if storageShaped {
+			signalCount++
+		}
+		reasons := make([]string, 0, 4)
+		if snapshotHeavy {
+			reasons = append(reasons, fmt.Sprintf("response appears snapshot-heavy (%d nested fields, depth %d)", stats.TotalProperties, stats.MaxDepth))
+		}
+		if internalExposure {
+			reasons = append(reasons, fmt.Sprintf("response exposes many incidental internal-looking fields (%d matches)", stats.InternalLookingCount))
+		}
+		if missingOutcomeGuidance {
+			reasons = append(reasons, "response does not clearly communicate compact workflow outcome guidance")
+		}
+		if storageShaped {
+			reasons = append(reasons, "response emphasizes storage/model structure more than task-level meaning")
+		}
+
+		issue := &model.Issue{
+			Code:        r.Name(),
+			Severity:    "warning",
+			Path:        op.Path,
+			Operation:   fmt.Sprintf("%s %s (%s)", op.Method, op.OperationID, code),
+			Message:     fmt.Sprintf("%s contract-shape/workflow-guidance burden appears likely: %s", contractShapeBurdenLevel(signalCount, stats), strings.Join(reasons, "; ")),
+			Description: "This response appears closer to internal platform state than a compact task-level contract, which may force developers to infer workflow meaning and next actions manually.",
+		}
+
+		score := stats.TotalProperties + (stats.InternalLookingCount * 8) + (stats.MaxDepth * 3) + (stats.ArrayNodes * 2)
+		candidates = append(candidates, candidate{issue: issue, score: score})
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		if candidates[i].issue.Path != candidates[j].issue.Path {
+			return candidates[i].issue.Path < candidates[j].issue.Path
+		}
+		return strings.ToLower(candidates[i].issue.Operation) < strings.ToLower(candidates[j].issue.Operation)
+	})
+
+	issues := make([]*model.Issue, 0, len(candidates))
+	for i, cand := range candidates {
+		if i >= contractShapeIssueLimit {
+			break
+		}
+		issues = append(issues, cand.issue)
+	}
+	return issues
+}
+
+func contractShapeSignature(stats schemaShapeStats) string {
+	parts := []string{
+		fmt.Sprintf("top=%d", stats.TopLevelProperties),
+		fmt.Sprintf("total=%d", stats.TotalProperties),
+		fmt.Sprintf("obj=%d", stats.ObjectNodes),
+		fmt.Sprintf("arr=%d", stats.ArrayNodes),
+		fmt.Sprintf("depth=%d", stats.MaxDepth),
+		fmt.Sprintf("internal=%d", stats.InternalLookingCount),
+		fmt.Sprintf("outcome=%d", stats.OutcomeHintCount),
+		fmt.Sprintf("structural=%d", stats.StructuralHintCount),
+	}
+	return strings.Join(parts, "|")
 }
 
 type InconsistentResponseShapeRule struct{}
@@ -1634,6 +1767,165 @@ func isIdentifierLikeField(name string) bool {
 	}
 
 	return strings.HasSuffix(name, "Id") || strings.HasSuffix(name, "ID") || strings.HasSuffix(name, "Ids") || strings.HasSuffix(name, "IDs")
+}
+
+type schemaShapeStats struct {
+	TopLevelProperties  int
+	TotalProperties     int
+	ObjectNodes         int
+	ArrayNodes          int
+	MaxDepth            int
+	InternalLookingCount int
+	OutcomeHintCount    int
+	StructuralHintCount int
+}
+
+func inspectSchemaShape(schema *model.Schema, depth int) schemaShapeStats {
+	stats := schemaShapeStats{}
+	collectSchemaShapeStats(schema, depth, true, &stats)
+	return stats
+}
+
+func collectSchemaShapeStats(schema *model.Schema, depth int, topLevel bool, stats *schemaShapeStats) {
+	if schema == nil || stats == nil || depth > 6 {
+		return
+	}
+	if schema.Ref != "" && len(schema.Properties) == 0 && schema.Items == nil && schema.Type == "" {
+		return
+	}
+	if depth > stats.MaxDepth {
+		stats.MaxDepth = depth
+	}
+
+	if schema.Type == "array" {
+		stats.ArrayNodes++
+		collectSchemaShapeStats(schema.Items, depth+1, false, stats)
+		return
+	}
+
+	if schema.Type != "object" && len(schema.Properties) == 0 {
+		return
+	}
+
+	stats.ObjectNodes++
+	if topLevel {
+		stats.TopLevelProperties = len(schema.Properties)
+	}
+
+	for name, child := range schema.Properties {
+		stats.TotalProperties++
+		if isInternalLookingField(name) {
+			stats.InternalLookingCount++
+		}
+		if isWorkflowOutcomeHintField(name) {
+			stats.OutcomeHintCount++
+		}
+		if isStorageStructuralHintField(name) {
+			stats.StructuralHintCount++
+		}
+		collectSchemaShapeStats(child, depth+1, false, stats)
+	}
+}
+
+func isSnapshotHeavyShape(stats schemaShapeStats) bool {
+	if stats.TopLevelProperties >= 14 {
+		return true
+	}
+	if stats.TotalProperties >= 40 {
+		return true
+	}
+	if stats.ArrayNodes >= 4 && stats.TotalProperties >= 28 {
+		return true
+	}
+	return stats.MaxDepth >= 5 && stats.TotalProperties >= 28
+}
+
+func isInternalStateExposure(stats schemaShapeStats) bool {
+	return stats.InternalLookingCount >= 4
+}
+
+func isMissingWorkflowOutcomeGuidance(stats schemaShapeStats) bool {
+	if stats.TotalProperties == 0 {
+		return false
+	}
+	return stats.OutcomeHintCount == 0 && stats.TotalProperties >= 6 && stats.StructuralHintCount >= 1
+}
+
+func isStorageShapedOverTaskMeaning(stats schemaShapeStats) bool {
+	if stats.TotalProperties == 0 {
+		return false
+	}
+	if stats.StructuralHintCount >= 2 && stats.OutcomeHintCount <= 1 && stats.TotalProperties >= 8 {
+		return true
+	}
+	if stats.ObjectNodes >= 4 && stats.OutcomeHintCount == 0 && stats.TotalProperties >= 14 {
+		return true
+	}
+	return false
+}
+
+func contractShapeBurdenLevel(signalCount int, stats schemaShapeStats) string {
+	score := signalCount
+	if stats.TotalProperties >= 35 {
+		score++
+	}
+	if stats.InternalLookingCount >= 5 {
+		score++
+	}
+	if score >= 5 {
+		return "high"
+	}
+	if score >= 3 {
+		return "medium"
+	}
+	return "low"
+}
+
+func isInternalLookingField(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+
+	for _, exact := range []string{
+		"versionid", "parentversionid", "createdbyid", "updatedbyid", "translated", "translations", "customfields",
+		"stateid", "statemachinestate", "statemachinestateid", "auto_increment", "internal", "_score", "_uniqueidentifier",
+	} {
+		if lower == exact {
+			return true
+		}
+	}
+
+	return strings.HasSuffix(lower, "versionid") || strings.HasSuffix(lower, "stateid")
+}
+
+func isWorkflowOutcomeHintField(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	for _, exact := range []string{
+		"success", "result", "status", "state", "changed", "updated", "actionrequired", "nextactions",
+		"nextaction", "contexttoken", "token", "message", "warnings", "errors",
+	} {
+		if lower == exact {
+			return true
+		}
+	}
+	return false
+}
+
+func isStorageStructuralHintField(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	for _, exact := range []string{"data", "attributes", "relationships", "included", "extensions", "meta", "elements", "items", "children", "links"} {
+		if lower == exact {
+			return true
+		}
+	}
+	return false
 }
 
 func isLikelyEnumProperty(name string, schema *model.Schema) bool {

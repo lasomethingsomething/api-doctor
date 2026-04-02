@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>api-doctor explore</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>api-doctor explore</h1>
+      <p id="runContext" class="subtle"></p>
+    </div>
+    <div class="actions">
+      <a href="/api/payload" class="button" target="_blank" rel="noopener">View JSON payload</a>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="summary-head">
+      <h2>Contract trust and workflow burden snapshot</h2>
+      <p id="summaryHelp" class="subtle">Use this page to identify what to trust, what is hard to chain, and what to fix first.</p>
+    </section>
+
+    <section class="summary" id="summaryCards"></section>
+
+    <section class="fixfirst">
+      <h2>Fix first priorities</h2>
+      <p id="fixFirstHelp" class="subtle">Click a priority line to narrow endpoint evidence and related workflow context.</p>
+      <div id="fixFirstList" class="fix-list"></div>
+    </section>
+
+    <section class="pane workflow-pane">
+      <h2>Families and workflow paths</h2>
+      <p id="workflowHelp" class="subtle">Start here to see where burden concentrates, then click into endpoint evidence.</p>
+      <div id="workflowPanel" class="detail-block"></div>
+    </section>
+
+    <section class="controls">
+      <h2>Filter endpoint evidence</h2>
+      <p class="subtle">These filters adjust endpoint evidence investigation; top summary and fix-first cards remain global context.</p>
+      <input id="searchInput" type="search" placeholder="Search endpoint path or method">
+      <select id="severityFilter"></select>
+      <select id="categoryFilter"></select>
+      <select id="burdenFilter"></select>
+      <label><input id="hasFindingsOnly" type="checkbox"> only endpoints with findings</label>
+      <select id="sortBy">
+        <option value="priority">sort: priority</option>
+        <option value="findings">sort: findings</option>
+        <option value="path">sort: path</option>
+      </select>
+    </section>
+
+    <section class="panes">
+      <div class="pane list-pane">
+        <h2>Endpoint evidence list</h2>
+        <p id="evidenceListHelp" class="subtle">Use filters and sort to narrow to the endpoint evidence you want to inspect next.</p>
+        <p id="evidenceScope" class="subtle"></p>
+        <table>
+          <thead><tr><th>Endpoint</th><th>Findings</th><th>Priority</th><th>Risk</th></tr></thead>
+          <tbody id="endpointRows"></tbody>
+        </table>
+      </div>
+      <div class="pane detail-pane">
+        <h2>Endpoint evidence detail</h2>
+        <p id="detailHelp" class="subtle">Pick a row to see why this endpoint is flagged and what workflow context to inspect next.</p>
+        <div id="endpointDetail" class="detail-block"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -26,6 +26,7 @@ Two supported local usage patterns:
 cd ~/api-doctor
 go run . analyze --spec ./adminapi.json
 go run . workflows --spec ./adminapi.json
+go run . explore --spec ./adminapi.json
 go run . tui --spec ./adminapi.json
 ```
 
@@ -35,6 +36,7 @@ go run . tui --spec ./adminapi.json
 cd ~/api-doctor
 go build -o api-doctor .
 ./api-doctor analyze --spec ./adminapi.json
+./api-doctor explore --spec ./adminapi.json
 ./api-doctor tui --spec ./adminapi.json
 ```
 
@@ -45,15 +47,15 @@ This is documentation for local development usage only. Packaging and external t
 ### External developer: chain calls and avoid hidden follow-up traps
 
 1. Run `go run . workflows --spec ./adminapi.json` to see likely route sequences.
-2. Run `go run . tui --spec ./adminapi.json`.
+2. Run `go run . explore --spec ./adminapi.json`.
 3. Open Endpoints and inspect your target endpoint detail.
 4. Read `Likely next calls`, `Required identifiers`, and `Linkage status`.
 5. Open Issue categories and check rows marked `[consistency]` for naming/shape mismatch traps.
 
-### Internal API owner/team: find worst quality and consistency problems
+### Internal API owner/team: find highest workflow burden, consistency, and change-risk problems
 
 1. Run `go run . analyze --spec ./adminapi.json`.
-2. Open `go run . tui --spec ./adminapi.json`.
+2. Open `go run . explore --spec ./adminapi.json`.
 3. Read Overview `Fix first (deterministic snapshot)` to get immediate priorities.
 4. Use Hotspots for high-priority endpoint families and repeated issue categories.
 5. Use Issue categories detail for consistency categories and affected endpoint examples.
@@ -61,8 +63,8 @@ This is documentation for local development usage only. Packaging and external t
 ### PM/stakeholder: get a quick current-state summary for planning
 
 1. Run `go run . analyze --spec ./adminapi.json`.
-2. Capture total issues, severity split, and endpoint quality summary.
-3. Open `go run . tui --spec ./adminapi.json` and read Overview totals plus `Fix first` lines.
+2. Capture total findings, severity split, and endpoint score summary.
+3. Open `go run . explore --spec ./adminapi.json` and read Overview totals plus `Fix first` lines.
 4. Check Workflows totals for single-step and multi-step usability signal.
 5. If comparing releases, run `go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json`.
 
@@ -70,17 +72,19 @@ This is documentation for local development usage only. Packaging and external t
 
 ### What it does
 
-analyze reads one Shopware Admin API spec and reports quality findings.
+analyze reads one Shopware Admin API spec and reports integration-risk findings.
 
 It checks for things like:
 
-- Missing request or response schema details
-- Weak links between related endpoints
-- Patterns that can make generated clients harder to use
+- Workflow burden signals (where common call sequences are hard to follow)
+- Contract-shape burden signals (where response shapes are hard to use for next steps)
+- Consistency outliers across related endpoints and routes
+
+It is spec-only analysis: it works from the OpenAPI document and does not observe live runtime behavior.
 
 ### Why you would use it
 
-Use analyze when you want a quick quality health check for one spec file.
+Use analyze when you want a quick, practical triage view of one spec file.
 
 Good moments to run it:
 
@@ -96,7 +100,7 @@ go run . analyze --spec ./adminapi.json
 
 ### What kind of output to expect
 
-You get a summary of findings grouped by severity (for example, errors and warnings), plus score summaries.
+You get a summary of findings grouped by severity, plus compact burden/consistency/risk-oriented summaries that help you decide what to fix first.
 
 By default, output is text.
 You can also choose markdown or JSON with --format.
@@ -175,13 +179,53 @@ That makes it useful in CI pipelines.
 
 ---
 
-## 4) TUI
+## 4) Explore
+
+### What it does
+
+explore starts a lightweight local browser UI as the primary interactive analysis surface.
+
+It uses the same deterministic analysis/workflow/diff data already produced by the CLI engine, then normalizes that data once server-side for interactive browsing.
+
+### Why you would use it
+
+Use explore when you want fast local triage and drill-down with searchable/filterable endpoint and workflow views.
+
+Good moments to run it:
+
+- Daily local analysis review
+- Team triage sessions on burden/consistency/risk hotspots
+- Follow-up investigation after `analyze`/`workflows` summaries
+
+### Launch command
+
+```sh
+go run . explore --spec ./adminapi.json
+```
+
+Optional diff context in explore:
+
+```sh
+go run . explore --spec ./adminapi.json --base ./adminapi-v1.json --head ./adminapi-v2.json
+```
+
+### First-pass constraints
+
+- Binds to `127.0.0.1` only
+- Single-page UI
+- No client-side routing
+- No persistence layer
+- No websocket/live reload
+
+---
+
+## 5) TUI (secondary)
 
 ### What it does
 
 tui opens a read-only terminal interface for browsing results from analyze, workflows, and optional diff data.
 
-It is built with Bubble Tea, but the important part for daily use is that it helps you move from high-level summaries to concrete items faster.
+For daily use, the key value is faster triage: move from overview signals (workflow burden, contract-shape burden, consistency, change risk) to concrete endpoints and findings.
 
 Current maturity:
 
@@ -221,7 +265,7 @@ go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2
 
 - Sidebar navigation (primary): up/down (or j/k), Enter to open selected section
 - Pane focus: Tab or left/right moves focus across Navigation, Main, and Detail panes
-- Secondary screen shortcuts: 1 Overview, 2 Hotspots, 3 Endpoints, 4 Issue categories, 5 Workflows, 6 Diff
+- Secondary screen shortcuts: number keys map to the screens available in the current run; Diff is included only when launched with --old and --new
 - Legacy quick cycling: [ and ] (or h/l)
 - Quit: q (or Ctrl+C)
 - Open related detail: Enter or o (context-dependent)
@@ -248,12 +292,12 @@ Recommended first-run navigation:
 - Use Enter, o, d, and Esc in Main to open and close drill-down detail.
 - Move to the Detail pane with Tab or right arrow when a drill-down is open.
 
-- Overview: totals, severity summary, and a compact deterministic "Fix first" snapshot
+- Overview: totals, severity summary, and a compact deterministic "Fix first" snapshot for workflow burden, contract-shape burden, consistency outliers, and endpoint priorities
 - Hotspots: ranked priority areas across issue categories, endpoint areas, and workflow patterns
 - Endpoints: browsable endpoint list with explicit row labels (`issues`, `quality`, `priority`) and sort toggle (`r`: priority-first/path)
 - Issue categories: grouped issue-code categories with structured detail (summary, affected count, representative examples, why it matters, plus hidden-items note)
 - Workflows: single-step and multi-step pattern summaries with inline examples so equal counts are easier to interpret
-- Diff: change summary when started with --old and --new; otherwise the pane explains how to relaunch with diff flags and shows an example
+- Diff: available only when started with --old and --new
 
 ### Drill-down supported today
 

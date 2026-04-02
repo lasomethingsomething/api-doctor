@@ -485,3 +485,59 @@ func TestChecker_CheckAll_PrerequisiteTaskBurdenFixture(t *testing.T) {
 		t.Fatalf("expected weak follow-up exposure reason for create flow, got %#v", createIssue)
 	}
 }
+
+func TestChecker_CheckAll_ContractShapeWorkflowGuidanceBurdenFixture(t *testing.T) {
+	parser := openapi.NewParser()
+	result, err := parser.ParseFile("../../testdata/contract-shape-workflow-guidance-burden.json")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+
+	issues := NewChecker().CheckAll(result.Operations)
+	matched := make([]*model.Issue, 0)
+	for _, issue := range issues {
+		if issue.Code == "contract-shape-workflow-guidance-burden" {
+			matched = append(matched, issue)
+		}
+	}
+
+	if len(matched) != 1 {
+		t.Fatalf("expected exactly 1 representative contract-shape-workflow-guidance-burden issue from fixture, got %#v", matched)
+	}
+
+	byPath := map[string]*model.Issue{}
+	for _, issue := range matched {
+		byPath[issue.Path] = issue
+		if issue.Severity != "warning" {
+			t.Fatalf("expected warning severity, got %#v", issue)
+		}
+		if !strings.Contains(issue.Message, "appears likely") {
+			t.Fatalf("expected cautious wording in message, got %#v", issue)
+		}
+	}
+
+	if _, ok := byPath["/products/{id}/sync"]; !ok {
+		if _, ok := byPath["/media/{id}/replace"]; !ok {
+			t.Fatalf("expected representative issue for one storage-shaped endpoint, got %#v", matched)
+		}
+	}
+
+	if _, ok := byPath["/orders/{id}/cancel"]; ok {
+		t.Fatalf("did not expect task-shaped cancel response to be flagged, got %#v", byPath["/orders/{id}/cancel"])
+	}
+	if _, ok := byPath["/profiles/{id}"]; ok {
+		t.Fatalf("did not expect small update response to be flagged, got %#v", byPath["/profiles/{id}"])
+	}
+
+	selected := byPath["/products/{id}/sync"]
+	if selected == nil {
+		selected = byPath["/media/{id}/replace"]
+	}
+	message := selected.Message
+	if !strings.Contains(message, "snapshot-heavy") {
+		t.Fatalf("expected snapshot-heavy reason, got %#v", selected)
+	}
+	if !strings.Contains(message, "internal-looking") {
+		t.Fatalf("expected internal exposure reason, got %#v", selected)
+	}
+}

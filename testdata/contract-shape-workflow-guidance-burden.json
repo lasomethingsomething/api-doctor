@@ -1,0 +1,225 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Contract Shape Workflow Guidance Burden",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/products/{id}/sync": {
+      "post": {
+        "operationId": "syncProductSnapshot",
+        "responses": {
+          "200": {
+            "description": "Storage-shaped snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string"},
+                    "versionId": {"type": "string"},
+                    "createdById": {"type": "string"},
+                    "updatedById": {"type": "string"},
+                    "translated": {"type": "object"},
+                    "customFields": {"type": "object"},
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "attributes": {
+                          "type": "object",
+                          "properties": {
+                            "name": {"type": "string"},
+                            "description": {"type": "string"},
+                            "stateMachineStateId": {"type": "string"},
+                            "parentVersionId": {"type": "string"}
+                          }
+                        },
+                        "relationships": {
+                          "type": "object",
+                          "properties": {
+                            "media": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {"type": "string"},
+                                  "versionId": {"type": "string"}
+                                }
+                              }
+                            },
+                            "prices": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "currencyId": {"type": "string"},
+                                  "gross": {"type": "number"}
+                                }
+                              }
+                            },
+                            "categories": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {"type": "string"},
+                                  "versionId": {"type": "string"}
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "included": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {"type": "string"},
+                          "versionId": {"type": "string"},
+                          "translated": {"type": "object"}
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "extensions": {
+                          "type": "object",
+                          "properties": {
+                            "internal": {"type": "boolean"}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/media/{id}/replace": {
+      "post": {
+        "operationId": "replaceMediaSnapshot",
+        "responses": {
+          "200": {
+            "description": "Another storage-shaped response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {"type": "string"},
+                        "versionId": {"type": "string"},
+                        "updatedById": {"type": "string"},
+                        "attributes": {
+                          "type": "object",
+                          "properties": {
+                            "fileName": {"type": "string"},
+                            "translated": {"type": "object"},
+                            "customFields": {"type": "object"}
+                          }
+                        },
+                        "relationships": {
+                          "type": "object",
+                          "properties": {
+                            "thumbnails": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {"type": "string"},
+                                  "versionId": {"type": "string"}
+                                }
+                              }
+                            },
+                            "folder": {
+                              "type": "object",
+                              "properties": {
+                                "id": {"type": "string"},
+                                "parentVersionId": {"type": "string"}
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "included": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {"type": "string"},
+                          "versionId": {"type": "string"}
+                        }
+                      }
+                    },
+                    "links": {
+                      "type": "object",
+                      "properties": {
+                        "self": {"type": "string"}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}/cancel": {
+      "post": {
+        "operationId": "cancelOrderTaskShaped",
+        "responses": {
+          "200": {
+            "description": "Task-shaped outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {"type": "boolean"},
+                    "status": {"type": "string"},
+                    "nextActions": {
+                      "type": "array",
+                      "items": {"type": "string"}
+                    },
+                    "contextToken": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profiles/{id}": {
+      "patch": {
+        "operationId": "updateProfileMinimal",
+        "responses": {
+          "200": {
+            "description": "Simple response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string"},
+                    "displayName": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

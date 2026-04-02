@@ -1,111 +1,148 @@
-# api-doctor - Real-Spec Analysis Checkpoint
+# api-doctor - Current Admin API Checkpoint
 
 Spec: Shopware Admin API (`adminapi.json`)
 Operations analyzed: 1036
-Scope: stable tool state with validated endpoint scoring, validated single-step workflow scoring, validated multi-step chain scoring, and diff validation
 Date: April 2026
 
 ---
 
-## Endpoint Quality Summary
+## What the tool is optimized for now
 
-Scoring results across all endpoints:
+The current product shape is not just generic schema linting.
 
-| Dimension | Excellent (5) | Good (4) | Fair (3) | Poor (<=2) |
-|---|---|---|---|---|
-| Schema Completeness | 518 (50%) | 518 (50%) | 0 | 0 |
-| Client Generation Quality | 1036 (100%) | 0 | 0 | 0 |
-| Versioning Safety | 1035 (99%) | 0 | 0 | 1 |
+For the validated Admin API scope, api-doctor is now positioned around four practical review questions:
 
-Interpretation:
-- Endpoint scoring is validated and stable
-- Schema Completeness is the dominant quality bottleneck
-- Client Generation and Versioning are generally strong, with one deprecated-operation penalty
+- Where does the spec create workflow burden?
+- Which responses create contract-shape burden?
+- Where do related endpoints drift in naming or shape?
+- What changed in ways that create breaking-change risk?
+
+This remains deterministic, local-only, and spec-only.
 
 ---
 
-## Workflow Scoring Summary
+## Current real-spec snapshot
 
-Workflow inference and scoring are validated and stable.
+Current `adminapi.json` runs show:
 
-Workflow output behavior (current):
-- Single-step workflows remain and are still reported/scored as the baseline signal.
-- Multi-step chains are inferred additively from deterministic continuity rules.
-- Chain scoring is deterministic and explainable: worst-step plus continuity penalty.
-- Default text/Markdown output surfaces stronger chains and hides noisier CRUD-heavy chain families by default.
-- JSON keeps the full inferred chain set (with chain summaries and score details) for complete downstream analysis.
+- Analyze: 2828 warnings in the current real-spec snapshot
+- Workflow burden: `weak-follow-up-linkage` remains the dominant signal with 137 hits
+- Contract-shape burden: 20 representative `contract-shape-workflow-guidance-burden` findings are surfaced in human-facing output
+- Workflows: 277 inferred single-step workflows
+- Multi-step chains: 139 inferred chains, with default output surfacing only the stronger representative chain families
 
-Inferred workflows:
-- 277 total
+This is the current practical reading of the spec:
+
+- many common create/list-to-detail flows are inferable
+- follow-up verification and next-step clarity remain the biggest workflow weakness
+- some `200` responses still look more like large internal snapshots than compact task-level outcomes
+- diff analysis continues to provide release-risk checks for breaking changes
+
+---
+
+## Endpoint score snapshot
+
+Current markdown analyze output reports these endpoint score distributions:
+
+| Dimension | Excellent (5) | Good (4) | Fair (3) | Poor (<=2) |
+|---|---|---|---|---|
+| Schema Completeness | 61 | 182 | 176 | 617 |
+| Client Generation | 65 | 178 | 252 | 541 |
+| Versioning Safety | 1035 | 1 | 0 | 0 |
+
+Interpretation:
+
+- endpoint scoring is now based on broader contract inspection than the earlier checkpoint state
+- versioning safety remains strong in the current Admin API snapshot
+- the main pain is not version markers, but how clearly request/response contracts support practical client and workflow use
+
+---
+
+## Workflow burden snapshot
+
+Current workflow inference remains intentionally deterministic and conservative.
+
+Single-step workflows:
+
 - 137 Create To Detail
 - 137 List To Detail
 - 3 Action To Detail
 
-Inferred multi-step chains:
-- 139 total after tightening (down from near-universal extension)
-- dominant chain family still list-detail-update, but surfaced output prioritizes stronger action/media chain signals
+Representative multi-step chains currently surfaced by default:
 
-Observed scoring profile:
-- Most workflows score 4/4/5 (UI Independence / Schema Completeness / Client Generation Quality)
-- The dominant weakness is schema linkage clarity, not client generation ability
+- Media Detail To Follow Up Action
+- Order Detail To Action
+
+What this means:
+
+- the spec often contains enough structure to infer the next obvious call
+- the main gap is still whether responses clearly expose the identifiers or outcome cues needed for reliable follow-up automation
 
 ---
 
-## Dominant Signal
+## Contract-shape burden snapshot
 
-Top analysis signal: `weak-follow-up-linkage` with 137 hits.
+The newer contract-shape/workflow-guidance slice is now part of the real-spec checkpoint.
+
+In the current Admin API snapshot, it highlights 20 representative endpoints where a response appears too snapshot-heavy, too internal-state-oriented, or too weak on next-step guidance for a compact task contract.
+
+Representative affected endpoints include:
+
+- `POST /aggregate/customer`
+- `POST /aggregate/order`
+- `POST /customer`
+- `POST /media`
+- `POST /order`
+
+Important presentation note:
+
+- human-facing grouped summaries intentionally use qualitative family-breadth wording
+- the representative endpoint slice is capped to keep output stable and reviewable
+- JSON output still contains the concrete finding entries used for downstream inspection
+
+---
+
+## Consistency and change-risk snapshot
+
+Consistency analysis is now part of the product framing and TUI/report summaries, even when it is not the dominant signal in a given real-spec run.
+
+Current practical reading:
+
+- consistency outliers are available for triage in analyze output and the TUI
+- they matter most as workflow friction multipliers when route naming or response shape expectations drift across related endpoint families
+- in this checkpoint, workflow burden and contract-shape burden are more prominent than consistency noise
+
+Diff remains the explicit change-risk surface.
+
+Validated proof point still used in this repo:
+
+- `POST /_action/sync` removed `request[].filter` from the request-body schema
 
 Why it matters:
-- Many responses do not clearly expose the identifier needed for the next obvious detail call
-- SDK and automation flows must rely on conventions or external docs rather than schema-declared linkage
-- This directly explains why schema-related scoring often does not reach 5/5 in inferred workflows
-- This remains the dominant weakness even after adding multi-step chains and chain scoring
+
+- confirms the diff engine catches production-relevant breaking changes
+- demonstrates useful detection for nested field removals, not only top-level path changes
 
 ---
 
-## Action-Transition Verification Weakness
+## TUI status
 
-`weak-action-follow-up-linkage` appears on 3 state-transition endpoints:
-- `POST /_action/order/{orderId}/state/{transition}`
-- `POST /_action/order_delivery/{orderDeliveryId}/state/{transition}`
-- `POST /_action/order_transaction/{orderTransactionId}/state/{transition}`
+The TUI is read-only and meant for fast local triage.
 
-Interpretation:
-- The path indicates the target resource, but the response does not clearly expose resulting state or a strong follow-up verification pointer
-- Action workflows are inferable, but response contracts remain weak for verification ergonomics
+Current focus areas:
 
----
-
-## Diff Proof Point
-
-Validated real diff finding:
-- `POST /_action/sync` removed `request[].filter` from request-body schema
-
-Why this matters:
-- Confirms the diff engine catches production-relevant breaking changes
-- Demonstrates detection works for nested array field removals
+- Overview: top-level counts plus deterministic `Fix first` lines for workflow burden, contract-shape burden, consistency outliers, and endpoint priorities
+- Hotspots: ranked priority areas across issue categories, endpoint areas, and workflow patterns
+- Endpoints: browsable endpoint rows with issue/quality/priority labels and drill-down detail
+- Issue categories: grouped findings with summaries, representative examples, and why-it-matters text
+- Workflows: single-step and multi-step summaries with preview/detail flows
+- Diff: available only when the TUI is launched with `--old` and `--new`
 
 ---
 
-## Current Constraints
+## Current constraints
 
-- No `$ref` resolution yet, so referenced component schemas are not fully analyzed in scoring/rule checks
-- Multi-step chain inference remains intentionally conservative and limited to small deterministic families
-
----
-
-## Current TUI Status
-
-Interactive TUI is available and read-only.
-
-Current TUI coverage:
-- Overview with severity and workflow/path totals
-- Hotspots with ranked priority areas
-- Endpoints with issues/quality/priority labels and sort toggle
-- Issue categories with structured detail and endpoint jump
-- Workflows with single-step and multi-step pattern summaries
-- Diff guidance when not launched with --old and --new, or diff summary when both are provided
-
-TUI constraints:
-- keep current deterministic analyzers/inference unchanged
-- prioritize navigation, triage speed, and developer ergonomics over new inference complexity
+- validated scope remains Shopware Admin API-first; Store API support is not claimed
+- analysis is still spec-only and local-only
+- local component-schema `$ref` expansion is now part of scoring and rule checks, but broader OpenAPI support should still be treated as validated only within this repo's tested scope
+- multi-step workflow inference remains intentionally conservative
