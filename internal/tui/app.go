@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	intdiff "github.com/lasomethingsomething/api-doctor/internal/diff"
@@ -14,27 +16,41 @@ import (
 )
 
 var (
-	styleTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230"))
+	styleTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("225"))
 	styleHeader = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("63")).
-		Background(lipgloss.Color("236")).
+		BorderForeground(lipgloss.Color("111")).
+		Background(lipgloss.Color("60")).
+		Foreground(lipgloss.Color("255")).
 		Padding(0, 1)
 	styleFooter = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		Foreground(lipgloss.Color("252")).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("219")).
+		Background(lipgloss.Color("236")).
+		Foreground(lipgloss.Color("255")).
 		Padding(0, 1)
 	stylePanel = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("241")).
+		BorderForeground(lipgloss.Color("117")).
+		Background(lipgloss.Color("235")).
 		Padding(0, 1)
-	stylePanelTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("45"))
-	styleSelection = lipgloss.NewStyle().Foreground(lipgloss.Color("45")).Bold(true)
-	styleMuted = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	styleOK = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
-	styleBad = lipgloss.NewStyle().Foreground(lipgloss.Color("203")).Bold(true)
+	stylePanelTitle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("219"))
+	styleSelection = lipgloss.NewStyle().Foreground(lipgloss.Color("219")).Bold(true)
+	styleMuted = lipgloss.NewStyle().Foreground(lipgloss.Color("248"))
+	styleOK = lipgloss.NewStyle().Foreground(lipgloss.Color("121"))
+	styleWarn = lipgloss.NewStyle().Foreground(lipgloss.Color("223"))
+	styleBad = lipgloss.NewStyle().Foreground(lipgloss.Color("204")).Bold(true)
+	styleNav = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("219")).
+		Background(lipgloss.Color("237")).
+		Padding(0, 1)
+	styleNavItem = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	styleNavActive = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("255")).
+		Background(lipgloss.Color("62")).
+		Bold(true)
+	styleFocus = lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
 )
 
 type screen int
@@ -50,6 +66,11 @@ const (
 
 type Model struct {
 	active screen
+	menuIndex int
+	focusNav bool
+
+	helpModel help.Model
+	keys     tuiKeyMap
 
 	hotspotIndex int
 
@@ -77,6 +98,67 @@ type Model struct {
 	diffResult *intdiff.Result
 }
 
+type tuiKeyMap struct {
+	NavUp     key.Binding
+	NavDown   key.Binding
+	Select    key.Binding
+	FocusPane key.Binding
+	Open      key.Binding
+	Close     key.Binding
+	Section   key.Binding
+	QuickJump key.Binding
+	Quit      key.Binding
+}
+
+func defaultKeyMap() tuiKeyMap {
+	return tuiKeyMap{
+		NavUp: key.NewBinding(
+			key.WithKeys("up", "k"),
+			key.WithHelp("↑/k", "move"),
+		),
+		NavDown: key.NewBinding(
+			key.WithKeys("down", "j"),
+			key.WithHelp("↓/j", "move"),
+		),
+		Select: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "select/open"),
+		),
+		FocusPane: key.NewBinding(
+			key.WithKeys("tab"),
+			key.WithHelp("tab", "switch pane"),
+		),
+		Open: key.NewBinding(
+			key.WithKeys("o", "d"),
+			key.WithHelp("o/d", "open detail"),
+		),
+		Close: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "close detail"),
+		),
+		Section: key.NewBinding(
+			key.WithKeys("w", "s"),
+			key.WithHelp("w/s", "toggle section"),
+		),
+		QuickJump: key.NewBinding(
+			key.WithKeys("1", "2", "3", "4", "5", "6"),
+			key.WithHelp("1..6", "quick jump"),
+		),
+		Quit: key.NewBinding(
+			key.WithKeys("q", "ctrl+c"),
+			key.WithHelp("q", "quit"),
+		),
+	}
+}
+
+func (k tuiKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.NavUp, k.NavDown, k.Select, k.FocusPane, k.Open, k.Close, k.QuickJump, k.Quit}
+}
+
+func (k tuiKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.NavUp, k.NavDown, k.Select, k.FocusPane}, {k.Open, k.Close, k.Section, k.QuickJump, k.Quit}}
+}
+
 func NewModel(
 	analysis *model.AnalysisResult,
 	endpointScores map[string]*endpoint.EndpointScore,
@@ -85,8 +167,14 @@ func NewModel(
 	chainScores map[string]*workflow.ChainScore,
 	diffResult *intdiff.Result,
 ) Model {
+	h := help.New()
+	h.ShowAll = false
 	return Model{
 		active:         screenOverview,
+		menuIndex:      0,
+		focusNav:       true,
+		helpModel:      h,
+		keys:           defaultKeyMap(),
 		analysis:       analysis,
 		endpointScores: endpointScores,
 		workflowGraph:  workflowGraph,
@@ -101,6 +189,30 @@ func (m Model) Init() tea.Cmd { return nil }
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if key.Matches(msg, m.keys.Quit) {
+			return m, tea.Quit
+		}
+
+		if key.Matches(msg, m.keys.FocusPane) || msg.String() == "left" || msg.String() == "right" {
+			m.focusNav = !m.focusNav
+			return m, nil
+		}
+
+		if m.focusNav {
+			switch msg.String() {
+			case "up", "k":
+				m.moveMenu(-1)
+				return m, nil
+			case "down", "j":
+				m.moveMenu(1)
+				return m, nil
+			case "enter":
+				m.setActive(m.screenAtMenuIndex())
+				m.focusNav = false
+				return m, nil
+			}
+		}
+
 		if m.active == screenFindings {
 			switch msg.String() {
 			case "up", "k":
@@ -117,7 +229,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "o":
 				op := m.firstOperationForSelectedFindingBucket()
 				if op != nil {
-					m.active = screenEndpoints
+					m.setActive(screenEndpoints)
 					m.endpointIndex = m.indexOfOperation(op)
 					m.endpointDetailOpen = true
 				}
@@ -195,51 +307,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "o", "enter":
 				op := m.selectedHotspotOperation()
 				if op != nil {
-					m.active = screenEndpoints
+					m.setActive(screenEndpoints)
 					m.endpointIndex = m.indexOfOperation(op)
 					m.endpointDetailOpen = true
 				} else if m.openWorkflowDetailFromSelectedHotspot() {
-					m.active = screenWorkflows
+					m.setActive(screenWorkflows)
 				}
 				return m, nil
 			}
 		}
 
 		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		case "left", "h", "shift+tab", "[":
+		case "[", "h", "shift+tab":
 			if m.active == 0 {
-				m.active = screenDiff
+				m.setActive(screenDiff)
 			} else {
-				m.active--
+				m.setActive(m.active - 1)
 			}
-		case "right", "l", "tab", "]":
+		case "]", "l":
 			if m.active == screenDiff {
-				m.active = screenOverview
+				m.setActive(screenOverview)
 			} else {
-				m.active++
+				m.setActive(m.active + 1)
 			}
 		case "home":
-			m.active = screenOverview
+			m.setActive(screenOverview)
 		case "end":
-			m.active = screenDiff
+			m.setActive(screenDiff)
 		case "1":
-			m.active = screenOverview
+			m.setActive(screenOverview)
 		case "2":
-			m.active = screenHotspots
+			m.setActive(screenHotspots)
 		case "3":
-			m.active = screenEndpoints
+			m.setActive(screenEndpoints)
 			m.endpointDetailOpen = false
 		case "4":
-			m.active = screenFindings
+			m.setActive(screenFindings)
 			m.findingsDetailOpen = false
 		case "5":
-			m.active = screenWorkflows
+			m.setActive(screenWorkflows)
 			m.workflowDetailOpen = false
 			m.workflowItemDetailOpen = false
 		case "6":
-			m.active = screenDiff
+			m.setActive(screenDiff)
 		}
 	}
 	return m, nil
@@ -248,32 +358,93 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	header := styleHeader.Render(strings.Join([]string{
 		styleTitle.Render("api-doctor dashboard"),
-		m.screenTabs(),
-		"Global keys: left/right/tab/[ ] switch, home/end jump, q quit",
+		"Menu-driven navigation: move in sidebar with ↑/↓ and Enter; press Tab to switch focus",
 		m.dataStatusLine(),
-		m.screenHints(),
 	}, "\n"))
 
-	body := ""
+	content := ""
 	switch m.active {
 	case screenOverview:
-		body = m.viewOverview()
+		content = m.viewOverview()
 	case screenHotspots:
-		body = m.viewHotspots()
+		content = m.viewHotspots()
 	case screenEndpoints:
-		body = m.viewEndpoints()
+		content = m.viewEndpoints()
 	case screenFindings:
-		body = m.viewFindings()
+		content = m.viewFindings()
 	case screenWorkflows:
-		body = m.viewWorkflows()
+		content = m.viewWorkflows()
 	case screenDiff:
-		body = m.viewDiff()
+		content = m.viewDiff()
 	default:
-		body = stylePanel.Render("Unknown screen")
+		content = stylePanel.Render("Unknown screen")
 	}
 
-	footer := styleFooter.Render("Tip: Enter/o opens detail, Esc closes detail, numbers jump screens")
-	return lipgloss.JoinVertical(lipgloss.Left, header, body, footer)
+	layout := lipgloss.JoinHorizontal(lipgloss.Top, m.viewSidebar(), content)
+	focus := "Focus: Content"
+	if m.focusNav {
+		focus = "Focus: Navigation"
+	}
+	footer := styleFooter.Render(styleFocus.Render(focus) + "  |  " + m.helpModel.View(m.keys))
+	return lipgloss.JoinVertical(lipgloss.Left, header, layout, footer)
+}
+
+func (m *Model) setActive(s screen) {
+	m.active = s
+	m.menuIndex = int(s)
+}
+
+func (m *Model) moveMenu(delta int) {
+	items := m.menuItems()
+	if len(items) == 0 {
+		m.menuIndex = 0
+		return
+	}
+	m.menuIndex = wrapIndex(m.menuIndex+delta, len(items))
+}
+
+func (m Model) screenAtMenuIndex() screen {
+	items := m.menuItems()
+	if len(items) == 0 || m.menuIndex < 0 || m.menuIndex >= len(items) {
+		return screenOverview
+	}
+	return items[m.menuIndex].id
+}
+
+type menuItem struct {
+	id    screen
+	label string
+}
+
+func (m Model) menuItems() []menuItem {
+	return []menuItem{
+		{id: screenOverview, label: "Overview"},
+		{id: screenHotspots, label: "Hotspots"},
+		{id: screenEndpoints, label: "Endpoints"},
+		{id: screenFindings, label: "Findings"},
+		{id: screenWorkflows, label: "Workflows"},
+		{id: screenDiff, label: "Diff"},
+	}
+}
+
+func (m Model) viewSidebar() string {
+	lines := []string{stylePanelTitle.Render("Menu")}
+	for i, item := range m.menuItems() {
+		prefix := "  "
+		if item.id == m.active {
+			prefix = "• "
+		}
+		line := fmt.Sprintf("%s%d. %s", prefix, i+1, item.label)
+		if i == m.menuIndex {
+			line = styleNavActive.Render(line)
+		} else {
+			line = styleNavItem.Render(line)
+		}
+		lines = append(lines, line)
+	}
+
+	lines = append(lines, "", styleMuted.Render("Enter = open section"), styleMuted.Render("Tab = switch focus"))
+	return styleNav.Width(28).Render(strings.Join(lines, "\n"))
 }
 
 func (m Model) screenTabs() string {
@@ -762,14 +933,14 @@ func (m Model) viewDiff() string {
 }
 
 func (m Model) panelSingle(title, content string) string {
-	width := 116
+	width := 100
 	body := stylePanelTitle.Render(title) + "\n\n" + strings.TrimRight(content, "\n")
 	return stylePanel.Width(width).Render(body)
 }
 
 func (m Model) panelSplit(leftTitle, left, rightTitle, right string) string {
-	leftPanel := stylePanel.Width(66).Render(stylePanelTitle.Render(leftTitle) + "\n\n" + strings.TrimRight(left, "\n"))
-	rightPanel := stylePanel.Width(50).Render(stylePanelTitle.Render(rightTitle) + "\n\n" + strings.TrimRight(right, "\n"))
+	leftPanel := stylePanel.Width(58).Render(stylePanelTitle.Render(leftTitle) + "\n\n" + strings.TrimRight(left, "\n"))
+	rightPanel := stylePanel.Width(42).Render(stylePanelTitle.Render(rightTitle) + "\n\n" + strings.TrimRight(right, "\n"))
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, rightPanel)
 }
 

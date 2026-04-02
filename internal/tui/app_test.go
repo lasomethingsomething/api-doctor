@@ -109,7 +109,7 @@ func TestViewEndpoints_DetailWithRelatedData(t *testing.T) {
 	m := NewModel(analysis, scores, g, nil, nil, nil)
 	m.endpointDetailOpen = true
 	out := m.viewEndpoints()
-	if !strings.Contains(out, "Endpoints Browser") || !strings.Contains(out, "Scores (Schema/Client/Versioning): 4/5/5") || !strings.Contains(out, "weak-follow-up-linkage") || !strings.Contains(out, "Related workflows") {
+	if !strings.Contains(out, "Endpoints Browser") || !strings.Contains(out, "Scores (Schema/Client/Versioning):") || !strings.Contains(out, "4/5/5") || !strings.Contains(out, "weak-follow-up-linkage") || !strings.Contains(out, "Related workflows") {
 		t.Fatalf("expected endpoint detail with related data, got: %s", out)
 	}
 }

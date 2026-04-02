@@ -4,9 +4,9 @@ api-doctor is a local command-line helper for checking the quality of Shopware A
 
 Think of it like a spell-checker for API specs:
 
-- it points out things that may confuse API users
-- it highlights risky changes between spec versions
-- it gives quick summaries you can scan in the terminal
+- It points out things that may confuse API users.
+- It highlights risky changes between spec versions.
+- It gives quick summaries you can scan in the terminal.
 
 It is deterministic and local-only.
 
@@ -102,9 +102,18 @@ Current high-level screens:
 
 Common keybindings:
 
-- Screen switching: left/right, tab, [, ], home, end, and number keys
+- Sidebar-first navigation: Up/down to choose section, Enter to open
+- Focus switching: Tab (or left/right) toggles Navigation and Content focus
+- Quick section shortcuts: number keys 1..6 (secondary)
+- Legacy section cycling: [ and ] (or h/l)
 - Open related detail: Enter or o (context-dependent)
 - Close detail pane: Esc
+
+First-time flow:
+
+- Move in the left menu with up/down.
+- Press Enter to open a section in the main pane.
+- Use Tab to move into content and open drill-down details.
 
 ## Command overview
 

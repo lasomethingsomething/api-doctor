@@ -9,7 +9,7 @@ Scope reminder:
 - Broader API support should not be assumed unless validated in this repository
 - Store API support is not claimed here
 
-## 1) analyze
+## 1) Analyze
 
 ### What it does
 
@@ -17,9 +17,9 @@ analyze reads one Shopware Admin API spec and reports quality findings.
 
 It checks for things like:
 
-- missing request or response schema details
-- weak links between related endpoints
-- patterns that can make generated clients harder to use
+- Missing request or response schema details
+- Weak links between related endpoints
+- Patterns that can make generated clients harder to use
 
 ### Why you would use it
 
@@ -27,9 +27,9 @@ Use analyze when you want a quick quality health check for one spec file.
 
 Good moments to run it:
 
-- before sharing a spec with your team
-- before releasing a new API version
-- after making edits to endpoint schemas
+- Before sharing a spec with your team
+- Before releasing a new API version
+- After making edits to endpoint schemas
 
 ### One example command
 
@@ -46,7 +46,7 @@ You can also choose markdown or JSON with --format.
 
 ---
 
-## 2) workflows
+## 2) Workflows
 
 ### What it does
 
@@ -54,9 +54,9 @@ workflows infers likely endpoint flows from the spec.
 
 In plain words, it tries to show common API journeys, such as:
 
-- list to detail
-- create to detail
-- action to follow-up
+- List to detail
+- Create to detail
+- Action to follow-up
 
 It also includes selected multi-step chains.
 
@@ -66,9 +66,9 @@ Use workflows when you want to understand whether the API looks easy to use as a
 
 Good moments to run it:
 
-- when reviewing endpoint naming and shape consistency
-- when checking if follow-up links feel clear
-- when discussing API usability with backend and frontend teams
+- When reviewing endpoint naming and shape consistency
+- When checking if follow-up links feel clear
+- When discussing API usability with backend and frontend teams
 
 ### One example command
 
@@ -85,7 +85,7 @@ JSON output includes complete structured workflow and chain data.
 
 ---
 
-## 3) diff
+## 3) Diff
 
 ### What it does
 
@@ -99,9 +99,9 @@ Use diff before upgrading clients or publishing a new version.
 
 Good moments to run it:
 
-- in release checks
-- in CI before merge
-- when validating that a change is backward compatible
+- In release checks
+- In CI before merge
+- When validating that a change is backward compatible
 
 ### One example command
 
@@ -118,7 +118,7 @@ That makes it useful in CI pipelines.
 
 ---
 
-## 4) tui
+## 4) TUI
 
 ### What it does
 
@@ -138,9 +138,9 @@ Use tui when plain command output feels too dense and you want a quick visual su
 
 Good moments to run it:
 
-- local review sessions
-- pair-review of findings and workflow signals
-- quick triage before digging into JSON output
+- Local review sessions
+- Pair-review of findings and workflow signals
+- Quick triage before digging into JSON output
 
 ### Launch command
 
@@ -156,8 +156,10 @@ go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2
 
 ### Navigation keys
 
-- Global screen navigation: left/right, tab, [, ], home, end
-- Direct screen jump: 1 Overview, 2 Hotspots, 3 Endpoints, 4 Findings, 5 Workflows, 6 Diff
+- Sidebar navigation (primary): up/down (or j/k), Enter to open selected section
+- Pane focus: Tab toggles between Navigation and Content (left/right also toggles focus)
+- Secondary screen shortcuts: 1 Overview, 2 Hotspots, 3 Endpoints, 4 Findings, 5 Workflows, 6 Diff
+- Legacy quick cycling: [ and ] (or h/l)
 - Quit: q (or Ctrl+C)
 - Open related detail: Enter or o (context-dependent)
 - Open/close bucket preview: Enter or d (Findings/Workflows buckets)
@@ -167,6 +169,19 @@ go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2
 - Workflows section toggle (pairwise vs chains): w or s
 
 ### Current screens and views
+
+The layout is menu-driven:
+
+- Left sidebar: always-visible section menu for guided navigation
+- Main content pane: selected section summary/list content
+- Detail/drill-down pane: shown when endpoint/workflow/findings detail is opened
+- Persistent footer: key hints via Charm help component
+
+Recommended first-run navigation:
+
+- Start in the sidebar and choose a section with up/down.
+- Press Enter to load that section, then Tab into content.
+- Use Enter, o, d, and Esc in content to open and close drill-down detail.
 
 - Overview: totals and severity summary
 - Hotspots: worst-first ranking across finding buckets, endpoint families, and workflow/chain categories
