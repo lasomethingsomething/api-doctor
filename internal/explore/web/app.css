@@ -589,6 +589,102 @@ tr.active {
 .workflow-caveat {
   margin: 0 0 0.6rem;
 }
+
+/** Investigation state strip */
+.investigation-strip {
+  background: linear-gradient(90deg, rgba(76, 175, 200, 0.08), rgba(156, 230, 196, 0.08));
+  border: 1px solid rgba(76, 175, 200, 0.24);
+  border-radius: 12px;
+  padding: 0.7rem 0.95rem;
+  margin: -0.85rem 0 0.65rem 0;
+  display: grid;
+  gap: 0.1rem;
+  position: relative;
+}
+
+.investigation-inner {
+  display: grid;
+  gap: 0.35rem;
+  padding-right: 2rem;
+}
+
+.investigation-label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #2a4d52;
+}
+
+.investigation-type {
+  font-size: 0.82rem;
+  color: #4b8892;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.investigation-why {
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.investigation-action {
+  font-size: 0.85rem;
+  color: var(--muted-soft);
+  font-style: italic;
+  line-height: 1.35;
+}
+
+.investigation-clear {
+  position: absolute;
+  top: 50%;
+  right: 0.95rem;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 1px solid rgba(76, 175, 200, 0.3);
+  border-radius: 50%;
+  width: 1.8rem;
+  height: 1.8rem;
+  font-size: 1rem;
+  color: #4b8892;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 120ms ease;
+  font-weight: normal;
+  padding: 0;
+}
+
+.investigation-clear:hover {
+  background: rgba(76, 175, 200, 0.12);
+  border-color: rgba(76, 175, 200, 0.5);
+  color: #2a4d52;
+}
+
+/** Improved evidence help text */
+.evidence-help {
+  margin-bottom: 0.6rem !important;
+  line-height: 1.5;
+}
+
+.help-hint {
+  display: inline-block;
+  width: 1.2rem;
+  height: 1.2rem;
+  background: rgba(76, 175, 200, 0.12);
+  border: 1px solid rgba(76, 175, 200, 0.3);
+  border-radius: 50%;
+  text-align: center;
+  line-height: 1.2rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #4b8892;
+  cursor: help;
+  margin: 0 0.15rem;
+  vertical-align: middle;
+}
+
 @media (max-width: 960px) {
   .topbar {
     flex-direction: column;
