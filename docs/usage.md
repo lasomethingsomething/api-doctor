@@ -15,25 +15,39 @@ Use `analyze` for deterministic baseline output, then use `explore` as the prima
 ## Explorer vs CLI
 
 - Explorer (`explore`): primary way to inspect burden lenses, family clusters, endpoint evidence, and workflow context.
+  - Clean information hierarchy: lens choice → family overview → endpoint list with guidance → detail evidence
+  - No redundant explanations; each section builds on the previous without repetition
+  - Support for four view types: spec-rule violations (rules-based view), workflow burden, shape burden, consistency (all guidance views)
 - CLI (`analyze`, `workflows`, `diff`): canonical deterministic engine for local scripts, CI, and machine-readable outputs.
 - TUI (`tui`): secondary terminal read-only view of the same deterministic data.
 
 ## Current analyzer signals (practical framing)
 
-api-doctor is not positioned as generic lint-only output. Current review framing is:
+api-doctor organizes findings around four complementary views, accessible via category and burden filters:
 
-- Spec-rule risk: normative OpenAPI findings with explicit spec-rule evidence.
-- Workflow burden: weak follow-up linkage, hidden prerequisite burden, and weak outcome guidance in state-changing flows.
-- Contract-shape burden: snapshot-heavy response, deep nesting, duplicated state, and incidental/internal-field exposure.
-- Consistency drift: naming/path/shape divergence across related routes.
+**Rules-based view** (spec-rule violations):
+- Findings backed by explicit OpenAPI rule language (REQUIRED/MUST vs SHOULD/RECOMMENDED)
+- What: normative spec rule risk
+- When to use: validating against OpenAPI spec compliance
 
-The current workflow/shape heuristic signal set includes:
+**Guidance views** (three burden lenses):
 
-- `snapshot-heavy-response` — family card text: "Returns full model state rather than task-scoped fields."
-- `deeply-nested-response-structure` — family card text: "Response nesting may complicate client traversal."
-- `duplicated-state-response` — family card text: "State appears repeated across multiple response fields."
-- `incidental-internal-field-exposure` — family card text: "Internal or audit fields appear to dominate the contract."
-- `weak-outcome-next-action-guidance`
+1. **Workflow burden**: responses that create hidden follow-up complexity
+   - Key signals: weak follow-up linkage, hidden prerequisite burden, weak outcome guidance
+   - What: where call chains hide next-step requirements or identifiers
+   - When to use: improving state-change flow reliability across steps
+
+2. **Shape burden**: responses that feel too generic or storage-shaped
+   - Key signals: snapshot-heavy response, deep nesting, duplicated state, incidental/internal-field exposure
+   - What: where responses are too broad or backend-focused rather than task-focused
+   - When to use: tightening response contracts toward client needs
+
+3. **Consistency**: related endpoints that diverge in naming, path patterns, or response shape
+   - Key signals: parameter naming drift, path style drift, outcome wording drift, response shape drift
+   - What: where similar operations stop feeling interchangeable
+   - When to use: ensuring API surface cohesion across related routes
+
+Each view is isolated and independent. Selecting a category or burden filter will sync the view appropriately—for example, choosing workflow burden automatically switches the category filter to workflow-burden view.
 
 Scope reminder:
 
