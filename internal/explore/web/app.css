@@ -317,6 +317,30 @@ tr.active {
   font-size: 1.02rem;
   font-weight: 700;
 }
+.ranking-cue {
+  margin: 0.1rem 0 0.5rem;
+  font-size: 0.82rem;
+}
+.rank-cell {
+  display: grid;
+  gap: 0.08rem;
+}
+.rank-main {
+  color: #273447;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.rank-sub {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.rank-score {
+  color: var(--muted-soft);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
 .risk-copy {
   color: var(--muted);
   line-height: 1.45;

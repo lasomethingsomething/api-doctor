@@ -23,6 +23,7 @@
     sortBy: document.getElementById("sortBy"),
     endpointRows: document.getElementById("endpointRows"),
     evidenceScope: document.getElementById("evidenceScope"),
+    rankingCue: document.getElementById("rankingCue"),
     detailHelp: document.getElementById("detailHelp"),
     endpointDetail: document.getElementById("endpointDetail"),
     workflowHelp: document.getElementById("workflowHelp"),
@@ -193,6 +194,15 @@
       }
       el.evidenceScope.textContent = scopeText;
     }
+    if (el.rankingCue) {
+      if (state.filters.sortBy === 'priority') {
+        el.rankingCue.textContent = 'Default order uses inspection priority first, then findings count. Score is shown as supporting context.';
+      } else if (state.filters.sortBy === 'findings') {
+        el.rankingCue.textContent = 'Sorted by findings count. Priority and score remain supporting context for triage.';
+      } else {
+        el.rankingCue.textContent = 'Sorted alphabetically by path. Use findings/priority to assess inspection urgency.';
+      }
+    }
     if (rows.length === 0) {
       state.selectedEndpointId = "";
       el.endpointRows.innerHTML = '<tr><td colspan="4" class="subtle">No endpoints match this lens. Clear one filter to widen investigation scope.</td></tr>';
@@ -203,7 +213,8 @@
     }
     el.endpointRows.innerHTML = rows.map(function (row) {
       var selected = row.id === state.selectedEndpointId ? 'active' : '';
-      return '<tr class="' + selected + '" data-id="' + row.id + '"><td><div class="endpoint-main"><strong>' + row.method + ' ' + row.path + '</strong><div class="endpoint-sub"><span class="endpoint-chip">' + row.family + '</span><span class="subtle">' + rowProblemSummary(row) + '</span></div></div></td><td><span class="findings-count">' + row.findings + '</span></td><td><span class="badge ' + row.priority + '">' + row.priority + '</span></td><td><span class="risk-copy">' + row.riskSummary + '</span></td></tr>';
+      var pressure = inspectionPressureLabel(row);
+      return '<tr class="' + selected + '" data-id="' + row.id + '"><td><div class="endpoint-main"><strong>' + row.method + ' ' + row.path + '</strong><div class="endpoint-sub"><span class="endpoint-chip">' + row.family + '</span><span class="subtle">' + rowProblemSummary(row) + '</span></div></div></td><td><span class="findings-count">' + row.findings + '</span></td><td><span class="badge ' + row.priority + '">' + row.priority + '</span></td><td><div class="rank-cell"><span class="rank-main">' + pressure + '</span><span class="rank-sub">' + row.findings + ' finding' + (row.findings === 1 ? '' : 's') + ' on this endpoint</span><span class="rank-score">Score: ' + row.riskSummary + '</span></div></td></tr>';
     }).join('');
 
     Array.prototype.forEach.call(el.endpointRows.querySelectorAll('tr'), function (tr) {
@@ -708,6 +719,17 @@
     var primaryCategory = categories[0][0].replaceAll('-', ' ');
     var burden = (row.burdenFocuses || []).length > 0 ? row.burdenFocuses[0].replaceAll('-', ' ') : 'mixed';
     return primaryCategory + ' / ' + burden;
+  }
+
+  function inspectionPressureLabel(row) {
+    if (!row) return 'Inspection signal';
+    if (row.priority === 'high') {
+      return row.findings >= 10 ? 'High pressure (top queue)' : 'High pressure';
+    }
+    if (row.priority === 'medium') {
+      return 'Moderate pressure';
+    }
+    return row.findings > 0 ? 'Lower pressure' : 'No direct pressure';
   }
 
   function endpointInvestigationSummary(detail) {
