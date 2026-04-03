@@ -911,10 +911,16 @@
       return 'Potential workflow sequencing or follow-up linkage issues.';
     }
     if (burden === 'contract-shape') {
-      if (topSignals.length) {
-        return topSignals.map(function(s) { return humanizeSignalLabel(s); }).join(' and ') + ' patterns.';
-      }
-      return 'Response schema appears storage-shaped rather than task-oriented.';
+      var dominant = topSignals[0] || '';
+      var secondary = topSignals[1] ? ' Also: ' + humanizeSignalLabel(topSignals[1]) + '.' : '';
+      var shapeSentences = {
+        'response appears snapshot-heavy': 'Returns full model state rather than task-scoped fields.',
+        'deep nesting appears likely': 'Response nesting may complicate client traversal.',
+        'duplicated state appears likely': 'State appears repeated across multiple response fields.',
+        'incidental/internal fields appear to dominate': 'Internal or audit fields appear to dominate the contract.'
+      };
+      var lead = shapeSentences[dominant] || 'Response schema appears storage-shaped rather than task-oriented.';
+      return lead + secondary;
     }
     if (burden === 'consistency') {
       if (topSignals.length) {
@@ -963,7 +969,12 @@
     } else {
       chipItems = (family.topDimensions || []).slice(0, 1);
     }
-    var chipsHtml = chipItems.map(function(c) { return '<span class="chip">' + escapeHtml(c) + '</span>'; }).join('');
+    var chipsHtml = (activeBurden === 'contract-shape')
+      ? chipItems.map(function (c, i) {
+          var cls = i === 0 ? 'chip chip-primary' : 'chip chip-secondary';
+          return '<span class="' + cls + '">' + escapeHtml(humanizeSignalLabel(c)) + '</span>';
+        }).join('')
+      : chipItems.map(function (c) { return '<span class="chip">' + escapeHtml(c) + '</span>'; }).join('');
 
     return '<button type="button" class="family-card pressure-' + family.pressure + '" data-family="' + escapeHtml(family.family) + '">'
       + '<div class="family-head">'
@@ -2050,7 +2061,11 @@
       'incidental-internal-field-exposure': 'incidental fields',
       'weak-outcome-next-action-guidance': 'weak guidance',
       'missing-next-action': 'missing next-action',
-      'storage-shaped-response': 'storage-shaped'
+      'storage-shaped-response': 'storage-shaped',
+      'response appears snapshot-heavy': 'snapshot-heavy',
+      'deep nesting appears likely': 'deep nesting',
+      'duplicated state appears likely': 'duplicated state',
+      'incidental/internal fields appear to dominate': 'internal fields'
     };
     return map[signal] || signal.replaceAll('-', ' ');
   }

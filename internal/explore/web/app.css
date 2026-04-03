@@ -1912,6 +1912,21 @@ tbody tr.active {
   max-width: 100%;
 }
 
+.chip.chip-primary {
+  border-color: #9bbdcc;
+  background: #e8f4f8;
+  color: #1a3d4f;
+  font-weight: 600;
+}
+
+.chip.chip-secondary {
+  border-color: #d4e5ec;
+  background: #f8fbfc;
+  color: #5a788a;
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+
 .issue-group {
   border: 1px solid #dce5ec;
   border-radius: 10px;
