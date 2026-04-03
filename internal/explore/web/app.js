@@ -926,7 +926,11 @@
       }
       return 'Similar operations drift in path style, parameters, or response shape.';
     }
-    return '';
+    var allDimensions = (family.topDimensions || []).slice(0, 2);
+    if (allDimensions.length) {
+      return 'Shows ' + allDimensions.join(' and ') + '.';
+    }
+    return 'Family across ' + family.endpoints + ' endpoint' + (family.endpoints === 1 ? '' : 's') + '.';
   }
 
   function bumpFamilySignal(map, label) {
@@ -954,7 +958,7 @@
 
   function renderFamilyCard(family) {
     var activeBurden = state.filters.burden;
-    var whyText = activeBurden !== 'all' ? familyBurdenWhyText(family) : '';
+    var whyText = familyBurdenWhyText(family);
 
     var chipItems;
     if (activeBurden !== 'all') {
@@ -965,7 +969,7 @@
         else chipItems = ['path/param drift'];
       }
     } else {
-      chipItems = (family.topDimensions || []).slice(0, 1);
+      chipItems = (family.topDimensions || []).slice(0, 2);
     }
     var chipsHtml = (activeBurden === 'contract-shape')
       ? chipItems.map(function (c, i) {
@@ -980,9 +984,7 @@
       + pressureBadge(family.pressure, 'pressure')
       + '</div>'
       + '<p class="family-stat">' + family.findings + ' issue' + (family.findings === 1 ? '' : 's') + ' across ' + family.endpoints + ' endpoint' + (family.endpoints === 1 ? '' : 's') + '</p>'
-      + (whyText
-          ? '<p class="family-burden-why">' + escapeHtml(whyText) + '</p>'
-          : '')
+      + '<p class="family-burden-why">' + escapeHtml(whyText) + '</p>'
       + (chipsHtml ? '<div class="chips">' + chipsHtml + '</div>' : '')
       + '</button>';
   }
