@@ -1,0 +1,105 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Deeply Nested Response Structure",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/orders/{id}/finalize": {
+      "post": {
+        "operationId": "finalizeOrderDeepNested",
+        "responses": {
+          "200": {
+            "description": "Deeply nested contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "type": "object",
+                          "properties": {
+                            "envelope": {
+                              "type": "object",
+                              "properties": {
+                                "payload": {
+                                  "type": "object",
+                                  "properties": {
+                                    "order": {
+                                      "type": "object",
+                                      "properties": {
+                                        "state": {
+                                          "type": "object",
+                                          "properties": {
+                                            "status": {
+                                              "type": "string"
+                                            },
+                                            "next": {
+                                              "type": "object",
+                                              "properties": {
+                                                "action": {
+                                                  "type": "string"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "trace": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}/cancel": {
+      "post": {
+        "operationId": "cancelOrderCompactOutcome",
+        "responses": {
+          "200": {
+            "description": "Compact task outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "nextAction": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -16,6 +16,7 @@ var workflowBurdenCodes = map[string]bool{
 	"weak-follow-up-linkage":                  true,
 	"weak-action-follow-up-linkage":           true,
 	"weak-accepted-tracking-linkage":          true,
+	"weak-outcome-next-action-guidance":       true,
 	"prerequisite-task-burden":                true,
 	"contract-shape-workflow-guidance-burden": true,
 }
@@ -26,6 +27,14 @@ var consistencyCodes = map[string]bool{
 	"endpoint-path-style-drift":           true,
 	"inconsistent-response-shapes":        true,
 	"inconsistent-response-shapes-family": true,
+}
+
+var contractShapeCodes = map[string]bool{
+	"contract-shape-workflow-guidance-burden": true,
+	"snapshot-heavy-response":                 true,
+	"deeply-nested-response-structure":        true,
+	"duplicated-state-response":               true,
+	"incidental-internal-field-exposure":      true,
 }
 
 func BuildPayload(
@@ -58,6 +67,7 @@ func BuildPayload(
 	workflowBurdenCount := 0
 	contractShapeCount := 0
 	consistencyCount := 0
+	specRuleCount := 0
 
 	for _, issue := range analysis.Issues {
 		payload.Summary.TotalFindings++
@@ -68,11 +78,14 @@ func BuildPayload(
 		if workflowBurdenCodes[issue.Code] {
 			workflowBurdenCount++
 		}
-		if issue.Code == "contract-shape-workflow-guidance-burden" {
+		if contractShapeCodes[issue.Code] {
 			contractShapeCount++
 		}
 		if consistencyCodes[issue.Code] {
 			consistencyCount++
+		}
+		if issue.EvidenceType == "spec-rule" {
+			specRuleCount++
 		}
 	}
 
@@ -86,9 +99,9 @@ func BuildPayload(
 		burdens := map[string]bool{}
 		for _, issue := range issues {
 			sevCounts[issue.Severity]++
-			cat := categoryForIssue(issue.Code)
+			cat := categoryForIssue(issue.Code, issue.EvidenceType)
 			catCounts[cat]++
-			bf := burdenFocusForIssue(issue.Code)
+			bf := burdenFocusForIssue(issue.Code, issue.EvidenceType)
 			if bf != "" {
 				burdens[bf] = true
 			}
@@ -112,15 +125,23 @@ func BuildPayload(
 
 		findingDetails := make([]FindingDetail, 0, len(issues))
 		for _, issue := range issues {
-			findingDetails = append(findingDetails, FindingDetail{
+			fd := FindingDetail{
 				Code:        issue.Code,
 				Severity:    issue.Severity,
-				Category:    categoryForIssue(issue.Code),
-				BurdenFocus: burdenFocusForIssue(issue.Code),
+				Category:    categoryForIssue(issue.Code, issue.EvidenceType),
+				BurdenFocus: burdenFocusForIssue(issue.Code, issue.EvidenceType),
 				Operation:   issue.Operation,
 				Message:     issue.Message,
 				Impact:      issue.Description,
-			})
+			}
+			if issue.EvidenceType == "spec-rule" {
+				fd.EvidenceType = issue.EvidenceType
+				fd.SpecRuleID = issue.SpecRuleID
+				fd.NormativeLevel = issue.NormativeLevel
+				fd.SpecSource = issue.SpecSource
+				fd.SpecLocation = issue.SpecLocation
+			}
+			findingDetails = append(findingDetails, fd)
 		}
 		sort.Slice(findingDetails, func(i, j int) bool {
 			if findingDetails[i].Severity != findingDetails[j].Severity {
@@ -236,6 +257,7 @@ func BuildPayload(
 		topFamilyLabel = strings.Join(topFamilies, ", ")
 	}
 	payload.FixFirst = []FixFirstItem{
+		{ID: "spec-rule", Label: "Spec rule violations", Value: fmt.Sprintf("%d findings", specRuleCount), Description: "OpenAPI-normative findings (MUST/SHOULD). Grounded in explicit spec language.", Filter: FilterPreset{Category: "spec-rule"}},
 		{ID: "workflow-burden", Label: "Workflow burden", Value: fmt.Sprintf("%d findings", workflowBurdenCount), Description: "Focus on weak next-step linkage and task continuity.", Filter: FilterPreset{BurdenFocus: "workflow-burden"}},
 		{ID: "contract-shape", Label: "Contract-shape burden", Value: fmt.Sprintf("%d findings", contractShapeCount), Description: "Review snapshot-heavy responses that hide task outcomes.", Filter: FilterPreset{BurdenFocus: "contract-shape"}},
 		{ID: "consistency", Label: "Consistency outliers", Value: fmt.Sprintf("%d findings", consistencyCount), Description: "Inspect naming/shape drift across related routes.", Filter: FilterPreset{Category: "consistency"}},
@@ -283,8 +305,11 @@ func scoreForEndpoint(scores map[string]*endpoint.EndpointScore, method, path st
 	return nil
 }
 
-func categoryForIssue(code string) string {
-	if code == "contract-shape-workflow-guidance-burden" {
+func categoryForIssue(code, evidenceType string) string {
+	if evidenceType == "spec-rule" {
+		return "spec-rule"
+	}
+	if contractShapeCodes[code] {
 		return "contract-shape"
 	}
 	if consistencyCodes[code] {
@@ -302,8 +327,12 @@ func categoryForIssue(code string) string {
 	return "other"
 }
 
-func burdenFocusForIssue(code string) string {
-	if code == "contract-shape-workflow-guidance-burden" {
+func burdenFocusForIssue(code, evidenceType string) string {
+	// Spec-rule findings are not a burden track; they are a distinct evidence type.
+	if evidenceType == "spec-rule" {
+		return ""
+	}
+	if contractShapeCodes[code] {
 		return "contract-shape"
 	}
 	if workflowBurdenCodes[code] {

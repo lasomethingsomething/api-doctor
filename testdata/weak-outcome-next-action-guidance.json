@@ -1,0 +1,97 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Weak Outcome Next Action Guidance",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/payments/{id}/capture": {
+      "post": {
+        "operationId": "capturePayment",
+        "responses": {
+          "200": {
+            "description": "Capture result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "attributes": {
+                          "type": "object",
+                          "properties": {
+                            "phase": {
+                              "type": "string"
+                            },
+                            "attemptCount": {
+                              "type": "integer"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "requestTrace": {
+                          "type": "string"
+                        },
+                        "timestamps": {
+                          "type": "object",
+                          "properties": {
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/{id}/capture-preview": {
+      "post": {
+        "operationId": "capturePaymentPreview",
+        "responses": {
+          "200": {
+            "description": "Capture preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "outcome": {
+                      "type": "string"
+                    },
+                    "nextAction": {
+                      "type": "string"
+                    },
+                    "captureId": {
+                      "type": "string"
+                    },
+                    "contextToken": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

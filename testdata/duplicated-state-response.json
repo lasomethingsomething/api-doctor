@@ -1,0 +1,98 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Duplicated State Response Detection",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/orders/{id}/review": {
+      "post": {
+        "operationId": "reviewOrderWithDuplicateBranches",
+        "responses": {
+          "200": {
+            "description": "Repeated state across sibling branches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customerSummary": {
+                      "type": "object",
+                      "properties": {
+                        "name": {"type": "string"},
+                        "email": {"type": "string"},
+                        "status": {"type": "string"}
+                      }
+                    },
+                    "customerProfile": {
+                      "type": "object",
+                      "properties": {
+                        "name": {"type": "string"},
+                        "email": {"type": "string"},
+                        "status": {"type": "string"}
+                      }
+                    },
+                    "billingAddress": {
+                      "type": "object",
+                      "properties": {
+                        "line1": {"type": "string"},
+                        "city": {"type": "string"},
+                        "country": {"type": "string"}
+                      }
+                    },
+                    "shippingAddress": {
+                      "type": "object",
+                      "properties": {
+                        "line1": {"type": "string"},
+                        "city": {"type": "string"},
+                        "country": {"type": "string"}
+                      }
+                    },
+                    "paymentSummary": {
+                      "type": "object",
+                      "properties": {
+                        "method": {"type": "string"},
+                        "status": {"type": "string"},
+                        "last4": {"type": "string"}
+                      }
+                    },
+                    "paymentState": {
+                      "type": "object",
+                      "properties": {
+                        "method": {"type": "string"},
+                        "status": {"type": "string"},
+                        "last4": {"type": "string"}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}/cancel": {
+      "post": {
+        "operationId": "cancelOrderCompact",
+        "responses": {
+          "200": {
+            "description": "Compact outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {"type": "boolean"},
+                    "status": {"type": "string"},
+                    "nextAction": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

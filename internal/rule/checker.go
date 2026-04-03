@@ -33,6 +33,11 @@ func NewChecker() *Checker {
 			NewWeakArrayItemsRule(),
 			NewLikelyMissingEnumRule(),
 			NewDeprecatedOperationRule(),
+			// Spec-grounded per-operation rules (OAS normative language)
+			NewSpecResponseDescriptionRequiredRule(),
+			NewSpecNoSuccessResponseRule(),
+			NewSpecGetRequestBodyRule(),
+			NewSpecEmptyResponseContentRule(),
 		},
 		setRules: []SetRule{
 			NewInconsistentResponseShapeRule(),
@@ -43,8 +48,15 @@ func NewChecker() *Checker {
 			NewWeakListDetailLinkageRule(),
 			NewWeakAcceptedTrackingLinkageRule(),
 			NewWeakActionFollowUpLinkageRule(),
+			NewWeakOutcomeNextActionGuidanceRule(),
 			NewPrerequisiteTaskBurdenRule(),
+			NewDuplicatedStateResponseRule(),
+			NewIncidentalInternalFieldExposureRule(),
+			NewDeeplyNestedResponseStructureRule(),
+			NewSnapshotHeavyResponseRule(),
 			NewContractShapeWorkflowGuidanceBurdenRule(),
+			// Spec-grounded set rules (OAS normative language, require all operations)
+			NewSpecOperationIDUniqueRule(),
 		},
 	}
 }
@@ -65,7 +77,7 @@ func (c *Checker) CheckAll(operations []*model.Operation) []*model.Issue {
 type MissingRequestSchemaRule struct{}
 
 func NewMissingRequestSchemaRule() *MissingRequestSchemaRule { return &MissingRequestSchemaRule{} }
-func (r *MissingRequestSchemaRule) Name() string            { return "missing-request-schema" }
+func (r *MissingRequestSchemaRule) Name() string             { return "missing-request-schema" }
 
 func (r *MissingRequestSchemaRule) Check(op *model.Operation) []*model.Issue {
 	if op.RequestBody == nil {
@@ -279,7 +291,6 @@ func (r *DeprecatedOperationRule) Check(op *model.Operation) []*model.Issue {
 	}}
 }
 
-
 type WeakFollowUpLinkageRule struct{}
 
 func NewWeakFollowUpLinkageRule() *WeakFollowUpLinkageRule { return &WeakFollowUpLinkageRule{} }
@@ -452,12 +463,145 @@ func (r *WeakActionFollowUpLinkageRule) CheckAll(operations []*model.Operation) 
 	}
 
 	return issues
-	}
+}
 
 type PrerequisiteTaskBurdenRule struct{}
 
-func NewPrerequisiteTaskBurdenRule() *PrerequisiteTaskBurdenRule { return &PrerequisiteTaskBurdenRule{} }
-func (r *PrerequisiteTaskBurdenRule) Name() string               { return "prerequisite-task-burden" }
+type WeakOutcomeNextActionGuidanceRule struct{}
+
+const weakOutcomeNextActionIssueLimit = 30
+
+func NewWeakOutcomeNextActionGuidanceRule() *WeakOutcomeNextActionGuidanceRule {
+	return &WeakOutcomeNextActionGuidanceRule{}
+}
+
+func (r *WeakOutcomeNextActionGuidanceRule) Name() string {
+	return "weak-outcome-next-action-guidance"
+}
+
+func (r *WeakOutcomeNextActionGuidanceRule) CheckAll(operations []*model.Operation) []*model.Issue {
+	type candidate struct {
+		issue *model.Issue
+		score int
+	}
+
+	candidates := make([]candidate, 0)
+	for _, op := range operations {
+		if !isLikelyOutcomeGuidanceTarget(op) {
+			continue
+		}
+		if isLikelyWorkflowSource(op) {
+			continue
+		}
+		if _, ok := actionTransitionDetailPath(op); ok {
+			continue
+		}
+		if resp202, ok := op.Responses["202"]; ok && resp202 != nil {
+			continue
+		}
+
+		code, schema, ok := successfulJSONResponseSchema(op)
+		if !ok || schema == nil {
+			continue
+		}
+
+		ev := inspectWeakOutcomeGuidanceEvidence(schema)
+		continuationLikely := isLikelyWorkflowContinuation(op)
+		if !isWeakOutcomeNextActionGuidance(ev, continuationLikely, code) {
+			continue
+		}
+
+		missingSignals := make([]string, 0, 5)
+		if ev.OutcomeSignalCount == 0 {
+			missingSignals = append(missingSignals, "does not clearly communicate what changed")
+		}
+		if ev.NextActionSignalCount == 0 {
+			missingSignals = append(missingSignals, "does not clearly expose what next action is valid")
+		}
+		if ev.AuthoritativeHandoffCount == 0 {
+			missingSignals = append(missingSignals, "may hide the authoritative state needed for the next step")
+		}
+		if ev.StructuralHintCount >= 2 && ev.OutcomeSignalCount == 0 {
+			missingSignals = append(missingSignals, "may force callers to infer follow-up meaning from broad response structure")
+		}
+		if continuationLikely && ev.NextActionSignalCount == 0 {
+			missingSignals = append(missingSignals, "operation looks follow-up-oriented but next-step meaning is weakly signaled")
+		}
+		if len(missingSignals) == 0 {
+			missingSignals = append(missingSignals, "workflow outcome and next-step meaning appear weakly signaled")
+		}
+
+		topFields := limitStrings(ev.TopLevelFields, 6)
+		notablePaths := limitStrings(ev.NotableFieldPaths, 4)
+		message := fmt.Sprintf(
+			"Response %s application/json may weaken workflow guidance: %s",
+			code,
+			strings.Join(missingSignals, "; "),
+		)
+		if len(topFields) > 0 {
+			message += fmt.Sprintf("; top-level fields: %s", strings.Join(topFields, ", "))
+		}
+		if len(notablePaths) > 0 {
+			message += fmt.Sprintf("; notable response paths: %s", strings.Join(notablePaths, ", "))
+		}
+
+		issue := &model.Issue{
+			Code:        r.Name(),
+			Severity:    "warning",
+			Path:        op.Path,
+			Operation:   fmt.Sprintf("%s %s (%s)", op.Method, op.OperationID, code),
+			Message:     message,
+			Description: "This heuristic indicates a state-changing response that may not clearly communicate what changed or what next action is valid.",
+		}
+
+		score := 0
+		if ev.OutcomeSignalCount == 0 {
+			score += 3
+		}
+		if ev.NextActionSignalCount == 0 {
+			score += 3
+		}
+		if ev.AuthoritativeHandoffCount == 0 {
+			score += 2
+		}
+		if ev.StructuralHintCount >= 2 {
+			score += 2
+		}
+		if continuationLikely {
+			score += 2
+		}
+		if code == "202" {
+			score += 1
+		}
+
+		candidates = append(candidates, candidate{issue: issue, score: score})
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		if candidates[i].issue.Path != candidates[j].issue.Path {
+			return candidates[i].issue.Path < candidates[j].issue.Path
+		}
+		return strings.ToLower(candidates[i].issue.Operation) < strings.ToLower(candidates[j].issue.Operation)
+	})
+
+	issues := make([]*model.Issue, 0, len(candidates))
+	for i, cand := range candidates {
+		if i >= weakOutcomeNextActionIssueLimit {
+			break
+		}
+		issues = append(issues, cand.issue)
+	}
+
+	return issues
+}
+
+func NewPrerequisiteTaskBurdenRule() *PrerequisiteTaskBurdenRule {
+	return &PrerequisiteTaskBurdenRule{}
+}
+func (r *PrerequisiteTaskBurdenRule) Name() string { return "prerequisite-task-burden" }
 
 func (r *PrerequisiteTaskBurdenRule) CheckAll(operations []*model.Operation) []*model.Issue {
 	detailParamsByBase := map[string][]string{}
@@ -534,6 +678,356 @@ func isLikelyContractShapeTarget(op *model.Operation) bool {
 type ContractShapeWorkflowGuidanceBurdenRule struct{}
 
 const contractShapeIssueLimit = 20
+
+type DuplicatedStateResponseRule struct{}
+
+const duplicatedStateIssueLimit = 30
+
+type IncidentalInternalFieldExposureRule struct{}
+
+const incidentalFieldIssueLimit = 30
+
+func NewIncidentalInternalFieldExposureRule() *IncidentalInternalFieldExposureRule {
+	return &IncidentalInternalFieldExposureRule{}
+}
+
+func (r *IncidentalInternalFieldExposureRule) Name() string {
+	return "incidental-internal-field-exposure"
+}
+
+func (r *IncidentalInternalFieldExposureRule) CheckAll(operations []*model.Operation) []*model.Issue {
+	type candidate struct {
+		issue *model.Issue
+		score int
+	}
+
+	candidates := make([]candidate, 0)
+	for _, op := range operations {
+		code, schema, ok := successfulJSONResponseSchema(op)
+		if !ok || schema == nil {
+			continue
+		}
+
+		ev := inspectIncidentalInternalFieldEvidence(schema)
+		if !isIncidentalInternalFieldExposure(ev) {
+			continue
+		}
+
+		notable := limitStrings(ev.NotableFieldPaths, 5)
+		reasons := make([]string, 0, 4)
+		reasons = append(reasons, fmt.Sprintf("internal/back-end oriented fields=%d", ev.InternalFieldCount))
+		if ev.VersionLikeCount > 0 || ev.LinkageLikeCount > 0 {
+			reasons = append(reasons, fmt.Sprintf("version/linkage metadata=%d/%d", ev.VersionLikeCount, ev.LinkageLikeCount))
+		}
+		if ev.ScaffoldingCount > 0 {
+			reasons = append(reasons, fmt.Sprintf("translated/customFields/state-machine scaffolding=%d", ev.ScaffoldingCount))
+		}
+		if ev.LowLevelIDCount > 0 {
+			reasons = append(reasons, fmt.Sprintf("low-level identifier metadata=%d", ev.LowLevelIDCount))
+		}
+
+		notablePart := ""
+		if len(notable) > 0 {
+			notablePart = fmt.Sprintf("; notable field paths: %s", strings.Join(notable, ", "))
+		}
+
+		issue := &model.Issue{
+			Code:      r.Name(),
+			Severity:  "warning",
+			Path:      op.Path,
+			Operation: fmt.Sprintf("%s %s (%s)", op.Method, op.OperationID, code),
+			Message: fmt.Sprintf(
+				"Response %s application/json appears to expose incidental/internal fields: %s%s; may leak backend model structure, may increase reading cost without clarifying the workflow outcome, and may weaken task-oriented contract emphasis",
+				code,
+				strings.Join(reasons, ", "),
+				notablePart,
+			),
+			Description: "This heuristic suggests response fields that look backend-oriented or model-scaffolding-heavy rather than directly useful for immediate task handoff.",
+		}
+
+		score := (ev.InternalFieldCount * 3) + (ev.VersionLikeCount * 2) + (ev.LinkageLikeCount * 2) + (ev.ScaffoldingCount * 2) + ev.LowLevelIDCount
+		candidates = append(candidates, candidate{issue: issue, score: score})
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		if candidates[i].issue.Path != candidates[j].issue.Path {
+			return candidates[i].issue.Path < candidates[j].issue.Path
+		}
+		return strings.ToLower(candidates[i].issue.Operation) < strings.ToLower(candidates[j].issue.Operation)
+	})
+
+	issues := make([]*model.Issue, 0, len(candidates))
+	for i, cand := range candidates {
+		if i >= incidentalFieldIssueLimit {
+			break
+		}
+		issues = append(issues, cand.issue)
+	}
+
+	return issues
+}
+
+func NewDuplicatedStateResponseRule() *DuplicatedStateResponseRule {
+	return &DuplicatedStateResponseRule{}
+}
+
+func (r *DuplicatedStateResponseRule) Name() string {
+	return "duplicated-state-response"
+}
+
+func (r *DuplicatedStateResponseRule) CheckAll(operations []*model.Operation) []*model.Issue {
+	type candidate struct {
+		issue *model.Issue
+		score int
+	}
+
+	candidates := make([]candidate, 0)
+	for _, op := range operations {
+		code, schema, ok := successfulJSONResponseSchema(op)
+		if !ok || schema == nil {
+			continue
+		}
+
+		ev := inspectDuplicatedStateEvidence(schema)
+		if !isDuplicatedStateShape(ev) {
+			continue
+		}
+
+		repeatedConcepts := limitStrings(ev.RepeatedConcepts, 4)
+		overlapExamples := limitStrings(ev.OverlapExamples, 3)
+
+		reasons := make([]string, 0, 4)
+		if len(repeatedConcepts) > 0 {
+			reasons = append(reasons, fmt.Sprintf("repeated concepts across branches: %s", strings.Join(repeatedConcepts, ", ")))
+		}
+		if len(overlapExamples) > 0 {
+			reasons = append(reasons, fmt.Sprintf("overlapping branch field groups: %s", strings.Join(overlapExamples, "; ")))
+		}
+		if ev.RepeatedIDLikeFieldCount > 0 {
+			reasons = append(reasons, fmt.Sprintf("repeated identifier/linkage-style fields across branches=%d", ev.RepeatedIDLikeFieldCount))
+		}
+		if len(reasons) == 0 {
+			reasons = append(reasons, "similar branch shapes appear repeated")
+		}
+
+		issue := &model.Issue{
+			Code:      r.Name(),
+			Severity:  "warning",
+			Path:      op.Path,
+			Operation: fmt.Sprintf("%s %s (%s)", op.Method, op.OperationID, code),
+			Message: fmt.Sprintf(
+				"Response %s application/json appears to repeat similar state across branches: %s; may increase reading cost, may duplicate information instead of emphasizing what matters next, and may weaken task-outcome clarity",
+				code,
+				strings.Join(reasons, "; "),
+			),
+			Description: "This heuristic suggests overlapping state exposure across response branches, which can make contracts noisy and reduce focus on the most important task outcome.",
+		}
+
+		score := (len(ev.RepeatedConcepts) * 4) + (len(ev.OverlapExamples) * 3) + (ev.RepeatedIDLikeFieldCount * 2)
+		candidates = append(candidates, candidate{issue: issue, score: score})
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		if candidates[i].issue.Path != candidates[j].issue.Path {
+			return candidates[i].issue.Path < candidates[j].issue.Path
+		}
+		return strings.ToLower(candidates[i].issue.Operation) < strings.ToLower(candidates[j].issue.Operation)
+	})
+
+	issues := make([]*model.Issue, 0, len(candidates))
+	for i, cand := range candidates {
+		if i >= duplicatedStateIssueLimit {
+			break
+		}
+		issues = append(issues, cand.issue)
+	}
+
+	return issues
+}
+
+type DeeplyNestedResponseStructureRule struct{}
+
+const deepNestingIssueLimit = 30
+
+func NewDeeplyNestedResponseStructureRule() *DeeplyNestedResponseStructureRule {
+	return &DeeplyNestedResponseStructureRule{}
+}
+
+func (r *DeeplyNestedResponseStructureRule) Name() string {
+	return "deeply-nested-response-structure"
+}
+
+func (r *DeeplyNestedResponseStructureRule) CheckAll(operations []*model.Operation) []*model.Issue {
+	type candidate struct {
+		issue *model.Issue
+		score int
+	}
+
+	candidates := make([]candidate, 0)
+	for _, op := range operations {
+		code, schema, ok := successfulJSONResponseSchema(op)
+		if !ok || schema == nil {
+			continue
+		}
+
+		ev := inspectDeepNestingEvidence(schema)
+		if !isDeeplyNestedResponseShape(ev) {
+			continue
+		}
+
+		reasons := []string{
+			fmt.Sprintf("max object nesting depth=%d", ev.MaxObjectDepth),
+			fmt.Sprintf("max property path depth=%d", ev.MaxPathDepth),
+			fmt.Sprintf("deep object chains=%d", ev.DeepObjectChainCount),
+		}
+		if ev.NestedArrayObjectCount > 0 {
+			reasons = append(reasons, fmt.Sprintf("nested arrays of objects=%d", ev.NestedArrayObjectCount))
+		}
+
+		notablePaths := limitStrings(ev.DeepPropertyPaths, 4)
+		notablePart := ""
+		if len(notablePaths) > 0 {
+			notablePart = fmt.Sprintf("; notable deep paths: %s", strings.Join(notablePaths, ", "))
+		}
+
+		issue := &model.Issue{
+			Code:      r.Name(),
+			Severity:  "warning",
+			Path:      op.Path,
+			Operation: fmt.Sprintf("%s %s (%s)", op.Method, op.OperationID, code),
+			Message: fmt.Sprintf(
+				"Response %s application/json appears deeply nested: %s%s; may increase reading cost, may hide the important outcome, and may weaken workflow-outcome emphasis",
+				code,
+				strings.Join(reasons, ", "),
+				notablePart,
+			),
+			Description: "This heuristic suggests nested response structure complexity that can make the contract harder to scan and can bury outcome meaning beneath deep object paths.",
+		}
+
+		score := (ev.MaxObjectDepth * 5) + (ev.MaxPathDepth * 3) + (ev.DeepObjectChainCount * 2) + (ev.NestedArrayObjectCount * 2)
+		candidates = append(candidates, candidate{issue: issue, score: score})
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		if candidates[i].issue.Path != candidates[j].issue.Path {
+			return candidates[i].issue.Path < candidates[j].issue.Path
+		}
+		return strings.ToLower(candidates[i].issue.Operation) < strings.ToLower(candidates[j].issue.Operation)
+	})
+
+	issues := make([]*model.Issue, 0, len(candidates))
+	for i, cand := range candidates {
+		if i >= deepNestingIssueLimit {
+			break
+		}
+		issues = append(issues, cand.issue)
+	}
+
+	return issues
+}
+
+type SnapshotHeavyResponseRule struct{}
+
+const snapshotHeavyIssueLimit = 30
+
+func NewSnapshotHeavyResponseRule() *SnapshotHeavyResponseRule {
+	return &SnapshotHeavyResponseRule{}
+}
+
+func (r *SnapshotHeavyResponseRule) Name() string {
+	return "snapshot-heavy-response"
+}
+
+func (r *SnapshotHeavyResponseRule) CheckAll(operations []*model.Operation) []*model.Issue {
+	type candidate struct {
+		issue *model.Issue
+		score int
+	}
+
+	candidates := make([]candidate, 0)
+	for _, op := range operations {
+		if !isLikelyContractShapeTarget(op) {
+			continue
+		}
+
+		code, schema, ok := successfulJSONResponseSchema(op)
+		if !ok || schema == nil {
+			continue
+		}
+
+		stats := inspectSchemaShape(schema, 0)
+		if !isSnapshotHeavyObjectGraph(stats) {
+			continue
+		}
+
+		reasons := make([]string, 0, 5)
+		reasons = append(reasons, fmt.Sprintf("%d top-level fields", stats.TopLevelProperties))
+		reasons = append(reasons, fmt.Sprintf("%d nested object branches", stats.NestedObjectBranches))
+		if stats.ArrayOfObjectBranches > 0 {
+			reasons = append(reasons, fmt.Sprintf("%d arrays of nested objects", stats.ArrayOfObjectBranches))
+		}
+		if stats.EntityLikeNodeCount > 0 {
+			reasons = append(reasons, fmt.Sprintf("%d entity-like substructures", stats.EntityLikeNodeCount))
+		}
+		if stats.IDLikeFieldCount > 0 || stats.VersionLikeFieldCount > 0 || stats.LinkageLikeFieldCount > 0 {
+			reasons = append(reasons, fmt.Sprintf("id/version/linkage fields=%d/%d/%d", stats.IDLikeFieldCount, stats.VersionLikeFieldCount, stats.LinkageLikeFieldCount))
+		}
+
+		notable := limitStrings(stats.NotableBranches, 4)
+		notablePart := ""
+		if len(notable) > 0 {
+			notablePart = fmt.Sprintf("; notable branches: %s", strings.Join(notable, ", "))
+		}
+
+		message := fmt.Sprintf(
+			"Response %s application/json appears snapshot-heavy: %s%s; suggests broad internal object-graph exposure and may increase reading cost while weakening workflow-outcome emphasis",
+			code,
+			strings.Join(reasons, ", "),
+			notablePart,
+		)
+
+		issue := &model.Issue{
+			Code:        r.Name(),
+			Severity:    "warning",
+			Path:        op.Path,
+			Operation:   fmt.Sprintf("%s %s (%s)", op.Method, op.OperationID, code),
+			Message:     message,
+			Description: "This heuristic suggests the response is broad and snapshot-like rather than compact task outcome guidance, which may hide what changed or what matters next.",
+		}
+
+		score := (stats.TopLevelProperties * 2) + stats.TotalProperties + (stats.NestedObjectBranches * 2) + (stats.ArrayOfObjectBranches * 3) + (stats.EntityLikeNodeCount * 2)
+		candidates = append(candidates, candidate{issue: issue, score: score})
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score > candidates[j].score
+		}
+		if candidates[i].issue.Path != candidates[j].issue.Path {
+			return candidates[i].issue.Path < candidates[j].issue.Path
+		}
+		return strings.ToLower(candidates[i].issue.Operation) < strings.ToLower(candidates[j].issue.Operation)
+	})
+
+	issues := make([]*model.Issue, 0, len(candidates))
+	for i, cand := range candidates {
+		if i >= snapshotHeavyIssueLimit {
+			break
+		}
+		issues = append(issues, cand.issue)
+	}
+
+	return issues
+}
 
 func NewContractShapeWorkflowGuidanceBurdenRule() *ContractShapeWorkflowGuidanceBurdenRule {
 	return &ContractShapeWorkflowGuidanceBurdenRule{}
@@ -651,16 +1145,18 @@ func contractShapeSignature(stats schemaShapeStats) string {
 
 type InconsistentResponseShapeRule struct{}
 
-func NewInconsistentResponseShapeRule() *InconsistentResponseShapeRule { return &InconsistentResponseShapeRule{} }
-func (r *InconsistentResponseShapeRule) Name() string                  { return "inconsistent-response-shape" }
+func NewInconsistentResponseShapeRule() *InconsistentResponseShapeRule {
+	return &InconsistentResponseShapeRule{}
+}
+func (r *InconsistentResponseShapeRule) Name() string { return "inconsistent-response-shape" }
 
 func (r *InconsistentResponseShapeRule) CheckAll(operations []*model.Operation) []*model.Issue {
 	type comparable struct {
-		op        *model.Operation
-		code      string
-		shape     string
-		groupKey  string
-		normPath  string
+		op       *model.Operation
+		code     string
+		shape    string
+		groupKey string
+		normPath string
 	}
 
 	groups := map[string][]comparable{}
@@ -1251,6 +1747,52 @@ func isLikelyAcceptedWorkflowSource(op *model.Operation) bool {
 	}
 }
 
+func isLikelyOutcomeGuidanceTarget(op *model.Operation) bool {
+	if op == nil {
+		return false
+	}
+
+	method := strings.ToUpper(op.Method)
+	if method == "POST" && strings.HasSuffix(op.Path, "/search") {
+		return false
+	}
+
+	if method == "POST" || method == "PUT" || method == "PATCH" || method == "DELETE" {
+		return true
+	}
+
+	lowerPath := strings.ToLower(op.Path)
+	lowerID := strings.ToLower(op.OperationID)
+	for _, token := range []string{"_action", "state", "transition", "approve", "capture", "cancel", "finalize", "complete", "confirm", "sync"} {
+		if strings.Contains(lowerPath, token) || strings.Contains(lowerID, token) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isLikelyWorkflowContinuation(op *model.Operation) bool {
+	if op == nil {
+		return false
+	}
+
+	if _, ok := actionTransitionDetailPath(op); ok {
+		return true
+	}
+
+	lowerPath := strings.ToLower(op.Path)
+	lowerID := strings.ToLower(op.OperationID)
+	for _, token := range []string{"next", "follow", "state", "transition", "approve", "capture", "cancel", "finalize", "complete", "confirm", "sync", "authorize", "payment", "order"} {
+		if strings.Contains(lowerPath, token) || strings.Contains(lowerID, token) {
+			return true
+		}
+	}
+
+	method := strings.ToUpper(op.Method)
+	return (method == "POST" || method == "PATCH" || method == "PUT") && strings.Contains(op.Path, "{")
+}
+
 func successfulJSONResponseSchema(op *model.Operation) (string, *model.Schema, bool) {
 	if op == nil {
 		return "", nil, false
@@ -1478,6 +2020,13 @@ func appendUnique(values []string, value string) []string {
 		}
 	}
 	return append(values, value)
+}
+
+func limitStrings(values []string, limit int) []string {
+	if len(values) <= limit {
+		return values
+	}
+	return values[:limit]
 }
 
 func listDetailLinkageReason(schema *model.Schema) (string, bool) {
@@ -1770,14 +2319,21 @@ func isIdentifierLikeField(name string) bool {
 }
 
 type schemaShapeStats struct {
-	TopLevelProperties  int
-	TotalProperties     int
-	ObjectNodes         int
-	ArrayNodes          int
-	MaxDepth            int
-	InternalLookingCount int
-	OutcomeHintCount    int
-	StructuralHintCount int
+	TopLevelProperties    int
+	TotalProperties       int
+	ObjectNodes           int
+	ArrayNodes            int
+	MaxDepth              int
+	InternalLookingCount  int
+	OutcomeHintCount      int
+	StructuralHintCount   int
+	NestedObjectBranches  int
+	ArrayOfObjectBranches int
+	EntityLikeNodeCount   int
+	IDLikeFieldCount      int
+	VersionLikeFieldCount int
+	LinkageLikeFieldCount int
+	NotableBranches       []string
 }
 
 func inspectSchemaShape(schema *model.Schema, depth int) schemaShapeStats {
@@ -1814,6 +2370,15 @@ func collectSchemaShapeStats(schema *model.Schema, depth int, topLevel bool, sta
 
 	for name, child := range schema.Properties {
 		stats.TotalProperties++
+		if isIDLikeShapeField(name) {
+			stats.IDLikeFieldCount++
+		}
+		if isVersionLikeShapeField(name) {
+			stats.VersionLikeFieldCount++
+		}
+		if isLinkageLikeShapeField(name) {
+			stats.LinkageLikeFieldCount++
+		}
 		if isInternalLookingField(name) {
 			stats.InternalLookingCount++
 		}
@@ -1823,8 +2388,720 @@ func collectSchemaShapeStats(schema *model.Schema, depth int, topLevel bool, sta
 		if isStorageStructuralHintField(name) {
 			stats.StructuralHintCount++
 		}
+		if child != nil {
+			if child.Type == "object" && len(child.Properties) > 0 {
+				stats.NestedObjectBranches++
+				if topLevel && isLikelyEntityBranchName(name) {
+					stats.NotableBranches = appendUnique(stats.NotableBranches, name)
+				}
+			}
+			if child.Type == "array" && child.Items != nil && (child.Items.Type == "object" || len(child.Items.Properties) > 0) {
+				stats.ArrayOfObjectBranches++
+				if topLevel {
+					stats.NotableBranches = appendUnique(stats.NotableBranches, name)
+				}
+			}
+			if looksEntityLikeNode(child) {
+				stats.EntityLikeNodeCount++
+				if topLevel {
+					stats.NotableBranches = appendUnique(stats.NotableBranches, name)
+				}
+			}
+		}
 		collectSchemaShapeStats(child, depth+1, false, stats)
 	}
+}
+
+func isSnapshotHeavyObjectGraph(stats schemaShapeStats) bool {
+	signals := 0
+	if stats.TopLevelProperties >= 10 {
+		signals++
+	}
+	if stats.TotalProperties >= 28 {
+		signals++
+	}
+	if stats.NestedObjectBranches >= 5 {
+		signals++
+	}
+	if stats.ArrayOfObjectBranches >= 2 {
+		signals++
+	}
+	if stats.EntityLikeNodeCount >= 5 {
+		signals++
+	}
+	if stats.IDLikeFieldCount >= 8 || (stats.IDLikeFieldCount >= 5 && stats.VersionLikeFieldCount >= 2) {
+		signals++
+	}
+	if stats.LinkageLikeFieldCount >= 4 {
+		signals++
+	}
+
+	// Require broad graph-style exposure, not just deep nesting.
+	hasBroadShape := stats.TopLevelProperties >= 8 || stats.NestedObjectBranches >= 4 || stats.ArrayOfObjectBranches >= 2 || stats.TotalProperties >= 24
+	return signals >= 2 && hasBroadShape
+}
+
+type deepNestingEvidence struct {
+	MaxObjectDepth         int
+	MaxPathDepth           int
+	DeepObjectChainCount   int
+	NestedArrayObjectCount int
+	DeepPropertyPaths      []string
+}
+
+type duplicatedStateEvidence struct {
+	RepeatedConcepts         []string
+	OverlapExamples          []string
+	RepeatedIDLikeFieldCount int
+}
+
+type incidentalInternalFieldEvidence struct {
+	InternalFieldCount int
+	VersionLikeCount   int
+	LinkageLikeCount   int
+	ScaffoldingCount   int
+	LowLevelIDCount    int
+	NotableFieldPaths  []string
+}
+
+type weakOutcomeGuidanceEvidence struct {
+	TotalPropertyCount        int
+	TopLevelFieldCount        int
+	StructuralHintCount       int
+	OutcomeSignalCount        int
+	NextActionSignalCount     int
+	AuthoritativeHandoffCount int
+	TopLevelFields            []string
+	NotableFieldPaths         []string
+}
+
+type responseBranchShape struct {
+	Path         string
+	FieldSet     map[string]bool
+	ConceptSet   map[string]bool
+	IDLikeFields map[string]bool
+}
+
+func inspectDuplicatedStateEvidence(schema *model.Schema) duplicatedStateEvidence {
+	branches := collectResponseBranchShapes(schema)
+	if len(branches) < 2 {
+		return duplicatedStateEvidence{}
+	}
+
+	conceptBranchCount := map[string]int{}
+	idFieldBranchCount := map[string]int{}
+	overlapExamples := make([]string, 0)
+
+	for _, branch := range branches {
+		for concept := range branch.ConceptSet {
+			conceptBranchCount[concept]++
+		}
+		for idField := range branch.IDLikeFields {
+			idFieldBranchCount[idField]++
+		}
+	}
+
+	for i := 0; i < len(branches); i++ {
+		for j := i + 1; j < len(branches); j++ {
+			shared := sharedFieldNames(branches[i].FieldSet, branches[j].FieldSet)
+			if len(shared) >= 2 {
+				overlap := fmt.Sprintf("%s <-> %s (shared: %s)", branches[i].Path, branches[j].Path, strings.Join(limitStrings(shared, 3), ", "))
+				overlapExamples = appendUnique(overlapExamples, overlap)
+			}
+		}
+	}
+
+	repeatedConcepts := make([]string, 0)
+	for concept, count := range conceptBranchCount {
+		if count >= 2 {
+			repeatedConcepts = append(repeatedConcepts, concept)
+		}
+	}
+	sort.Strings(repeatedConcepts)
+
+	repeatedIDLikeFieldCount := 0
+	for _, count := range idFieldBranchCount {
+		if count >= 2 {
+			repeatedIDLikeFieldCount++
+		}
+	}
+
+	sort.Strings(overlapExamples)
+
+	return duplicatedStateEvidence{
+		RepeatedConcepts:         repeatedConcepts,
+		OverlapExamples:          overlapExamples,
+		RepeatedIDLikeFieldCount: repeatedIDLikeFieldCount,
+	}
+}
+
+func isDuplicatedStateShape(ev duplicatedStateEvidence) bool {
+	signals := 0
+	if len(ev.RepeatedConcepts) >= 2 {
+		signals++
+	}
+	if len(ev.OverlapExamples) >= 1 {
+		signals++
+	}
+	if len(ev.OverlapExamples) >= 2 {
+		signals++
+	}
+	if ev.RepeatedIDLikeFieldCount >= 2 {
+		signals++
+	}
+
+	return signals >= 2
+}
+
+func inspectIncidentalInternalFieldEvidence(schema *model.Schema) incidentalInternalFieldEvidence {
+	ev := incidentalInternalFieldEvidence{}
+	collectIncidentalInternalFieldEvidence(schema, nil, &ev)
+	return ev
+}
+
+func collectIncidentalInternalFieldEvidence(schema *model.Schema, path []string, ev *incidentalInternalFieldEvidence) {
+	if schema == nil || ev == nil || len(path) > 10 {
+		return
+	}
+
+	if schema.Ref != "" && len(schema.Properties) == 0 && schema.Items == nil && schema.Type == "" {
+		return
+	}
+
+	if schema.Type == "array" {
+		collectIncidentalInternalFieldEvidence(schema.Items, append(path, "[]"), ev)
+		return
+	}
+
+	if schema.Type != "object" && len(schema.Properties) == 0 {
+		return
+	}
+
+	for name, child := range schema.Properties {
+		nextPath := append(path, name)
+		pathStr := strings.Join(nextPath, ".")
+		lower := strings.ToLower(strings.TrimSpace(name))
+
+		if isInternalLookingField(lower) || isIncidentalInternalFieldName(lower) {
+			ev.InternalFieldCount++
+			ev.NotableFieldPaths = appendUnique(ev.NotableFieldPaths, pathStr)
+		}
+		if isVersionLikeShapeField(lower) {
+			ev.VersionLikeCount++
+			ev.NotableFieldPaths = appendUnique(ev.NotableFieldPaths, pathStr)
+		}
+		if isLinkageLikeShapeField(lower) {
+			ev.LinkageLikeCount++
+			ev.NotableFieldPaths = appendUnique(ev.NotableFieldPaths, pathStr)
+		}
+		if isScaffoldingFieldName(lower) {
+			ev.ScaffoldingCount++
+			ev.NotableFieldPaths = appendUnique(ev.NotableFieldPaths, pathStr)
+		}
+		if isLowLevelIDField(lower) {
+			ev.LowLevelIDCount++
+			ev.NotableFieldPaths = appendUnique(ev.NotableFieldPaths, pathStr)
+		}
+
+		collectIncidentalInternalFieldEvidence(child, nextPath, ev)
+	}
+}
+
+func isIncidentalInternalFieldExposure(ev incidentalInternalFieldEvidence) bool {
+	signals := 0
+	if ev.InternalFieldCount >= 4 {
+		signals++
+	}
+	if ev.VersionLikeCount >= 2 {
+		signals++
+	}
+	if ev.LinkageLikeCount >= 2 {
+		signals++
+	}
+	if ev.ScaffoldingCount >= 1 {
+		signals++
+	}
+	if ev.LowLevelIDCount >= 3 {
+		signals++
+	}
+
+	return signals >= 2
+}
+
+func inspectWeakOutcomeGuidanceEvidence(schema *model.Schema) weakOutcomeGuidanceEvidence {
+	ev := weakOutcomeGuidanceEvidence{}
+	collectWeakOutcomeGuidanceEvidence(schema, nil, 0, true, &ev)
+	return ev
+}
+
+func collectWeakOutcomeGuidanceEvidence(schema *model.Schema, path []string, depth int, topLevel bool, ev *weakOutcomeGuidanceEvidence) {
+	if schema == nil || ev == nil || depth > 6 {
+		return
+	}
+
+	if schema.Ref != "" && len(schema.Properties) == 0 && schema.Items == nil && schema.Type == "" {
+		return
+	}
+
+	if schema.Type == "array" {
+		collectWeakOutcomeGuidanceEvidence(schema.Items, append(path, "[]"), depth+1, topLevel, ev)
+		return
+	}
+
+	if schema.Type != "object" && len(schema.Properties) == 0 {
+		return
+	}
+
+	for name, child := range schema.Properties {
+		nextPath := append(path, name)
+		pathStr := strings.Join(nextPath, ".")
+		lower := strings.ToLower(strings.TrimSpace(name))
+
+		ev.TotalPropertyCount++
+		if topLevel {
+			ev.TopLevelFieldCount++
+			ev.TopLevelFields = appendUnique(ev.TopLevelFields, name)
+		}
+
+		if isStorageStructuralHintField(lower) {
+			ev.StructuralHintCount++
+			ev.NotableFieldPaths = appendUnique(ev.NotableFieldPaths, pathStr)
+		}
+		if isOutcomeSignalField(lower) {
+			ev.OutcomeSignalCount++
+			ev.NotableFieldPaths = appendUnique(ev.NotableFieldPaths, pathStr)
+		}
+		if isNextActionGuidanceField(lower) {
+			ev.NextActionSignalCount++
+			ev.NotableFieldPaths = appendUnique(ev.NotableFieldPaths, pathStr)
+		}
+		if isAuthoritativeHandoffField(lower) {
+			ev.AuthoritativeHandoffCount++
+			ev.NotableFieldPaths = appendUnique(ev.NotableFieldPaths, pathStr)
+		}
+
+		collectWeakOutcomeGuidanceEvidence(child, nextPath, depth+1, false, ev)
+	}
+}
+
+func isWeakOutcomeNextActionGuidance(ev weakOutcomeGuidanceEvidence, continuationLikely bool, responseCode string) bool {
+	if ev.TopLevelFieldCount == 0 {
+		return false
+	}
+
+	missingOutcome := ev.OutcomeSignalCount == 0
+	missingNext := ev.NextActionSignalCount == 0
+	missingHandoff := ev.AuthoritativeHandoffCount == 0
+
+	signals := 0
+	if missingOutcome {
+		signals++
+	}
+	if missingNext {
+		signals++
+	}
+	if missingHandoff {
+		signals++
+	}
+	if ev.StructuralHintCount >= 2 && missingOutcome {
+		signals++
+	}
+	if ev.TotalPropertyCount >= 8 && missingOutcome && missingNext {
+		signals++
+	}
+	if continuationLikely && (missingNext || missingHandoff) {
+		signals++
+	}
+	if responseCode == "202" && missingHandoff {
+		signals++
+	}
+
+	return signals >= 3 && (missingOutcome || missingNext) && missingHandoff
+}
+
+func isOutcomeSignalField(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	for _, exact := range []string{"success", "status", "state", "result", "outcome", "changed", "updated", "applied", "completed", "done"} {
+		if lower == exact {
+			return true
+		}
+	}
+	return strings.HasSuffix(lower, "status") || strings.HasSuffix(lower, "state") || strings.HasSuffix(lower, "outcome")
+}
+
+func isNextActionGuidanceField(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	for _, exact := range []string{"nextaction", "nextactions", "nextstep", "followup", "followupaction", "actionrequired", "requiresaction", "pollurl", "retryafter", "cancontinue"} {
+		if lower == exact {
+			return true
+		}
+	}
+	return strings.Contains(lower, "next") || strings.Contains(lower, "follow")
+}
+
+func isAuthoritativeHandoffField(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	for _, exact := range []string{"id", "token", "contexttoken", "trackingid", "jobid", "taskid", "operationid", "resourceid", "url", "href", "location", "correlationid"} {
+		if lower == exact {
+			return true
+		}
+	}
+	if strings.HasSuffix(lower, "id") {
+		return true
+	}
+	return strings.Contains(lower, "token")
+}
+
+func isIncidentalInternalFieldName(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	for _, exact := range []string{
+		"createdat", "updatedat", "createdbyid", "updatedbyid", "deletedat", "deleted",
+		"stateid", "statemachinestate", "statemachinestateid", "internalstate", "lifecycle",
+		"translationcodeid", "translated", "translations", "customfields",
+		"technicalname", "internal", "metadata",
+	} {
+		if lower == exact {
+			return true
+		}
+	}
+	return false
+}
+
+func isScaffoldingFieldName(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	return lower == "translated" || lower == "translations" || lower == "customfields" || lower == "statemachinestate" || lower == "statemachinestateid"
+}
+
+func isLowLevelIDField(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "id" {
+		return false
+	}
+	if strings.HasSuffix(lower, "id") {
+		for _, frag := range []string{"version", "state", "reference", "parent", "createdby", "updatedby", "billing", "shipping", "address", "order", "customer", "payment", "transaction"} {
+			if strings.Contains(lower, frag) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func collectResponseBranchShapes(schema *model.Schema) []responseBranchShape {
+	if schema == nil {
+		return nil
+	}
+
+	root := schema
+	if root.Type == "array" {
+		root = root.Items
+	}
+	if root == nil || (root.Type != "object" && len(root.Properties) == 0) {
+		return nil
+	}
+
+	branches := make([]responseBranchShape, 0)
+	for name, child := range root.Properties {
+		appendBranchShape(name, child, &branches)
+		if isWrapperBranchName(name) {
+			for nestedName, nestedChild := range objectProperties(nestedObjectSchema(child)) {
+				appendBranchShape(name+"."+nestedName, nestedChild, &branches)
+			}
+		}
+	}
+
+	return branches
+}
+
+func appendBranchShape(path string, schema *model.Schema, out *[]responseBranchShape) {
+	obj := nestedObjectSchema(schema)
+	if obj == nil || len(obj.Properties) < 2 {
+		return
+	}
+
+	fields := map[string]bool{}
+	concepts := map[string]bool{}
+	idFields := map[string]bool{}
+
+	for _, token := range strings.Split(strings.ToLower(path), ".") {
+		for _, concept := range inferStateConcepts(token) {
+			concepts[concept] = true
+		}
+	}
+
+	for name := range obj.Properties {
+		lower := strings.ToLower(name)
+		fields[lower] = true
+		for _, concept := range inferStateConcepts(lower) {
+			concepts[concept] = true
+		}
+		if isIDLikeShapeField(lower) || isLinkageLikeShapeField(lower) {
+			idFields[lower] = true
+		}
+	}
+
+	*out = append(*out, responseBranchShape{
+		Path:         path,
+		FieldSet:     fields,
+		ConceptSet:   concepts,
+		IDLikeFields: idFields,
+	})
+}
+
+func nestedObjectSchema(schema *model.Schema) *model.Schema {
+	if schema == nil {
+		return nil
+	}
+	if schema.Type == "array" {
+		if schema.Items != nil && (schema.Items.Type == "object" || len(schema.Items.Properties) > 0) {
+			return schema.Items
+		}
+		return nil
+	}
+	if schema.Type == "object" || len(schema.Properties) > 0 {
+		return schema
+	}
+	return nil
+}
+
+func objectProperties(schema *model.Schema) map[string]*model.Schema {
+	if schema == nil {
+		return map[string]*model.Schema{}
+	}
+	return schema.Properties
+}
+
+func isWrapperBranchName(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	switch lower {
+	case "data", "result", "payload", "response", "body", "entity":
+		return true
+	default:
+		return false
+	}
+}
+
+func inferStateConcepts(token string) []string {
+	t := strings.ToLower(strings.TrimSpace(token))
+	if t == "" {
+		return nil
+	}
+
+	out := make([]string, 0, 4)
+	add := func(concept string) {
+		if !containsString(out, concept) {
+			out = append(out, concept)
+		}
+	}
+
+	if strings.Contains(t, "customer") {
+		add("customer")
+	}
+	if strings.Contains(t, "address") || strings.Contains(t, "billing") || strings.Contains(t, "shipping") {
+		add("address")
+	}
+	if strings.Contains(t, "payment") || strings.Contains(t, "transaction") {
+		add("payment")
+	}
+	if strings.Contains(t, "state") || strings.Contains(t, "status") {
+		add("state")
+	}
+	if strings.Contains(t, "delivery") || strings.Contains(t, "shipment") {
+		add("delivery")
+	}
+	if strings.Contains(t, "order") {
+		add("order")
+	}
+
+	return out
+}
+
+func sharedFieldNames(a map[string]bool, b map[string]bool) []string {
+	shared := make([]string, 0)
+	for name := range a {
+		if b[name] {
+			shared = append(shared, name)
+		}
+	}
+	sort.Strings(shared)
+	return shared
+}
+
+func containsString(values []string, value string) bool {
+	for _, v := range values {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
+func inspectDeepNestingEvidence(schema *model.Schema) deepNestingEvidence {
+	ev := deepNestingEvidence{}
+	collectDeepNestingEvidence(schema, 0, 0, nil, &ev)
+	return ev
+}
+
+func collectDeepNestingEvidence(schema *model.Schema, objectDepth int, pathDepth int, path []string, ev *deepNestingEvidence) {
+	if schema == nil || ev == nil || pathDepth > 14 {
+		return
+	}
+
+	if schema.Ref != "" && len(schema.Properties) == 0 && schema.Items == nil && schema.Type == "" {
+		return
+	}
+
+	if schema.Type == "array" {
+		if schema.Items != nil && (schema.Items.Type == "object" || len(schema.Items.Properties) > 0) {
+			ev.NestedArrayObjectCount++
+		}
+		collectDeepNestingEvidence(schema.Items, objectDepth, pathDepth+1, append(path, "[]"), ev)
+		return
+	}
+
+	if schema.Type != "object" && len(schema.Properties) == 0 {
+		if pathDepth > ev.MaxPathDepth {
+			ev.MaxPathDepth = pathDepth
+		}
+		if pathDepth >= 5 && len(path) > 0 {
+			ev.DeepPropertyPaths = appendUnique(ev.DeepPropertyPaths, strings.Join(path, "."))
+		}
+		return
+	}
+
+	objectDepth++
+	if objectDepth > ev.MaxObjectDepth {
+		ev.MaxObjectDepth = objectDepth
+	}
+	if objectDepth >= 4 {
+		ev.DeepObjectChainCount++
+	}
+
+	if len(schema.Properties) == 0 {
+		if pathDepth > ev.MaxPathDepth {
+			ev.MaxPathDepth = pathDepth
+		}
+		if pathDepth >= 5 && len(path) > 0 {
+			ev.DeepPropertyPaths = appendUnique(ev.DeepPropertyPaths, strings.Join(path, "."))
+		}
+		return
+	}
+
+	for name, child := range schema.Properties {
+		nextPath := append(path, name)
+		nextPathDepth := pathDepth + 1
+		if nextPathDepth > ev.MaxPathDepth {
+			ev.MaxPathDepth = nextPathDepth
+		}
+		if nextPathDepth >= 5 {
+			ev.DeepPropertyPaths = appendUnique(ev.DeepPropertyPaths, strings.Join(nextPath, "."))
+		}
+		collectDeepNestingEvidence(child, objectDepth, nextPathDepth, nextPath, ev)
+	}
+}
+
+func isDeeplyNestedResponseShape(ev deepNestingEvidence) bool {
+	signals := 0
+	if ev.MaxObjectDepth >= 5 {
+		signals++
+	}
+	if ev.MaxPathDepth >= 6 {
+		signals++
+	}
+	if ev.DeepObjectChainCount >= 4 {
+		signals++
+	}
+	if ev.NestedArrayObjectCount >= 2 {
+		signals++
+	}
+	if len(ev.DeepPropertyPaths) >= 3 {
+		signals++
+	}
+
+	// Require actual depth/path pressure so broad-but-shallow responses do not trip this detector.
+	hasDepthPressure := ev.MaxObjectDepth >= 4 && ev.MaxPathDepth >= 5
+	return signals >= 2 && hasDepthPressure
+}
+
+func isIDLikeShapeField(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "id" {
+		return true
+	}
+	if strings.HasSuffix(lower, "id") || strings.HasSuffix(lower, "ids") {
+		return true
+	}
+	return strings.Contains(lower, "identifier")
+}
+
+func isVersionLikeShapeField(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if strings.Contains(lower, "version") {
+		return true
+	}
+	return strings.HasSuffix(lower, "revision") || strings.HasSuffix(lower, "revisionid")
+}
+
+func isLinkageLikeShapeField(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "parentid" || strings.HasPrefix(lower, "parent") {
+		return true
+	}
+	if strings.Contains(lower, "link") || strings.Contains(lower, "relationship") || strings.Contains(lower, "reference") {
+		return true
+	}
+	return strings.Contains(lower, "state") && strings.HasSuffix(lower, "id")
+}
+
+func isLikelyEntityBranchName(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	if lower == "" {
+		return false
+	}
+	for _, exact := range []string{"customer", "order", "delivery", "transaction", "payment", "address", "state", "version", "versions", "relationships", "included", "lineitems", "items", "records"} {
+		if lower == exact {
+			return true
+		}
+	}
+	return strings.HasSuffix(lower, "s") && len(lower) > 3
+}
+
+func looksEntityLikeNode(schema *model.Schema) bool {
+	if schema == nil {
+		return false
+	}
+	if schema.Type == "array" {
+		schema = schema.Items
+	}
+	if schema == nil || schema.Type != "object" || len(schema.Properties) < 2 {
+		return false
+	}
+	idLike := 0
+	structural := 0
+	for name, child := range schema.Properties {
+		if isIDLikeShapeField(name) || isVersionLikeShapeField(name) {
+			idLike++
+		}
+		if isStorageStructuralHintField(name) || isLinkageLikeShapeField(name) {
+			structural++
+		}
+		if child != nil && child.Type == "object" {
+			structural++
+		}
+	}
+	return idLike >= 1 && structural >= 1
 }
 
 func isSnapshotHeavyShape(stats schemaShapeStats) bool {

@@ -50,6 +50,15 @@ type Issue struct {
 	Operation   string
 	Message     string
 	Description string
+
+	// Spec-rule grounding — populated only for findings that are anchored to an
+	// explicit OpenAPI normative statement (MUST / REQUIRED / SHOULD / SHOULD NOT).
+	// Heuristic burden findings leave these zero-valued.
+	EvidenceType   string // "spec-rule" when set; empty for heuristic findings
+	SpecRuleID     string // stable internal ID, e.g. "OAS-RESPONSE-DESCRIPTION-REQUIRED"
+	NormativeLevel string // "REQUIRED", "MUST", "SHOULD", "SHOULD NOT", "RECOMMENDED"
+	SpecSource     string // OAS object area, e.g. "Response Object"
+	SpecLocation   string // where in this API the issue was found, e.g. "200 response at GET /orders"
 }
 
 // AnalysisResult contains the analysis results

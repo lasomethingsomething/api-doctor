@@ -1,0 +1,64 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Incidental Internal Field Exposure",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/orders/{id}/ack": {
+      "post": {
+        "operationId": "ackOrderWithInternalFields",
+        "responses": {
+          "200": {
+            "description": "Compact but internal-field heavy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string"},
+                    "status": {"type": "string"},
+                    "nextAction": {"type": "string"},
+                    "versionId": {"type": "string"},
+                    "createdById": {"type": "string"},
+                    "updatedById": {"type": "string"},
+                    "stateMachineState": {"type": "string"},
+                    "stateMachineStateId": {"type": "string"},
+                    "customFields": {
+                      "type": "object",
+                      "properties": {
+                        "internalTag": {"type": "string"}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}/cancel": {
+      "post": {
+        "operationId": "cancelOrderCompactOutcome",
+        "responses": {
+          "200": {
+            "description": "Task outcome response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {"type": "boolean"},
+                    "status": {"type": "string"},
+                    "nextAction": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

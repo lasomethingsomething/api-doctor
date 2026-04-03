@@ -1,0 +1,131 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Snapshot Heavy Response Detection",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/orders/{id}/sync": {
+      "post": {
+        "operationId": "syncOrderSnapshot",
+        "responses": {
+          "200": {
+            "description": "Broad object graph response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string"},
+                    "versionId": {"type": "string"},
+                    "customer": {
+                      "type": "object",
+                      "properties": {
+                        "id": {"type": "string"},
+                        "defaultAddressId": {"type": "string"},
+                        "group": {"type": "string"}
+                      }
+                    },
+                    "addresses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {"type": "string"},
+                          "countryId": {"type": "string"},
+                          "versionId": {"type": "string"}
+                        }
+                      }
+                    },
+                    "deliveries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {"type": "string"},
+                          "stateId": {"type": "string"},
+                          "trackingCode": {"type": "string"}
+                        }
+                      }
+                    },
+                    "transactions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {"type": "string"},
+                          "paymentMethodId": {"type": "string"},
+                          "stateId": {"type": "string"}
+                        }
+                      }
+                    },
+                    "lineItems": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {"type": "string"},
+                          "productId": {"type": "string"},
+                          "versionId": {"type": "string"}
+                        }
+                      }
+                    },
+                    "state": {
+                      "type": "object",
+                      "properties": {
+                        "stateId": {"type": "string"},
+                        "versionId": {"type": "string"}
+                      }
+                    },
+                    "versions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {"type": "string"},
+                          "versionId": {"type": "string"}
+                        }
+                      }
+                    },
+                    "relationships": {
+                      "type": "object",
+                      "properties": {
+                        "linkedOrderIds": {
+                          "type": "array",
+                          "items": {"type": "string"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{id}/cancel": {
+      "post": {
+        "operationId": "cancelOrderCompact",
+        "responses": {
+          "200": {
+            "description": "Task outcome response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {"type": "boolean"},
+                    "status": {"type": "string"},
+                    "nextAction": {"type": "string"},
+                    "contextToken": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -72,6 +72,14 @@ type FindingDetail struct {
 	Operation   string `json:"operation"`
 	Message     string `json:"message"`
 	Impact      string `json:"impact"`
+
+	// Spec-rule grounding — present only when EvidenceType is "spec-rule".
+	// Heuristic burden findings omit these fields entirely (omitempty).
+	EvidenceType   string `json:"evidenceType,omitempty"`
+	SpecRuleID     string `json:"specRuleId,omitempty"`
+	NormativeLevel string `json:"normativeLevel,omitempty"`
+	SpecSource     string `json:"specSource,omitempty"`
+	SpecLocation   string `json:"specLocation,omitempty"`
 }
 
 type WorkflowSection struct {
