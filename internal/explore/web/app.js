@@ -903,10 +903,16 @@
     var burden = state.filters.burden;
     var topSignals = topFamilyBurdenSignals(family, burden, 2);
     if (burden === 'workflow-burden') {
-      if (topSignals.length) {
-        return topSignals.map(function(s) { return humanizeSignalLabel(s); }).join(' and ') + ' patterns.';
-      }
-      return 'Potential workflow sequencing or follow-up linkage issues.';
+      var dominant = topSignals[0] || '';
+      var secondary = topSignals[1] ? ' Also: ' + humanizeSignalLabel(topSignals[1]) + '.' : '';
+      var workflowSentences = {
+        'hidden token/context handoff appears likely': 'Hidden token/context requirements across call chain.',
+        'next step not clearly exposed': 'Next-step requirements or identifiers not clearly exposed.',
+        'sequencing appears brittle': 'Call sequence depends on tracking implicit prior state.',
+        'auth/header burden spread across steps': 'Auth/header context spread unevenly across steps.'
+      };
+      var lead = workflowSentences[dominant] || 'Potential workflow sequencing or follow-up linkage issues.';
+      return lead + secondary;
     }
     if (burden === 'contract-shape') {
       var dominant = topSignals[0] || '';
@@ -2065,7 +2071,11 @@
       'response appears snapshot-heavy': 'snapshot-heavy',
       'deep nesting appears likely': 'deep nesting',
       'duplicated state appears likely': 'duplicated state',
-      'incidental/internal fields appear to dominate': 'internal fields'
+      'incidental/internal fields appear to dominate': 'internal fields',
+      'hidden token/context handoff appears likely': 'hidden handoff',
+      'next step not clearly exposed': 'unclear next-step',
+      'sequencing appears brittle': 'brittle sequencing',
+      'auth/header burden spread across steps': 'auth/header spread'
     };
     return map[signal] || signal.replaceAll('-', ' ');
   }
