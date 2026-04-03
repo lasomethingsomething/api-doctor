@@ -1,71 +1,14 @@
 # api-doctor
 
-api-doctor is a local command-line helper for reviewing Shopware Admin API OpenAPI specs from an integration-risk perspective. It focuses on what tends to slow teams down in real API workflows:
+api-doctor analyzes the Shopware Admin API OpenAPI spec for workflow burden, contract shape, consistency drift, and change risk, then helps you inspect concrete evidence in a local Explorer UI.
 
-- workflow burden (how hard common call sequences are to follow)
-- contract-shape burden (responses that are hard to use as next-step input)
-- consistency outliers (naming/shape drift across related endpoints)
-- breaking-change risk between spec versions
+## Quick start
 
-It is deterministic and local-only.
-
-- No network calls
-- No AI calls
-- Spec-only analysis; it does not observe live runtime behavior
-
-## What this is (and is not)
-
-api-doctor is not primarily a generic API linter.
-
-It is a workflow burden and contract-shape analyzer for improving the Shopware Admin API toward JSON/OpenAPI as the source of truth.
-
-What it is strongest at today:
-
-- contract trustworthiness
-- workflow burden
-- contract shape
-- consistency drift
-- deterministic fix-first prioritization
-- spec-version diff change risk
-
-What it is not:
-
-- runtime traffic analysis
-- production behavior tracing
-- a replacement for real runtime validation
-
-## What problem this helps solve
-
-When API specs grow, it gets hard to spot workflow friction, contract drift, and change risk by eye.
-
-api-doctor helps you quickly answer:
-
-- Where do endpoint contracts create workflow burden?
-- Which areas have contract-shape and consistency outliers?
-- Did a new spec version introduce breaking-change risk?
-
-## Current scope (important)
-
-Current validated scope is intentionally narrow:
-
-- Primary target today is Shopware Admin API OpenAPI spec
-- Included in that scope are Admin API action routes
-- Broader API support should not be assumed unless validated in this repository
-- Store API support is not provided yet
-
-## Prerequisites
-
+Prerequisites:
 - Go 1.21+
-- A local Shopware Admin API OpenAPI spec file in JSON format
+- A local Shopware Admin API spec JSON file (example: ./adminapi.json)
 
-## Install
-
-Important for local development:
-
-- Commands like `go run . ...`, `go build ./...`, and `go test ./...` must be run from the project root directory (the folder that contains `go.mod`).
-- If you run them from another directory (for example `~`), they will fail because Go cannot find this module.
-
-Build and verify locally:
+From the repo root:
 
 ```sh
 go mod tidy
@@ -73,19 +16,91 @@ go build ./...
 go test ./...
 ```
 
-Optional: install the binary in your Go bin path:
+Run a first analysis:
 
 ```sh
-go install .
+go run . analyze --spec ./adminapi.json
 ```
 
-## Local Developer Workflows
+## Open the Explorer (primary interactive surface)
 
-You can use api-doctor locally in two simple ways while developing.
+Launch:
 
-### 1) Run from the repo root
+```sh
+go run . explore --spec ./adminapi.json
+```
 
-Use this when iterating quickly on code changes:
+Optional diff context:
+
+```sh
+go run . explore --spec ./adminapi.json --base ./adminapi-v1.json --head ./adminapi-v2.json
+```
+
+How to use it quickly:
+1. Start with the top actions to choose a burden lens.
+2. Use the Family investigation clusters section as the primary entry point.
+3. Click workflow steps or endpoint rows to inspect grouped issue evidence.
+4. Use OpenAPI grounding and inspect-first hints in detail before editing the spec.
+
+## Common commands
+
+```sh
+go run . analyze --spec ./adminapi.json
+go run . workflows --spec ./adminapi.json
+go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json
+go run . explore --spec ./adminapi.json
+go run . tui --spec ./adminapi.json
+```
+
+Command roles:
+- analyze: one-spec burden and contract review with fix-first summaries
+- workflows: inferred single-step and multi-step call chains
+- diff: breaking-change risk between two spec versions
+- explore: primary browser-based triage and evidence drill-down
+- tui: secondary read-only terminal triage
+
+## Main surfaces
+
+- CLI engine (canonical): analyze, workflows, diff, and machine-readable output
+- Explorer (primary): interactive family/workflow/endpoint evidence inspection
+- TUI (secondary): compact terminal triage over the same deterministic data
+
+## What api-doctor helps you find
+
+- Workflow burden: where call chains hide next-step requirements
+- Contract shape burden: where responses are too generic or storage-shaped
+- Consistency drift: where related endpoints diverge in naming/path/shape
+- Change risk: where spec-to-spec changes can break clients
+- Fix-first priorities: deterministic starting points for remediation
+
+## What this is (and is not)
+
+api-doctor is not primarily a generic linting tool or docs browser.
+
+It is a deterministic, spec-only analyzer for improving the Shopware Admin API toward JSON/OpenAPI as the source of truth.
+
+What it is not:
+- Runtime traffic analysis
+- Production behavior tracing
+- A replacement for runtime validation and integration tests
+
+## Evidence boundaries (important)
+
+- Local-only: no network calls, no AI calls
+- Spec-only: findings come from OpenAPI JSON, not observed runtime behavior
+- Findings are evidence-based hints for contract/workflow review, not proofs of runtime failures
+
+## Current scope
+
+Current validated scope is intentionally narrow:
+- Primary target: Shopware Admin API OpenAPI spec
+- Included: Admin API action routes in that spec
+- Store API support is not provided yet
+- Broader API support should not be assumed unless validated in this repository
+
+## Local developer workflows
+
+### Run from repo root
 
 ```sh
 cd ~/api-doctor
@@ -95,9 +110,7 @@ go run . explore --spec ./adminapi.json
 go run . tui --spec ./adminapi.json
 ```
 
-### 2) Build a local binary first
-
-Use this when you want repeatable command runs without `go run` startup overhead:
+### Build a local binary first
 
 ```sh
 cd ~/api-doctor
@@ -107,106 +120,20 @@ go build -o api-doctor .
 ./api-doctor tui --spec ./adminapi.json
 ```
 
-Both workflows are local-only and do not require packaging or any external CLI integration.
-
-## Quickstart
-
-Run one basic check on your Admin API spec:
-
-```sh
-go run . analyze --spec ./adminapi.json
-```
-
-If that works, open the local browser explorer (primary interactive view):
-
-```sh
-go run . explore --spec ./adminapi.json
-```
-
-You can still use the read-only terminal TUI as a secondary surface:
-
-```sh
-go run . tui --spec ./adminapi.json
-```
-
-## 5-Minute Paths By Role
-
-If you are an external developer and you need to chain calls safely:
-
-1. Run `go run . workflows --spec ./adminapi.json` to see likely next-call routes.
-2. Run `go run . explore --spec ./adminapi.json`.
-3. Pick a target endpoint and open detail.
-4. Use `Likely next calls`, `Required identifiers`, and `Linkage status` to verify follow-up steps.
-5. Check Issue categories for entries marked `[consistency]` to spot route/shape traps before integration.
-
-If you are an internal API owner/team and you need to prioritize fixes:
-
-1. Run `go run . analyze --spec ./adminapi.json` for burden, consistency, change-risk, and endpoint-score summaries.
-2. Open `go run . explore --spec ./adminapi.json`.
-3. Start in Overview and read `Fix first (deterministic snapshot)`.
-4. Use Hotspots for highest-priority endpoint areas and repeated issue categories.
-5. Use Issue categories to inspect consistency findings and representative endpoints.
-
-If you are a PM or stakeholder and you need a fast status snapshot:
-
-1. Run `go run . analyze --spec ./adminapi.json`.
-2. Capture top-line metrics: total findings, severity split, and top fix-first areas.
-3. Open `go run . explore --spec ./adminapi.json` and check Overview for deterministic `Fix first` lines.
-4. Review Workflows totals (single-step and multi-step) for usability signal.
-5. If release comparison is needed, run `go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json`.
-
-## Explore (primary interactive UI)
-
-`explore` starts a lightweight local browser UI over the same deterministic analyzer/workflow/diff outputs.
-
-How to launch:
-
-```sh
-go run . explore --spec ./adminapi.json
-```
-
-Optional diff context in explore:
-
-```sh
-go run . explore --spec ./adminapi.json --base ./adminapi-v1.json --head ./adminapi-v2.json
-```
-
-Important runtime notes:
-
-- Local-only server bound to `127.0.0.1`
-- Single-page UI (no client-side routing)
-- No persistence, no websocket/live-reload behavior
-- Uses existing analyzer/workflow/diff outputs; no separate analysis engine
-
 ## TUI (secondary surface)
 
-The TUI is a read-only terminal surface over the same CLI engine outputs.
-
-Use it for quick local triage when you want terminal navigation, but treat it as secondary to Explorer.
-
-Launch:
+Use TUI when you want terminal-first review, but treat it as secondary to Explorer.
 
 ```sh
 go run . tui --spec ./adminapi.json
 ```
 
-Optional diff in TUI:
+Optional diff data in TUI:
 
 ```sh
 go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2.json
 ```
 
+## More detailed command usage
 
-## Command overview
-
-Use one command at a time based on what you need:
-
-- analyze: one-spec evidence review for workflow burden, contract-shape burden, consistency drift, and fix-first prioritization
-- workflows: inspect likely single-step and multi-step call chains inferred from the same spec
-- diff: compare two spec versions for breaking changes and release risk checks
-- explore: primary local browser surface for interactive triage and endpoint/workflow drill-down
-- tui: secondary terminal surface for compact local triage
-
-For beginner-friendly command walkthroughs, see:
-
-- [docs/usage.md](docs/usage.md)
+See docs/usage.md for expanded command examples and walkthroughs.
