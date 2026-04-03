@@ -984,12 +984,21 @@
         }).join('')
       : chipItems.map(function (c) { return '<span class="chip">' + escapeHtml(c) + '</span>'; }).join('');
 
+    var priorityHint = '';
+    var high = family.priorityCounts.high || 0;
+    var medium = family.priorityCounts.medium || 0;
+    if (high > 0) {
+      priorityHint = high + ' high priority';
+    } else if (medium > 0) {
+      priorityHint = medium + ' medium priority';
+    }
+
     return '<button type="button" class="family-card pressure-' + family.pressure + '" data-family="' + escapeHtml(family.family) + '">'
       + '<div class="family-head">'
       + '<strong>' + escapeHtml(humanFamilyLabel(family.family)) + '</strong>'
       + pressureBadge(family.pressure, 'pressure')
       + '</div>'
-      + '<p class="family-stat">' + family.findings + ' issue' + (family.findings === 1 ? '' : 's') + ' across ' + family.endpoints + ' endpoint' + (family.endpoints === 1 ? '' : 's') + '</p>'
+      + '<p class="family-stat">' + family.findings + ' issue' + (family.findings === 1 ? '' : 's') + ' across ' + family.endpoints + ' endpoint' + (family.endpoints === 1 ? '' : 's') + (priorityHint ? ' — ' + priorityHint : '') + '</p>'
       + '<p class="family-burden-why">' + escapeHtml(whyText) + '</p>'
       + (chipsHtml ? '<div class="chips">' + chipsHtml + '</div>' : '')
       + '</button>';
