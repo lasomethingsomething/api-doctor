@@ -129,6 +129,20 @@ h2 { margin: 0; font-size: 1.12rem; line-height: 1.15; }
   font-size: 0.84rem;
   line-height: 1.42;
 }
+.summary-cta {
+  margin-top: 0.65rem;
+  border: 1px solid rgba(118, 227, 234, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  color: #223243;
+  padding: 0.34rem 0.62rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.card:hover .summary-cta {
+  border-color: rgba(118, 227, 234, 0.72);
+}
 .tone-trust { --tone-a: var(--accent-cyan); --tone-b: var(--accent-sky); }
 .tone-workflow { --tone-a: var(--accent-pink); --tone-b: #ffc0d8; }
 .tone-fix { --tone-a: var(--accent-sun); --tone-b: #ffe8c5; }
@@ -215,6 +229,10 @@ h2 { margin: 0; font-size: 1.12rem; line-height: 1.15; }
   display: grid;
   grid-template-columns: 1.9fr repeat(4, minmax(150px, 1fr)) minmax(150px, 1fr);
   gap: 0.75rem;
+}
+.search-insight {
+  margin-top: 0.5rem;
+  font-size: 0.84rem;
 }
 .field {
   display: grid;
@@ -320,6 +338,21 @@ tr.active {
 .ranking-cue {
   margin: 0.1rem 0 0.5rem;
   font-size: 0.82rem;
+}
+.dominant-cell {
+  display: grid;
+  gap: 0.08rem;
+}
+.dominant-main {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #2b3f50;
+  line-height: 1.35;
+}
+.dominant-sub {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--muted-soft);
 }
 .rank-cell {
   display: grid;
@@ -482,6 +515,12 @@ tr.active {
 .ctx-chip:hover { background: rgba(118, 227, 234, 0.18); border-color: rgba(118, 227, 234, 0.72); }
 .ctx-chip-count { color: var(--muted-soft); }
 .family-row-head { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 0.12rem; }
+.workflow-controls {
+  margin: 0.4rem 0 0.6rem;
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
 .family-pattern {
   font-size: 0.72rem;
   padding: 0.08rem 0.42rem;
@@ -491,6 +530,25 @@ tr.active {
   color: #1a4a33;
   font-weight: 600;
   white-space: nowrap;
+}
+.dimension-summary {
+  margin: 0.75rem 0 0.45rem;
+}
+.dimension-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.36rem;
+}
+.dimension-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.73rem;
+  font-weight: 650;
+  border: 1px solid rgba(118, 227, 234, 0.35);
+  background: rgba(235, 251, 252, 0.85);
+  color: #2a4958;
 }
 .detail-header {
   display: grid;

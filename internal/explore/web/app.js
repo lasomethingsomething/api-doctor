@@ -5,6 +5,7 @@
     selectionSource: "default",
     selectedFindingIdx: -1,
     fixFirstActiveId: null,
+    familyPressure: "all",
     filters: { search: "", severity: "all", category: "all", burden: "all", findingsOnly: false, sortBy: "priority" }
   };
 
@@ -21,9 +22,11 @@
     categoryFilter: document.getElementById("categoryFilter"),
     burdenFilter: document.getElementById("burdenFilter"),
     hasFindingsOnly: document.getElementById("hasFindingsOnly"),
+    familyPriorityFilter: document.getElementById("familyPriorityFilter"),
     sortBy: document.getElementById("sortBy"),
     endpointRows: document.getElementById("endpointRows"),
     evidenceScope: document.getElementById("evidenceScope"),
+    searchInsight: document.getElementById("searchInsight"),
     rankingCue: document.getElementById("rankingCue"),
     detailHelp: document.getElementById("detailHelp"),
     endpointDetail: document.getElementById("endpointDetail"),
@@ -46,6 +49,12 @@
     el.burdenFilter.addEventListener("change", function (e) { state.filters.burden = e.target.value; render(); });
     el.hasFindingsOnly.addEventListener("change", function (e) { state.filters.findingsOnly = e.target.checked; render(); });
     el.sortBy.addEventListener("change", function (e) { state.filters.sortBy = e.target.value; render(); });
+    if (el.familyPriorityFilter) {
+      el.familyPriorityFilter.addEventListener("change", function (e) {
+        state.familyPressure = e.target.value;
+        renderWorkflowPanel();
+      });
+    }
   }
 
   function syncControls() {
@@ -55,6 +64,9 @@
     el.burdenFilter.value = state.filters.burden;
     el.hasFindingsOnly.checked = state.filters.findingsOnly;
     el.sortBy.value = state.filters.sortBy;
+    if (el.familyPriorityFilter) {
+      el.familyPriorityFilter.value = state.familyPressure;
+    }
   }
 
   function renderFilters() {
@@ -70,8 +82,8 @@
     })));
     setOptions(el.burdenFilter, [
       { value: "all", label: "burden focus: all" },
-      { value: "workflow-burden", label: "burden focus: workflow burden" },
-      { value: "contract-shape", label: "burden focus: contract shape" },
+      { value: "workflow-burden", label: "burden focus: hidden next-step dependencies" },
+      { value: "contract-shape", label: "burden focus: storage-shaped responses" },
       { value: "consistency", label: "burden focus: consistency" }
     ]);
     var datalist = document.getElementById('searchSuggestions');
@@ -106,7 +118,7 @@
     var diffTag = run.baseSpecPath && run.headSpecPath ? (' | diff: ' + run.baseSpecPath + ' -> ' + run.headSpecPath) : '';
     el.runContext.textContent = 'spec: ' + run.specPath + ' | generated: ' + run.generatedAt + diffTag;
     if (el.summaryHelp) {
-      el.summaryHelp.textContent = 'Trust the contract where evidence is clear, prioritize burden where workflows are hard, and drill into endpoint-level proof.';
+      el.summaryHelp.textContent = 'Choose a launch action, inspect families by pressure and issue dimensions, then drill into endpoint messages for concrete fixes.';
     }
   }
 
@@ -135,6 +147,7 @@
       clearBtn.addEventListener('click', function () {
         state.filters = { search: '', severity: 'all', category: 'all', burden: 'all', findingsOnly: false, sortBy: 'priority' };
         state.fixFirstActiveId = null;
+        state.familyPressure = 'all';
         state.selectedEndpointId = '';
         state.selectedFindingIdx = -1;
         state.selectionSource = 'default';
@@ -145,7 +158,6 @@
   }
 
   function buildInvestigationContext() {
-    // If we're in a fix-first investigation
     if (state.fixFirstActiveId) {
       var item = state.payload.fixFirst.find(function (x) { return x.id === state.fixFirstActiveId; });
       if (item) {
@@ -153,7 +165,7 @@
         var matchCount = rows.length;
         return {
           what: 'Investigating: ' + item.label,
-          type: 'Priority queue focus',
+          type: 'Preset lens',
           why: item.description,
           action: 'Showing ' + matchCount + ' endpoint' + (matchCount === 1 ? '' : 's') + ' in this lens. Click a row to inspect or click ✕ to reset.'
         };
@@ -167,11 +179,21 @@
         var endpoint = detail.endpoint;
         return {
           what: 'Exploring from: ' + (endpoint.family || 'unknown family'),
-          type: 'Family / Workflow context jump',
-          why: 'You clicked a family or workflow pattern in the burden map. This endpoint is representative.',
+          type: 'Family / pattern jump',
+          why: 'You clicked a family or inferred multi-step pattern. This endpoint is representative evidence from that context.',
           action: 'Inspect the evidence below, then use related workflow/family context to explore connected patterns.'
         };
       }
+    }
+
+    if (state.selectionSource === 'summary-launch') {
+      var launchRows = filteredRows();
+      return {
+        what: 'Investigating launch focus from top cards',
+        type: 'Guided launch action',
+        why: 'A launch card applied a lens to reduce scanning and route you to evidence-first endpoints.',
+        action: 'List now shows ' + launchRows.length + ' matching endpoints. Detail shows the selected endpoint\'s exact issue messages. Use ✕ to reset.'
+      };
     }
 
     // If we have an active search filter
@@ -182,6 +204,15 @@
         type: 'Text search narrowing',
         why: 'You are searching for path, method, or family patterns.',
         action: 'Found ' + matchCount + ' matching endpoint' + (matchCount === 1 ? '' : 's') + '. Click a row to inspect or clear the search to reset.'
+      };
+    }
+
+    if (state.familyPressure !== 'all') {
+      return {
+        what: 'Family pressure filter: ' + state.familyPressure,
+        type: 'Family-first scope',
+        why: 'The family explorer is narrowed by pressure tier so you can inspect high/medium/low families separately.',
+        action: 'Choose a family row to load representative endpoint evidence. Clear with ✕ to restore all families.'
       };
     }
 
@@ -199,7 +230,44 @@
       };
     }
 
+    if (state.selectionSource === 'endpoint-list' && state.selectedEndpointId) {
+      return {
+        what: 'Inspecting endpoint evidence detail',
+        type: 'Endpoint-level inspection',
+        why: 'You selected a specific endpoint row to move from family-level context to exact issue messages.',
+        action: 'Detail panel now shows dominant dimensions, concrete issue messages, and next checks. Use ✕ to clear context.'
+      };
+    }
+
     return null;
+  }
+
+  function applyLaunchAction(action, topFamilyName, burdenCode) {
+    state.selectedFindingIdx = -1;
+    state.fixFirstActiveId = null;
+    if (action === 'launch-family' && topFamilyName) {
+      state.filters.search = topFamilyName.toLowerCase();
+      state.filters.findingsOnly = true;
+      state.filters.sortBy = 'findings';
+      state.selectionSource = 'summary-launch';
+    } else if (action === 'launch-burden' && burdenCode) {
+      state.filters.burden = burdenCode;
+      state.filters.findingsOnly = true;
+      state.filters.sortBy = 'priority';
+      state.selectionSource = 'summary-launch';
+    } else if (action === 'launch-high') {
+      state.filters.findingsOnly = true;
+      state.filters.sortBy = 'priority';
+      state.selectionSource = 'summary-launch';
+    } else if (action === 'launch-workflows') {
+      state.filters.burden = 'workflow-burden';
+      state.filters.findingsOnly = true;
+      state.filters.sortBy = 'findings';
+      state.selectionSource = 'summary-launch';
+    }
+    syncControls();
+    state.selectedEndpointId = firstVisibleEndpointId(filteredRows(), { preferFindings: true });
+    render();
   }
 
   function renderSummary() {
@@ -213,33 +281,48 @@
     var pct = s.endpointsAnalyzed > 0 ? Math.round(100 * withFindings / s.endpointsAnalyzed) : 0;
     var cards = [
       {
-        label: "Where to start",
-        value: topFamily,
-        meta: pct + "% of " + s.endpointsAnalyzed + " endpoints (" + withFindings + ") carry at least one finding. This family has the highest burden concentration.",
-        tone: "tone-trust"
+        id: "launch-family",
+        label: "Family to inspect first",
+        value: humanFamilyLabel(topFamily.name),
+        meta: topFamily.note + " Click to load endpoints in this family and start with highest-pressure evidence.",
+        tone: "tone-trust",
+        cta: "Inspect family"
       },
       {
-        label: "Primary burden type",
+        id: "launch-burden",
+        label: "Most common issue dimension",
         value: burdenLabel(burdenCode),
-        meta: burdenDescription(burdenCode),
-        tone: "tone-workflow"
+        meta: burdenDescription(burdenCode) + " Click to filter endpoint evidence to this dimension.",
+        tone: "tone-workflow",
+        cta: "Filter by dimension"
       },
       {
-        label: "Highest-pressure endpoints",
+        id: "launch-high",
+        label: "High-pressure endpoints",
         value: highPriorityCount + (highPriorityCount === 1 ? " endpoint" : " endpoints"),
-        meta: "Rise to the top based on low schema or client scores combined with multiple findings (" + s.totalFindings + " signals total across all endpoints). Use the fix-first priorities below to decide where to start.",
-        tone: "tone-fix"
+        meta: pct + "% of analyzed endpoints (" + withFindings + "/" + s.endpointsAnalyzed + ") have at least one issue. Click to focus list on high-pressure endpoints.",
+        tone: "tone-fix",
+        cta: "Focus high pressure"
       },
       {
-        label: "Spec-inferred workflows",
+        id: "launch-workflows",
+        label: "Inferred multi-step patterns",
         value: s.workflowsInferred + " step-pairs \u00b7 " + s.chainsInferred + " chains",
-        meta: "Inferred from path shapes and ID patterns \u2014 not from live API behavior. Dominant handoff type: " + topWorkflowKind + ".",
-        tone: "tone-family"
+        meta: "Pattern inference is based on path shapes/ID usage, not runtime traces. Dominant handoff: " + topWorkflowKind + ". Click to focus workflow-linkage issues.",
+        tone: "tone-family",
+        cta: "Inspect linkage issues"
       }
     ];
     el.summaryCards.innerHTML = cards.map(function (card) {
-      return '<article class="card ' + card.tone + '"><p class="card-label">' + card.label + '</p><p class="card-value">' + card.value + '</p><p class="card-meta">' + card.meta + '</p></article>';
+      return '<article class="card ' + card.tone + '" data-action="' + card.id + '"><p class="card-label">' + card.label + '</p><p class="card-value">' + card.value + '</p><p class="card-meta">' + card.meta + '</p><button class="summary-cta" data-action="' + card.id + '">' + card.cta + '</button></article>';
     }).join("");
+
+    Array.prototype.forEach.call(el.summaryCards.querySelectorAll('.card[data-action]'), function (node) {
+      node.addEventListener('click', function (evt) {
+        var action = node.getAttribute('data-action');
+        applyLaunchAction(action, topFamily.name, burdenCode);
+      });
+    });
   }
 
   function renderFixFirst() {
@@ -247,7 +330,7 @@
     var topFamily = topFamilyByFindings(rows);
     var topWorkflowKind = topWorkflowFamily(state.payload.workflows || {});
     if (el.fixFirstHelp) {
-      el.fixFirstHelp.textContent = 'Use these priorities first, then verify endpoint-level evidence. Current concentration: ' + topFamily + '. Dominant workflow kind: ' + topWorkflowKind + '.';
+      el.fixFirstHelp.textContent = 'Use these presets to apply a focused lens, then inspect endpoint evidence messages. Top family concentration: ' + humanFamilyLabel(topFamily.name) + '. Dominant workflow kind: ' + topWorkflowKind + '.';
     }
     el.fixFirstList.innerHTML = state.payload.fixFirst.map(function (item) {
       var rank = fixFirstRank(item.id);
@@ -288,13 +371,28 @@
       }
       el.evidenceScope.textContent = scopeText;
     }
+    if (el.searchInsight) {
+      var insight = '';
+      if (state.filters.search) {
+        var families = uniq(rows.map(function (r) { return r.family; }));
+        insight = 'Search matches ' + rows.length + ' endpoints across ' + families.length + ' families. Tip: click a family in the panel above to apply a cleaner family lens.';
+        if (state.filters.search.indexOf('aggregate') !== -1) {
+          insight += ' /aggregate refers to cross-resource utility endpoints rather than one business entity family.';
+        }
+      } else if (state.filters.category !== 'all' || state.filters.burden !== 'all') {
+        insight = 'Current lens is issue-driven. Use family rows above to pivot from issue type to affected endpoint groups.';
+      } else {
+        insight = 'No search/filter narrowing is active. Start with a family row or preset to avoid scanning all endpoints.';
+      }
+      el.searchInsight.textContent = insight;
+    }
     if (el.rankingCue) {
       if (state.filters.sortBy === 'priority') {
-        el.rankingCue.textContent = 'Default order uses inspection priority first, then findings count. Score is shown as supporting context.';
+        el.rankingCue.textContent = 'Default order uses endpoint pressure and issue evidence. Score is secondary and shown only as supporting context.';
       } else if (state.filters.sortBy === 'findings') {
-        el.rankingCue.textContent = 'Sorted by findings count. Priority and score remain supporting context for triage.';
+        el.rankingCue.textContent = 'Sorted by issue count. Dominant issue type and message detail should guide actual fixes.';
       } else {
-        el.rankingCue.textContent = 'Sorted alphabetically by path. Use findings/priority to assess inspection urgency.';
+        el.rankingCue.textContent = 'Sorted alphabetically by path. Use pressure and dominant issue type to decide what to inspect first.';
       }
     }
     if (rows.length === 0) {
@@ -308,7 +406,8 @@
     el.endpointRows.innerHTML = rows.map(function (row) {
       var selected = row.id === state.selectedEndpointId ? 'active' : '';
       var pressure = inspectionPressureLabel(row);
-      return '<tr class="' + selected + '" data-id="' + row.id + '"><td><div class="endpoint-main"><strong>' + row.method + ' ' + row.path + '</strong><div class="endpoint-sub"><span class="endpoint-chip">' + row.family + '</span><span class="subtle">' + rowProblemSummary(row) + '</span></div></div></td><td><span class="findings-count">' + row.findings + '</span></td><td><span class="badge ' + row.priority + '">' + row.priority + '</span></td><td><div class="rank-cell"><span class="rank-main">' + pressure + '</span><span class="rank-sub">' + row.findings + ' issue' + (row.findings === 1 ? '' : 's') + ' on this endpoint</span><span class="rank-score">Score: ' + row.riskSummary + '</span></div></td></tr>';
+      var dominantIssue = rowDominantIssue(row);
+      return '<tr class="' + selected + '" data-id="' + row.id + '"><td><div class="endpoint-main"><strong>' + row.method + ' ' + row.path + '</strong><div class="endpoint-sub"><span class="endpoint-chip">' + humanFamilyLabel(row.family) + '</span><span class="subtle">' + rowProblemSummary(row) + '</span></div></div></td><td><div class="dominant-cell"><span class="dominant-main">' + escapeHtml(dominantIssue.label) + '</span><span class="dominant-sub">' + escapeHtml(dominantIssue.code) + '</span></div></td><td><span class="badge ' + row.priority + '">' + row.priority + '</span></td><td><div class="rank-cell"><span class="rank-main">' + pressure + '</span><span class="rank-sub">' + row.findings + ' issue' + (row.findings === 1 ? '' : 's') + '</span><span class="rank-score">Score basis: ' + row.riskSummary + '</span></div></td></tr>';
     }).join('');
 
     Array.prototype.forEach.call(el.endpointRows.querySelectorAll('tr'), function (tr) {
@@ -361,7 +460,7 @@
       if (el.detailHelp) {
         el.detailHelp.textContent = 'No endpoint detail is shown because the current lens matches no endpoints.';
       }
-      el.endpointDetail.innerHTML = "<div class='empty-state'><strong>No matching endpoints.</strong><p class='subtle'>Your current filters are too narrow. Clear one or more to restore endpoint evidence.</p><p class='subtle' style='margin-top: 0.5rem;'><em>Try clearing the severity, category, or burden filter—or remove the search term.</em></p></div>";
+      el.endpointDetail.innerHTML = "<div class='empty-state'><strong>No matching endpoints in current lens.</strong><p class='subtle'>You are investigating a narrow slice. Clear search or one filter to bring endpoint evidence back.</p><p class='subtle'>Useful reset path: clear search -> set category and burden to all -> keep findings-only on.</p></div>";
       return;
     }
 
@@ -377,7 +476,7 @@
           howToMsg = 'You clicked a priority queue item. ' + howToMsg;
         }
       }
-      el.endpointDetail.innerHTML = "<div class='empty-state'><strong>No endpoint selected.</strong><p class='subtle'>" + howToMsg + "</p></div>";
+      el.endpointDetail.innerHTML = "<div class='empty-state'><strong>Select an endpoint to inspect concrete issue messages.</strong><p class='subtle'>" + howToMsg + "</p><p class='subtle'>The right panel will show: dominant issue dimensions, exact rule messages, why pressure is high/medium/low, and what to inspect next.</p></div>";
       return;
     }
 
@@ -386,8 +485,14 @@
     }
 
     var summary = endpointInvestigationSummary(detail);
+    var dimensionSummary = summarizeIssueDimensions(detail.findings || []);
+    var dimensionBlock = '<div class="dimension-summary"><h3>Dominant issue dimensions</h3>'
+      + (dimensionSummary.length > 0
+        ? '<div class="dimension-chips">' + dimensionSummary.map(function (d) { return '<span class="dimension-chip">' + escapeHtml(d.label + ' (' + d.count + ')') + '</span>'; }).join('') + '</div>'
+        : '<p class="subtle">No direct issue dimensions for this endpoint in current lens.</p>')
+      + '</div>';
 
-    var findings = "<h3>Contract issues</h3>";
+    var findings = "<h3>Contract issues (exact messages)</h3>";
     if (detail.findings.length === 0) {
       findings += "<p class='subtle'>No contract issues are flagged on this endpoint in the current lens.</p>";
     } else {
@@ -423,7 +528,7 @@
       return '<li>' + d.code + ': ' + escapeHtml(d.message) + '</li>';
     }).join('') + '</ul>' : '';
 
-    el.endpointDetail.innerHTML = '<div class="detail-header"><div class="detail-title"><span class="eyebrow">Selected endpoint</span><span class="detail-path">' + detail.endpoint.method + ' ' + detail.endpoint.path + '</span></div><div class="detail-meta"><span class="badge ' + detail.endpoint.priority + '">' + detail.endpoint.priority + '</span><span class="endpoint-chip">' + detail.endpoint.family + '</span><span class="risk-copy">' + detail.endpoint.riskSummary + '</span></div><div class="detail-context">' + escapeHtml(detailContextText(detail)) + '</div></div><div class="investigation-summary"><h3>Why this endpoint matters</h3><p>' + escapeHtml(summary.why) + '</p><p class="subtle">Next step: ' + escapeHtml(summary.next) + '</p></div>' + findings + workflows + chains + diffs;
+    el.endpointDetail.innerHTML = '<div class="detail-header"><div class="detail-title"><span class="eyebrow">Selected endpoint</span><span class="detail-path">' + detail.endpoint.method + ' ' + detail.endpoint.path + '</span></div><div class="detail-meta"><span class="badge ' + detail.endpoint.priority + '">' + detail.endpoint.priority + '</span><span class="endpoint-chip">' + humanFamilyLabel(detail.endpoint.family) + '</span><span class="risk-copy">Score basis (secondary): ' + detail.endpoint.riskSummary + '</span></div><div class="detail-context">' + escapeHtml(detailContextText(detail)) + '</div></div><div class="investigation-summary"><h3>Why this endpoint matters</h3><p>' + escapeHtml(summary.why) + '</p><p class="subtle">Next step: ' + escapeHtml(summary.next) + '</p></div>' + dimensionBlock + findings + workflows + chains + diffs;
 
     Array.prototype.forEach.call(el.endpointDetail.querySelectorAll('.finding-item'), function (item, idx) {
       item.addEventListener('click', function (e) {
@@ -436,25 +541,31 @@
 
   function renderWorkflowPanel() {
     var wf = state.payload.workflows;
-    var endpointFamilies = buildEndpointFamilySummaries(state.payload.endpoints || []);
+    var details = state.payload.endpointDetails || {};
+    var endpointFamilies = buildEndpointFamilySummaries(state.payload.endpoints || [], details);
     var kindSummaries = buildWorkflowKindSummaries(wf.entries || []);
     var familyPatterns = buildFamilyWorkflowPatterns(wf.entries || [], state.payload.endpointDetails || {});
+    var filteredFamilies = endpointFamilies.filter(function (f) {
+      return state.familyPressure === 'all' || f.pressure === state.familyPressure;
+    });
 
     if (el.workflowHelp) {
-      if (endpointFamilies.length > 0) {
-        el.workflowHelp.textContent = 'Click any family or inferred pattern to jump to its most impactful endpoint. This shows where contract issues concentrate and which multi-step flows are affected.';
+      if (filteredFamilies.length > 0) {
+        el.workflowHelp.textContent = 'Each family row shows pressure, dominant issue dimensions, and an inferred flow pattern. Clicking applies a family lens and selects representative endpoint evidence.';
       } else {
-        el.workflowHelp.textContent = 'No workflow or family concentration evidence is available in this run.';
+        el.workflowHelp.textContent = 'No families match the selected pressure tier. Change family pressure filter to widen scope.';
       }
     }
 
-    var families = endpointFamilies.slice(0, 10).map(function (f, idx) {
-      var prefix = idx === 0 ? 'Most issues — ' : '';
+    var families = filteredFamilies.slice(0, 16).map(function (f, idx) {
+      var prefix = idx === 0 ? 'Highest signal | ' : '';
       var pattern = familyPatterns[f.family];
       var patternTag = pattern ? ' <span class="family-pattern">flows: ' + workflowKindShort(pattern) + '</span>' : '';
+      var dims = (f.topDimensions || []).map(function (d) { return '<span class="dimension-chip">' + escapeHtml(d) + '</span>'; }).join('');
       return '<li class="workflow-click" data-id="' + (f.targetID || '') + '">'
-        + '<div class="family-row-head"><strong>' + prefix + f.family + '</strong>' + patternTag + '</div>'
-        + '<span class="subtle">' + f.findings + ' issue' + (f.findings === 1 ? '' : 's') + ' across ' + f.endpoints + ' endpoint' + (f.endpoints === 1 ? '' : 's') + ' · ' + f.dominantBurden + ' type</span>'
+        + '<div class="family-row-head"><strong>' + prefix + humanFamilyLabel(f.family) + '</strong>' + patternTag + '<span class="badge ' + f.pressure + '">' + f.pressure + ' family pressure</span></div>'
+        + '<span class="subtle">' + f.findings + ' issue' + (f.findings === 1 ? '' : 's') + ' across ' + f.endpoints + ' endpoint' + (f.endpoints === 1 ? '' : 's') + ' | dominant burden: ' + f.dominantBurden + '</span>'
+        + '<div class="dimension-chips">' + dims + '</div>'
         + '</li>';
     }).join('');
 
@@ -467,11 +578,11 @@
     }).join('');
 
     el.workflowPanel.innerHTML = '<div class="workflow-sections">'
-      + '<section class="workflow-group"><h3>Issue concentration by family</h3>'
+      + '<section class="workflow-group"><h3>Families ranked by pressure and issue dimensions</h3>'
       + '<ul id="familyList">' + (families || "<li class='subtle'>No family summaries in this run.</li>") + '</ul>'
       + '</section>'
       + '<section class="workflow-group"><h3>Inferred multi-step patterns</h3>'
-      + '<p class="workflow-caveat subtle">Inferred from endpoint path shapes and ID patterns—not from live runtime behavior. These are discovered candidates for your review.</p>'
+      + '<p class="workflow-caveat subtle">Inferred from endpoint path shapes and ID patterns, not runtime traces. Use these as candidate dependency flows to validate with endpoint messages.</p>'
       + '<ul id="workflowKindList">' + (paths || "<li class='subtle'>No workflow patterns detected.</li>") + '</ul>'
       + '</section>'
       + '</div>';
@@ -481,6 +592,20 @@
       if (!list) return;
       Array.prototype.forEach.call(list.querySelectorAll('li[data-id]'), function (li) {
         li.addEventListener('click', function () {
+          if (listID === 'familyList') {
+            var endpointId = li.getAttribute('data-id');
+            var familyName = '';
+            var row = state.payload.endpointDetails[endpointId];
+            if (row && row.endpoint) familyName = row.endpoint.family;
+            if (familyName) {
+              state.filters.search = familyName.toLowerCase();
+              state.filters.findingsOnly = true;
+              state.filters.sortBy = 'findings';
+              syncControls();
+            }
+            jumpToEndpoint(endpointId);
+            return;
+          }
           jumpToEndpoint(li.getAttribute('data-id'));
         });
       });
@@ -512,23 +637,33 @@
     var hasEvidence = detail && detail.findings && detail.findings.length > 0;
     var base = 'Current lens' + formatLensSuffix(state.filters) + '. ';
     if (state.selectionSource === 'family-workflow') {
-      return hasEvidence ? base + 'Opened from family/workflow context. Evidence is rendered in this panel so you can confirm why this endpoint is concerning and what to inspect next.' : base + 'Opened from family/workflow context. This endpoint has no direct findings in the current lens, so use related workflow and family context rendered here.';
+      return hasEvidence ? base + 'Opened from family/workflow context. Evidence is rendered in this panel so you can confirm why this endpoint is concerning and what to inspect next.' : base + 'Opened from family/workflow context. This endpoint has no direct issue messages in the current lens, so use related workflow and family context rendered here.';
     }
     if (state.selectionSource === 'fix-first') {
-      return hasEvidence ? base + 'Opened from fix-first prioritization. Evidence is rendered in this panel to validate urgency and related workflow impact.' : base + 'Opened from fix-first prioritization. No direct findings are attached to this endpoint in the current lens.';
+      return hasEvidence ? base + 'Opened from preset prioritization. Evidence is rendered in this panel to validate urgency and related workflow impact.' : base + 'Opened from preset prioritization. No direct issue messages are attached to this endpoint in the current lens.';
     }
-    return hasEvidence ? base + 'Evidence is rendered in this panel so you can confirm why this endpoint is concerning and what to inspect next.' : base + 'No direct findings are attached to this endpoint in the current lens; related workflow context is rendered here when available.';
+    return hasEvidence ? base + 'Evidence is rendered in this panel so you can confirm why this endpoint is concerning and what to inspect next.' : base + 'No direct issue messages are attached to this endpoint in the current lens; related workflow context is rendered here when available.';
   }
 
-  function buildEndpointFamilySummaries(rows) {
+  function buildEndpointFamilySummaries(rows, details) {
     var byFamily = {};
     rows.forEach(function (row) {
       if (!byFamily[row.family]) {
-        byFamily[row.family] = { family: row.family, findings: 0, endpoints: 0, targetID: row.id, maxFindings: row.findings, burdenCounts: {} };
+        byFamily[row.family] = {
+          family: row.family,
+          findings: 0,
+          endpoints: 0,
+          targetID: row.id,
+          maxFindings: row.findings,
+          burdenCounts: {},
+          priorityCounts: { high: 0, medium: 0, low: 0 },
+          dimensionCounts: {}
+        };
       }
       var item = byFamily[row.family];
       item.findings += row.findings;
       item.endpoints += 1;
+      item.priorityCounts[row.priority] = (item.priorityCounts[row.priority] || 0) + 1;
       if (row.findings > item.maxFindings) {
         item.targetID = row.id;
         item.maxFindings = row.findings;
@@ -536,11 +671,21 @@
       (row.burdenFocuses || []).forEach(function (focus) {
         item.burdenCounts[focus] = (item.burdenCounts[focus] || 0) + (row.findings > 0 ? row.findings : 1);
       });
+      var d = details[row.id];
+      if (d && d.findings) {
+        d.findings.forEach(function (f) {
+          var dim = issueDimensionForFinding(f.code, f.category, f.burdenFocus);
+          item.dimensionCounts[dim] = (item.dimensionCounts[dim] || 0) + 1;
+        });
+      }
     });
 
     var families = Object.values(byFamily).map(function (f) {
       var dominant = Object.entries(f.burdenCounts).sort(function (a, b) { return b[1] - a[1]; });
       f.dominantBurden = dominant.length > 0 ? dominant[0][0].replaceAll('-', ' ') : 'mixed evidence';
+      var dims = Object.entries(f.dimensionCounts).sort(function (a, b) { return b[1] - a[1]; });
+      f.topDimensions = dims.slice(0, 3).map(function (x) { return x[0]; });
+      f.pressure = familyPressureLabel(f.priorityCounts);
       return f;
     });
     families.sort(function (a, b) {
@@ -548,6 +693,32 @@
       return a.family.localeCompare(b.family);
     });
     return families;
+  }
+
+  function issueDimensionForFinding(code, category, burdenFocus) {
+    if (!code) return category ? category.replaceAll('-', ' ') : 'other issues';
+    if (code === 'contract-shape-workflow-guidance-burden') return 'storage-shaped / snapshot-heavy responses';
+    if (code === 'prerequisite-task-burden') return 'hidden dependencies / next-step linkage burden';
+    if (code === 'weak-list-detail-linkage' || code === 'weak-follow-up-linkage' || code === 'weak-action-follow-up-linkage' || code === 'weak-accepted-tracking-linkage') {
+      return 'weak workflow outcome modeling';
+    }
+    if (code === 'array-items-too-generic') return 'deep nesting';
+    if (code === 'internal-incidental-field') return 'internal/incidental fields';
+    if (code === 'sibling-path-shape-drift' || code === 'endpoint-path-style-drift' || code === 'detail-path-parameter-name-drift') return 'consistency drift';
+    if (code === 'likely-missing-enum' || code === 'generic-object-request' || code === 'generic-object-response') return 'typing/enum weakness';
+    if ((category || '') === 'change-risk') return 'change-risk clues';
+    if ((burdenFocus || '') === 'workflow-burden') return 'hidden dependencies / next-step linkage burden';
+    if ((burdenFocus || '') === 'contract-shape') return 'storage-shaped / snapshot-heavy responses';
+    if ((burdenFocus || '') === 'consistency') return 'consistency drift';
+    return (category || 'other issues').replaceAll('-', ' ');
+  }
+
+  function familyPressureLabel(priorityCounts) {
+    var high = priorityCounts.high || 0;
+    var medium = priorityCounts.medium || 0;
+    if (high >= 3) return 'high';
+    if (high > 0 || medium >= 3) return 'medium';
+    return 'low';
   }
 
   function buildWorkflowKindSummaries(entries) {
@@ -632,16 +803,16 @@
     var topCode = Object.entries(codeCounts).sort(function (a, b) { return b[1] - a[1]; })[0];
     var hint = topCode ? findingExamineHint(topCode[0], '') : '';
     var patternLine = topCode
-      ? '<p class="fix-context-pattern">Top issue type: <code class="finding-code">' + escapeHtml(topCode[0]) + '</code> · ' + topCode[1] + ' case' + (topCode[1] === 1 ? '' : 's') + (hint ? '. ' + escapeHtml(hint) : '') + '</p>'
+      ? '<p class="fix-context-pattern">Dominant rule code: <code class="finding-code">' + escapeHtml(topCode[0]) + '</code> (' + topCode[1] + ' case' + (topCode[1] === 1 ? '' : 's') + '). ' + escapeHtml(hint || 'Open endpoint detail to inspect exact messages.') + '</p>'
       : '';
     var top3 = rows.slice(0, 3).map(function (r) {
       var shortPath = r.path.split('/').slice(0, 4).join('/') + (r.path.split('/').length > 4 ? '…' : '');
       return '<span class="ctx-chip" data-id="' + r.id + '">' + escapeHtml(r.method) + ' ' + escapeHtml(shortPath) + (r.findings > 0 ? ' <span class="ctx-chip-count">· ' + r.findings + '</span>' : '') + '</span>';
     }).join('');
     el.fixFirstContext.innerHTML = '<div class="fix-context-inner">'
-      + '<p class="fix-context-label">Investigating <strong>' + escapeHtml(item.label) + '</strong>: ' + rows.length + ' endpoint' + (rows.length === 1 ? '' : 's') + ' in this lens</p>'
+      + '<p class="fix-context-label">Preset applied: <strong>' + escapeHtml(item.label) + '</strong> (' + rows.length + ' endpoint' + (rows.length === 1 ? '' : 's') + ' in lens)</p>'
       + patternLine
-      + (top3 ? '<p class="fix-context-top-label">Jump to:</p><div class="ctx-chips">' + top3 + '</div>' : '')
+      + (top3 ? '<p class="fix-context-top-label">Quick endpoint picks:</p><div class="ctx-chips">' + top3 + '</div>' : '')
       + '</div>';
     Array.prototype.forEach.call(el.fixFirstContext.querySelectorAll('.ctx-chip[data-id]'), function (chip) {
       chip.addEventListener('click', function () { jumpToEndpoint(chip.getAttribute('data-id')); });
@@ -736,8 +907,8 @@
 
   function burdenLabel(code) {
     switch (code) {
-      case 'workflow-burden': return 'Workflow linkage burden';
-      case 'contract-shape': return 'Contract-shape burden';
+      case 'workflow-burden': return 'Hidden next-step dependencies';
+      case 'contract-shape': return 'Storage-shaped / snapshot-heavy responses';
       case 'consistency': return 'Consistency drift';
       default: return code ? code.replaceAll('-', ' ') : 'Mixed signals';
     }
@@ -745,8 +916,8 @@
 
   function burdenDescription(code) {
     switch (code) {
-      case 'workflow-burden': return 'Most findings flag missing next-step linkage: the spec does not expose the ID or state a client needs to call the next endpoint in a two-step flow.';
-      case 'contract-shape': return 'Most findings flag write operations that return snapshot data instead of task outcomes: clients cannot confirm what changed without issuing a follow-up GET.';
+      case 'workflow-burden': return 'Many issues indicate missing next-step linkage: responses do not expose the ID/state clients need for the next call.';
+      case 'contract-shape': return 'Many issues indicate write responses mirror storage snapshots instead of outcome-focused payloads, forcing follow-up calls.';
       case 'consistency': return 'Most findings flag naming or shape drift across related paths: path parameters, response structures, or operation names are inconsistent.';
       default: return 'Findings are distributed across multiple burden types. Use the fix-first priorities below to decide where to focus.';
     }
@@ -787,14 +958,28 @@
   }
 
   function topFamilyByFindings(rows) {
-    if (!rows || rows.length === 0) return 'none';
+    if (!rows || rows.length === 0) return { name: 'none', findings: 0, note: 'No family evidence detected in this run.' };
     var counts = {};
     rows.forEach(function (row) {
       counts[row.family] = (counts[row.family] || 0) + row.findings;
     });
     var ranked = Object.entries(counts).sort(function (a, b) { return b[1] - a[1]; });
-    if (ranked.length === 0) return 'none';
-    return ranked[0][0] + ' (' + ranked[0][1] + ' findings)';
+    if (ranked.length === 0) return { name: 'none', findings: 0, note: 'No family evidence detected in this run.' };
+    var familyName = ranked[0][0];
+    var findingCount = ranked[0][1];
+    return {
+      name: familyName,
+      findings: findingCount,
+      note: humanFamilyLabel(familyName) + ' has the highest issue density (' + findingCount + ' issues across endpoints in this family).'
+    };
+  }
+
+  function humanFamilyLabel(name) {
+    if (!name) return 'unlabeled family';
+    if (name === '/aggregate') {
+      return '/aggregate (cross-resource utility endpoints, not one business entity)';
+    }
+    return name;
   }
 
   function topWorkflowFamily(workflows) {
@@ -816,16 +1001,28 @@
 
   function rowProblemSummary(row) {
     var categories = Object.entries(row.categoryCounts || {}).filter(function (x) { return x[1] > 0; }).sort(function (a, b) { return b[1] - a[1]; });
-    if (categories.length === 0) return 'no findings in this scope';
+    if (categories.length === 0) return 'no issues in this scope';
     var primaryCategory = categories[0][0].replaceAll('-', ' ');
     var burden = (row.burdenFocuses || []).length > 0 ? row.burdenFocuses[0].replaceAll('-', ' ') : 'mixed';
     return primaryCategory + ' / ' + burden;
   }
 
+  function rowDominantIssue(row) {
+    var d = state.payload.endpointDetails[row.id];
+    if (!d || !d.findings || d.findings.length === 0) {
+      return { label: 'No direct issue evidence', code: 'n/a' };
+    }
+    var first = d.findings[0];
+    return {
+      label: issueDimensionForFinding(first.code, first.category, first.burdenFocus),
+      code: first.code
+    };
+  }
+
   function inspectionPressureLabel(row) {
     if (!row) return 'Inspection signal';
     if (row.priority === 'high') {
-      return row.findings >= 10 ? 'High pressure (top queue)' : 'High pressure';
+      return row.findings >= 10 ? 'High pressure (inspect early)' : 'High pressure';
     }
     if (row.priority === 'medium') {
       return 'Moderate pressure';
@@ -835,6 +1032,7 @@
 
   function endpointInvestigationSummary(detail) {
     var findings = detail.findings || [];
+    var endpoint = detail.endpoint || {};
     if (findings.length === 0) {
       return {
         why: 'No direct contract issues are flagged here, but this endpoint may still matter through family context or workflow chains.',
@@ -855,7 +1053,7 @@
     var topBurden = Object.entries(byBurden).sort(function (a, b) { return b[1] - a[1]; })[0];
     var topCode = findings[0].code;
 
-    var why = 'Flagged primarily for ' + topCategory[0].replaceAll('-', ' ') + ' issues (' + topCategory[1] + ' contract issue' + (topCategory[1] === 1 ? '' : 's') + ')';
+    var why = 'Pressure is ' + endpoint.priority + ' because this endpoint has ' + findings.length + ' issue' + (findings.length === 1 ? '' : 's') + ', mainly in ' + topCategory[0].replaceAll('-', ' ') + ' (' + topCategory[1] + ')';
     if (topBurden) {
       why += '. Most concern is ' + topBurden[0].replaceAll('-', ' ') + '.';
     } else {
@@ -868,6 +1066,18 @@
     }
 
     return { why: why, next: next };
+  }
+
+  function summarizeIssueDimensions(findings) {
+    var counts = {};
+    findings.forEach(function (f) {
+      var label = issueDimensionForFinding(f.code, f.category, f.burdenFocus);
+      counts[label] = (counts[label] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .sort(function (a, b) { return b[1] - a[1]; })
+      .slice(0, 6)
+      .map(function (x) { return { label: x[0], count: x[1] }; });
   }
 
   function uniq(items) {

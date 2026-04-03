@@ -21,10 +21,10 @@
   <main class="layout">
     <section class="summary-head">
       <div class="section-heading">
-        <p class="eyebrow">Overview</p>
-        <h2>Contract trust and workflow burden snapshot</h2>
+        <p class="eyebrow">Investigation launchpad</p>
+        <h2>Start with families, then inspect endpoint evidence</h2>
       </div>
-      <p id="summaryHelp" class="subtle">Use this page to identify what to trust, what is hard to chain, and what to fix first.</p>
+      <p id="summaryHelp" class="subtle">Use launch actions to choose a focus. The family explorer and endpoint evidence below always show what changed and why.</p>
     </section>
 
     <section class="summary" id="summaryCards"></section>
@@ -33,20 +33,30 @@
 
     <section class="fixfirst section-card">
       <div class="section-heading">
-        <p class="eyebrow">Priority queue</p>
-        <h2>Fix first priorities</h2>
+        <p class="eyebrow">Investigation presets</p>
+        <h2>Focus by issue type</h2>
       </div>
-      <p id="fixFirstHelp" class="subtle">Click a priority line to narrow endpoint evidence and related workflow context.</p>
+      <p id="fixFirstHelp" class="subtle">Each preset applies a lens and selects a representative endpoint so you can inspect concrete messages quickly.</p>
       <div id="fixFirstList" class="fix-list"></div>
       <div id="fixFirstContext" class="fix-context" aria-live="polite"></div>
     </section>
 
     <section class="pane workflow-pane section-card">
       <div class="section-heading">
-        <p class="eyebrow">Burden map</p>
-        <h2>Where burden concentrates</h2>
+        <p class="eyebrow">Family-first investigation</p>
+        <h2>High-priority endpoint families</h2>
       </div>
-      <p id="workflowHelp" class="subtle">Start here to see where burden concentrates, then click into endpoint evidence.</p>
+      <p id="workflowHelp" class="subtle">Inspect families by pressure and dominant issue dimensions. Click a family to load matching endpoints and select a representative row.</p>
+      <div class="workflow-controls">
+        <label class="field">Family pressure
+          <select id="familyPriorityFilter">
+            <option value="all">all families</option>
+            <option value="high">high pressure families</option>
+            <option value="medium">medium pressure families</option>
+            <option value="low">low pressure families</option>
+          </select>
+        </label>
+      </div>
 
       <div id="workflowPanel" class="detail-block"></div>
     </section>
@@ -81,6 +91,7 @@
           </select>
         </label>
       </div>
+      <p id="searchInsight" class="subtle search-insight"></p>
     </section>
 
     <section class="panes">
@@ -91,11 +102,11 @@
             <h2>Endpoint evidence list</h2>
           </div>
         </div>
-        <p class="subtle evidence-help">A <strong>contract issue</strong> is a finding where the spec doesn't clearly surface all the information a client needs. <strong>Inspection priority</strong> combines count and severity. <span class="help-hint" title="Click any row to see specific issues and recommendations.">?</span></p>
+        <p class="subtle evidence-help">A <strong>contract issue</strong> is a specific rule finding message. <strong>Endpoint pressure</strong> is derived from priority + issue evidence, while score remains secondary context only. <span class="help-hint" title="Click a row, then expand issue items on the right to read exact messages and concrete inspection hints.">?</span></p>
         <p id="evidenceScope" class="subtle"></p>
         <p id="rankingCue" class="subtle ranking-cue"></p>
         <table>
-          <thead><tr><th>Endpoint</th><th>Issues <span class="score-hint">contract issues</span></th><th>Priority</th><th>Inspection priority <span class="score-hint">score is supporting context</span></th></tr></thead>
+          <thead><tr><th>Endpoint</th><th>Dominant issue</th><th>Priority</th><th>Endpoint pressure <span class="score-hint">score is supporting context</span></th></tr></thead>
           <tbody id="endpointRows"></tbody>
         </table>
       </div>
@@ -103,10 +114,10 @@
         <div class="section-heading compact-heading">
           <div>
             <p class="eyebrow">Inspection</p>
-            <h2>Endpoint evidence detail</h2>
+            <h2>Why this endpoint matters</h2>
           </div>
         </div>
-        <p id="detailHelp" class="subtle">Pick a row to see why this endpoint is flagged and what workflow context to inspect next.</p>
+        <p id="detailHelp" class="subtle">Select an endpoint row to inspect exact issue messages, dominant dimensions, and next checks.</p>
 
         <div id="endpointDetail" class="detail-block"></div>
       </div>
