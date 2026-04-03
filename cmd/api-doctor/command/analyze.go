@@ -27,12 +27,14 @@ var (
 	specFile string
 	format   string
 	verbose  bool
+	strict   bool
 )
 
 func init() {
 	analyzeCmd.Flags().StringVarP(&specFile, "spec", "s", "", "Path to OpenAPI spec file (JSON or YAML)")
 	analyzeCmd.Flags().StringVar(&format, "format", "text", "Output format: text, markdown, or json")
 	analyzeCmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "Show deeper technical detail in text output")
+	analyzeCmd.Flags().BoolVar(&strict, "strict", false, "Fail with non-zero exit when error-severity findings are present (useful for CI/gating)")
 	analyzeCmd.MarkFlagRequired("spec")
 }
 
@@ -70,13 +72,18 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 		fmt.Print(report.FormatText(result, endpointScores, verbose))
 	}
 
-	// Exit with error code if there are errors
+	// Default exploratory mode reports findings and exits zero.
+	// Strict mode is available for CI/gating fail behavior.
 	errorCount := countSeverity(result.Issues, "error")
-	if errorCount > 0 {
+	if shouldFailAnalyze(errorCount, strict) {
 		return fmt.Errorf("found %d error(s)", errorCount)
 	}
 
 	return nil
+}
+
+func shouldFailAnalyze(errorCount int, strictMode bool) bool {
+	return strictMode && errorCount > 0
 }
 
 func countSeverity(issues []*model.Issue, severity string) int {
