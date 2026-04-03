@@ -17,8 +17,8 @@ Use `analyze` for deterministic baseline output, then use `explore` as the prima
 - Explorer (`explore`): primary way to inspect burden lenses, family clusters, endpoint evidence, and workflow context.
    - Clean information hierarchy: lens choice → family overview → Endpoint diagnostics → workflow context
   - No redundant explanations; each section builds on the previous without repetition
-   - Top-level navigation now focuses on family triage lenses plus Endpoint diagnostics
-   - Endpoint diagnostics is the primary selected-endpoint inspection surface, with compact sub-tabs for Summary, Exact evidence, Consistency / drift, and Cleaner contract emphasis
+   - Top-level navigation is fixed to 3 primary lenses: Spec rule violations, Workflow burden, Shape burden
+   - Endpoint diagnostics is the persistent selected-endpoint inspection surface with lens-specific compact modes (summary + exact evidence everywhere, plus lens-relevant supporting modes)
    - Top shortcut/lens cards use subtle per-lens pastel tinting for fast visual distinction; reset remains a separate neutral utility control
 - CLI (`analyze`, `workflows`, `diff`): canonical deterministic engine for local scripts, CI, and machine-readable outputs.
 - TUI (`tui`): secondary terminal read-only view of the same deterministic data.
@@ -44,12 +44,12 @@ api-doctor organizes findings around four complementary views, accessible via ca
    - What: where responses are too broad or backend-focused rather than task-focused
    - When to use: tightening response contracts toward client needs
 
-3. **Consistency**: related endpoints that diverge in naming, path patterns, or response shape
+3. **Consistency/drift** (supporting perspective): related endpoints that diverge in naming, path patterns, or response shape
    - Key signals: parameter naming drift, path style drift, outcome wording drift, response shape drift
    - What: where similar operations stop feeling interchangeable
-   - When to use: ensuring API surface cohesion across related routes
+   - Where it lives now: inspector mode, endpoint evidence mode, and optional supporting perspective inside Workflow burden and Shape burden
 
-Each view is isolated and independent. Selecting a category or burden filter will sync the view appropriately—for example, choosing workflow burden automatically switches the category filter to workflow-burden view. In the current Explorer layout, endpoint-local consistency inspection lives inside Endpoint diagnostics rather than as a separate top-level shortcut.
+Each view is isolated and independent. Choosing Workflow burden or Shape burden keeps category/burden controls locked to that lens for lower navigation complexity. Endpoint-local consistency inspection remains available in Endpoint diagnostics and endpoint evidence rather than as a primary top-level destination.
 
 Scope reminder:
 
@@ -240,10 +240,11 @@ It uses the same deterministic analysis/workflow/diff data already produced by t
 
 The Explorer UI is organized around burden lenses:
 
-- **Workflow burden lens**: family cards highlight hidden token handoff, weak outcome guidance, brittle sequencing, and auth/header spread. Workflow chains show burden summary chips ordered by impact — the primary (most-affected) burden chip is visually emphasized; secondary burdens are shown compactly.
-- **Shape burden lens**: family cards distinguish the dominant local shape problem for each family (snapshot-heavy, deep nesting, duplicated state, or internal-field domination) with a specific sentence per card rather than a generic label. The primary shape signal chip is highlighted; secondary chips are de-emphasized.
-- **Consistency lens**: family cards surface parameter naming drift, path-style drift, and response-shape divergence across related routes.
-- **Spec-rule view**: a separate aggregate table lists normative rule findings by level and breadth, distinct from the burden card system.
+- **Workflow burden lens**: family cards and workflow chains highlight hidden token/context handoff, weak outcome guidance, brittle sequencing, and auth/header spread. Workflow steps now include explicit "What changed", "Authoritative now", "Next valid action", and trap guidance.
+- **Shape burden lens**: family cards and inspector summaries emphasize storage-shaped DX burden (snapshot-heavy responses, deep nesting, duplicated state, internal-field exposure, unclear source-of-truth, weak outcome/next-action framing).
+- **Spec-rule lens**: rules-based normative findings with explicit REQUIRED/MUST vs SHOULD/RECOMMENDED framing.
+
+Consistency/drift remains available as a supporting inspector/evidence perspective (including dedicated inspector mode), not as a competing top-level primary lens.
 
 ### Why you would use it
 

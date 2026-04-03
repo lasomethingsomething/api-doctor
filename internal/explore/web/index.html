@@ -44,6 +44,7 @@
           <input id="includeNoIssueRows" type="checkbox">
         </label>
       </div>
+      <p id="lensControlHint" class="subtle lens-control-hint" aria-live="polite"></p>
     </section>
 
     <section id="endpointDiagnosticsSection" class="section endpoint-diagnostics-section" style="display:none;">
@@ -63,6 +64,15 @@
       <p id="familySurfaceHelp" class="subtle"></p>
       <div id="familySurfaceContext" class="family-surface-context" aria-live="polite"></div>
       <div id="familySurface" class="family-surface"></div>
+    </section>
+
+    <section id="workflowSection" class="section workflow-section" style="display:none;">
+      <div class="section-heading">
+        <p class="eyebrow">Workflow patterns</p>
+        <h2>Step-by-step call chain surface</h2>
+      </div>
+      <p id="workflowHelp" class="subtle"></p>
+      <div id="workflowChains" class="workflow-chains" aria-live="polite"></div>
     </section>
 
     <section class="evidence-layout">
@@ -94,14 +104,6 @@
       </div>
     </section>
 
-    <section id="workflowSection" class="section workflow-section" style="display:none;">
-      <div class="section-heading">
-        <p class="eyebrow">Workflow patterns</p>
-        <h2>Call chain diagnostics and continuity</h2>
-      </div>
-      <p id="workflowHelp" class="subtle"></p>
-      <div id="workflowChains" class="workflow-chains" aria-live="polite"></div>
-    </section>
   </main>
 
   <script src="/static/app.js"></script>

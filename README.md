@@ -43,12 +43,12 @@ go run . explore --spec ./adminapi.json --base ./adminapi-v1.json --head ./admin
 ```
 
 How to use it quickly:
-1. Click a top-level lens/tab to activate a family triage view or open **Endpoint diagnostics** for selected-endpoint inspection.
+1. Click one of the three top-level lenses/tabs: **Spec rule violations**, **Workflow burden**, or **Shape burden**.
 2. In the top shortcut row, each lens card uses a subtle pastel tint so lens intent is visually distinct at a glance; the reset control remains a separate utility control.
 3. Use the **Family investigation clusters** section as the primary entry point — each card explains why that family appears in the current view.
-4. Use **Endpoint diagnostics** as the primary selected-endpoint inspection surface. It now contains summary, exact evidence, cleaner contract emphasis, and consistency/drift inspection for the current selection.
-5. Use the **Evidence list** to change the current endpoint selection; selecting a row updates Endpoint diagnostics.
-6. Use **Call chain diagnostics and continuity** as a lower secondary layer when you need workflow sequence context.
+4. Use **Endpoint diagnostics** as the persistent selected-endpoint inspection surface across all three lenses.
+5. In Workflow and Shape lenses, use inspector Summary for burden framing, Exact evidence for grouped messages, and supporting consistency/drift context where relevant.
+6. Use **Call chain diagnostics and continuity** in Workflow burden when you need step-by-step sequence context and trap guidance.
 
 ## Explorer vs CLI (quick decision)
 
@@ -84,7 +84,7 @@ Command roles:
 - Spec-rule risk: OpenAPI-normative rule findings (REQUIRED/RECOMMENDED evidence)
 - Workflow burden: where call chains hide next-step requirements
 - Contract shape burden: where responses are too generic or storage-shaped
-- Consistency drift: where related endpoints diverge in naming/path/shape
+- Consistency drift: supporting inspector/evidence perspective showing where related endpoints diverge in naming/path/shape
 - Change risk: where spec-to-spec changes can break clients
 - Fix-first priorities: deterministic starting points for remediation
 
@@ -94,6 +94,13 @@ Current workflow/shape heuristics include:
 - duplicated-state-response — card text: "State appears repeated across multiple response fields."
 - incidental-internal-field-exposure — card text: "Internal or audit fields appear to dominate the contract."
 - weak-outcome-next-action-guidance
+
+Explorer currently emphasizes:
+- three top-level primary lenses only: Spec rule violations, Workflow burden, Shape burden
+- persistent Endpoint diagnostics inspector as the main selected-endpoint surface
+- workflow step narratives with explicit "What changed", "Authoritative now", and "Next valid action"
+- first-class trap guidance with concise "What happened", "Easy to miss", and "Do next" actions
+- compact current-contract vs workflow-first contract comparison in Workflow/Shape inspector summaries
 
 ## What this is (and is not)
 
