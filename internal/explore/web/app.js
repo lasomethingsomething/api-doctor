@@ -572,19 +572,32 @@
     var nextNeeds = clues && clues.nextNeeds ? clues.nextNeeds : [];
     var hidden = clues && clues.hidden ? clues.hidden : [];
     var role = (roleLabel || '').toLowerCase();
+    var allText = (prereq.concat(establish, nextNeeds, hidden)).join(' | ').toLowerCase();
     var handoffText = (establish.concat(nextNeeds)).join(' | ').toLowerCase();
 
-    if (hidden.length) {
-      return { kind: 'weak', label: 'implicit handoff' };
+    // Derive the most specific applicable label from available clue text,
+    // including when hidden signals are present.
+    if (/(auth|bearer|authorization|access\s*key|api[-\s]?key)/.test(allText)) {
+      return { kind: 'context', label: hidden.length ? 'auth/header dependency' : 'auth/header dependency' };
     }
-    if (/(auth|session|token|context)/.test(handoffText)) {
-      return { kind: 'context', label: 'context handoff' };
+    if (/(token|context)/.test(allText)) {
+      return { kind: 'context', label: hidden.length ? 'context token handoff' : 'context handoff' };
+    }
+    if (/(order identity|order state|order context)/.test(allText)) {
+      return { kind: 'state', label: 'order identity handoff' };
+    }
+    if (/(cart|order|customer)/.test(allText) && hidden.length) {
+      return { kind: 'state', label: 'cart/order state dependency' };
     }
     if (/(cart|order|customer|state)/.test(handoffText) || role === 'action' || role === 'update') {
       return { kind: 'state', label: 'state transition' };
     }
-    if (/(payment|follow-up)/.test(handoffText) || role === 'payment' || role === 'checkout') {
-      return { kind: 'followup', label: 'follow-up dependency' };
+    if (/(payment|follow-up|follow up|transaction)/.test(allText) || role === 'payment' || role === 'checkout') {
+      return { kind: 'followup', label: hidden.length ? 'follow-up action dependency' : 'follow-up dependency' };
+    }
+    if (hidden.length) {
+      if (prereq.length) return { kind: 'weak', label: 'prior-state dependency' };
+      return { kind: 'weak', label: 'implicit handoff' };
     }
     if (prereq.length) {
       return { kind: 'prereq', label: 'prior-state dependency' };
