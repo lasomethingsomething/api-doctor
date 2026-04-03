@@ -931,31 +931,27 @@
 
     var chipItems;
     if (activeBurden !== 'all') {
-      chipItems = topFamilyBurdenSignals(family, activeBurden, 3);
+      chipItems = topFamilyBurdenSignals(family, activeBurden, 2);
       if (!chipItems.length) {
         if (activeBurden === 'workflow-burden') chipItems = ['missing next action'];
         else if (activeBurden === 'contract-shape') chipItems = ['storage-shaped response'];
         else chipItems = ['path/param drift'];
       }
     } else {
-      chipItems = family.topDimensions || [];
+      chipItems = (family.topDimensions || []).slice(0, 1);
     }
     var chipsHtml = chipItems.map(function(c) { return '<span class="chip">' + escapeHtml(c) + '</span>'; }).join('');
 
-    var burdenLabel = family.dominantBurden === 'mixed' ? 'mixed (multiple burden types)' : family.dominantBurden;
     return '<button type="button" class="family-card pressure-' + family.pressure + '" data-family="' + escapeHtml(family.family) + '">'
       + '<div class="family-head">'
       + '<strong>' + escapeHtml(humanFamilyLabel(family.family)) + '</strong>'
       + pressureBadge(family.pressure, 'pressure')
       + '</div>'
       + '<p class="family-stat">' + family.findings + ' issue' + (family.findings === 1 ? '' : 's') + ' across ' + family.endpoints + ' endpoint' + (family.endpoints === 1 ? '' : 's') + '</p>'
-      + '<p class="family-card-note">Why this appears here (summary)</p>'
       + (whyText
           ? '<p class="family-burden-why">' + escapeHtml(whyText) + '</p>'
-          : '<p class="subtle">Main burden: ' + escapeHtml(burdenLabel) + '</p>')
-      + '<p class="family-card-note">Summary signals</p>'
-      + '<div class="chips">' + chipsHtml + '</div>'
-      + '<p class="family-next-step">Inspect detail: select this family, then open an endpoint row for exact issue evidence.</p>'
+          : '')
+      + (chipsHtml ? '<div class="chips">' + chipsHtml + '</div>' : '')
       + '</button>';
   }
 

@@ -363,7 +363,7 @@ select:focus {
 }
 
 .family-stat {
-  margin: 0.32rem 0 0.18rem;
+  margin: 0.18rem 0 0;
   font-size: 0.92rem;
   font-weight: 700;
 }
@@ -473,9 +473,9 @@ select:focus {
 }
 
 .family-burden-why {
-  margin: 0.3rem 0 0.1rem;
+  margin: 0.12rem 0 0;
   font-size: 0.78rem;
-  line-height: 1.44;
+  line-height: 1.42;
   color: #2a3e4e;
   font-style: italic;
 }
@@ -1851,6 +1851,7 @@ tbody tr.active {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
+  margin-top: 0.12rem;
 }
 
 .chip {
