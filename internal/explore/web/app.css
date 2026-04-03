@@ -1097,6 +1097,25 @@ select:focus {
   background: #fbfeff;
 }
 
+.recovery-secondary-hint {
+  margin: 0.28rem 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.recovery-link {
+  all: unset;
+  cursor: pointer;
+  font-size: 0.76rem;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.recovery-link:hover {
+  color: #0d3a4a;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

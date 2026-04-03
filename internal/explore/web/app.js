@@ -263,8 +263,11 @@
       el.workflowHelp.textContent = 'No call chains match the current lens. Broaden the filters to see workflow patterns.';
       el.workflowChains.innerHTML = '<div class="workflow-no-match">'
         + '<p><strong>No matching workflows</strong></p>'
-        + '<p class="subtle">The current search, category, or burden filters removed all relevant call chains. Use the buttons below to broaden the view.</p>'
-        + renderRecoveryActions(["clear-search", "reset-burden", "show-all-workflows", "clear-current-lens"])  
+        + '<p class="subtle">The current filters removed all relevant call chains.</p>'
+        + '<div class="recovery-actions">'
+        + '<button type="button" class="secondary-action" data-recovery-action="show-all-workflows">Show all workflow patterns</button>'
+        + '</div>'
+        + '<p class="recovery-secondary-hint">Or: <button type="button" class="recovery-link" data-recovery-action="reset-burden">reset burden</button> · <button type="button" class="recovery-link" data-recovery-action="clear-search">clear search</button></p>'
         + '</div>';
       bindRecoveryButtons(el.workflowChains);
       return;
