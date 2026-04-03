@@ -1435,7 +1435,7 @@ tbody tr.active {
 /* ── Spec-rule grounding block ───────────────────────────────────────────── */
 
 .issue-group-spec-rule > summary {
-  border-left: 3px solid #2a7a4a;
+  border-left: 3px solid #5a758a;
 }
 
 .spec-rule-grounding {
@@ -1445,10 +1445,10 @@ tbody tr.active {
   gap: 0.3rem;
   margin: 0.4rem 0 0.2rem;
   padding: 0.38rem 0.52rem;
-  border: 1px solid #c4e0cc;
-  border-left: 3px solid #2a7a4a;
+  border: 1px solid #c8d4de;
+  border-left: 3px solid #5a758a;
   border-radius: 6px;
-  background: #f2faf5;
+  background: #f4f7fa;
   font-size: 0.78rem;
 }
 
@@ -1456,7 +1456,7 @@ tbody tr.active {
   font-family: monospace;
   font-size: 0.76rem;
   font-weight: 700;
-  color: #1a5a2a;
+  color: #2a455a;
   letter-spacing: 0.03em;
 }
 
@@ -1483,7 +1483,7 @@ tbody tr.active {
 }
 
 .spec-source {
-  color: #3a6a4a;
+  color: #4a6070;
   font-style: italic;
 }
 
@@ -1493,9 +1493,9 @@ tbody tr.active {
 }
 
 .spec-rule-explanation {
-  background: #f2faf5;
-  border-color: #c4e0cc;
-  border-left-color: #2a7a4a;
+  background: #f4f7fa;
+  border-color: #c8d4de;
+  border-left-color: #5a758a;
 }
 
 /* ── Spec-rule aggregate table (shown in list context when spec-rule lens is active) ── */
