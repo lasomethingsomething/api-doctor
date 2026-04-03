@@ -918,10 +918,10 @@
       var dominant = topSignals[0] || '';
       var secondary = topSignals[1] ? ' Also: ' + humanizeSignalLabel(topSignals[1]) + '.' : '';
       var shapeSentences = {
-        'response appears snapshot-heavy': 'Returns full model state rather than task-scoped fields.',
-        'deep nesting appears likely': 'Response nesting may complicate client traversal.',
-        'duplicated state appears likely': 'State appears repeated across multiple response fields.',
-        'incidental/internal fields appear to dominate': 'Internal or audit fields appear to dominate the contract.'
+        'response appears snapshot-heavy': 'Full model state included; consider task-focused subset.',
+        'deep nesting appears likely': 'Deeply nested structure; client code needs complex data access paths.',
+        'duplicated state appears likely': 'State values repeated across multiple fields; source of truth unclear.',
+        'incidental/internal fields appear to dominate': 'Internal/audit fields dominate exposed contract; clients must filter.'
       };
       var lead = shapeSentences[dominant] || 'Response schema appears storage-shaped rather than task-oriented.';
       return lead + secondary;
