@@ -19,7 +19,7 @@
   </header>
 
   <main class="layout">
-    <section class="summary-head section-card">
+    <section class="summary-head">
       <div class="section-heading">
         <p class="eyebrow">Overview</p>
         <h2>Contract trust and workflow burden snapshot</h2>
@@ -36,28 +36,28 @@
       </div>
       <p id="fixFirstHelp" class="subtle">Click a priority line to narrow endpoint evidence and related workflow context.</p>
       <div id="fixFirstList" class="fix-list"></div>
+      <div id="fixFirstContext" class="fix-context" aria-live="polite"></div>
     </section>
 
     <section class="pane workflow-pane section-card">
       <div class="section-heading">
-        <p class="eyebrow">Concentration map</p>
-        <h2>Families and workflow paths</h2>
+        <p class="eyebrow">Burden map</p>
+        <h2>Where burden concentrates</h2>
       </div>
       <p id="workflowHelp" class="subtle">Start here to see where burden concentrates, then click into endpoint evidence.</p>
+
       <div id="workflowPanel" class="detail-block"></div>
     </section>
 
-    <section class="controls section-card">
-      <div class="section-heading controls-head">
-        <div>
-          <p class="eyebrow">Investigation lens</p>
-          <h2>Filter endpoint evidence</h2>
-        </div>
+    <section class="controls filter-bar">
+      <div class="filter-bar-head">
+        <p class="eyebrow">Investigation lens</p>
+        <p class="subtle">Filters below apply to endpoint evidence only — summary cards and fix-first priorities stay full-spec context.</p>
       </div>
-      <p class="subtle">These filters adjust endpoint evidence investigation; top summary and fix-first cards remain global context.</p>
       <div class="controls-grid">
         <label class="field search-field">Search endpoint
-          <input id="searchInput" type="search" placeholder="Search endpoint path or method">
+          <input id="searchInput" type="search" placeholder="Search path, method, or family (e.g. /category, POST)" list="searchSuggestions" autocomplete="off">
+          <datalist id="searchSuggestions"></datalist>
         </label>
         <label class="field">Severity
           <select id="severityFilter"></select>
@@ -89,10 +89,9 @@
             <h2>Endpoint evidence list</h2>
           </div>
         </div>
-        <p id="evidenceListHelp" class="subtle">Use filters and sort to narrow to the endpoint evidence you want to inspect next.</p>
         <p id="evidenceScope" class="subtle"></p>
         <table>
-          <thead><tr><th>Endpoint</th><th>Findings</th><th>Priority</th><th>Risk</th></tr></thead>
+          <thead><tr><th>Endpoint</th><th>Findings</th><th>Priority</th><th>Risk <span class="score-hint">5=best</span></th></tr></thead>
           <tbody id="endpointRows"></tbody>
         </table>
       </div>
@@ -104,6 +103,7 @@
           </div>
         </div>
         <p id="detailHelp" class="subtle">Pick a row to see why this endpoint is flagged and what workflow context to inspect next.</p>
+
         <div id="endpointDetail" class="detail-block"></div>
       </div>
     </section>

@@ -3,6 +3,8 @@
     payload: null,
     selectedEndpointId: "",
     selectionSource: "default",
+    selectedFindingIdx: -1,
+    fixFirstActiveId: null,
     filters: { search: "", severity: "all", category: "all", burden: "all", findingsOnly: false, sortBy: "priority" }
   };
 
@@ -12,6 +14,7 @@
     summaryCards: document.getElementById("summaryCards"),
     fixFirstHelp: document.getElementById("fixFirstHelp"),
     fixFirstList: document.getElementById("fixFirstList"),
+      fixFirstContext: document.getElementById("fixFirstContext"),
     searchInput: document.getElementById("searchInput"),
     severityFilter: document.getElementById("severityFilter"),
     categoryFilter: document.getElementById("categoryFilter"),
@@ -89,6 +92,7 @@
     renderHeader();
     renderSummary();
     renderFixFirst();
+    renderFixFirstContext();
     renderEndpointRows();
     renderEndpointDetail();
     renderWorkflowPanel();
@@ -167,6 +171,8 @@
         state.filters.findingsOnly = item.id !== 'families';
         state.filters.sortBy = item.id === 'families' ? 'findings' : 'priority';
         state.selectionSource = "fix-first";
+        state.fixFirstActiveId = id;
+        state.selectedFindingIdx = -1;
         syncControls();
         state.selectedEndpointId = firstVisibleEndpointId(filteredRows(), { preferFindings: true });
         render();
@@ -177,7 +183,15 @@
   function renderEndpointRows() {
     var rows = filteredRows();
     if (el.evidenceScope) {
-      el.evidenceScope.textContent = rows.length + ' endpoints match current lens' + formatLensSuffix(state.filters) + '.';
+      var scopeText = rows.length + ' endpoint' + (rows.length === 1 ? '' : 's') + ' match current lens' + formatLensSuffix(state.filters) + '.';
+      if (state.filters.search && rows.length > 0) {
+        var famCounts = {};
+        rows.forEach(function (r) { famCounts[r.family] = (famCounts[r.family] || 0) + 1; });
+        var famEntries = Object.entries(famCounts).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 4);
+        var famTotal = Object.keys(famCounts).length;
+        scopeText += ' ' + famTotal + ' ' + (famTotal === 1 ? 'family' : 'families') + ': ' + famEntries.map(function (e) { return e[0] + '\u00a0(' + e[1] + ')'; }).join(', ') + '.';
+      }
+      el.evidenceScope.textContent = scopeText;
     }
     if (rows.length === 0) {
       state.selectedEndpointId = "";
@@ -196,6 +210,7 @@
       tr.addEventListener('click', function () {
         state.selectedEndpointId = tr.getAttribute('data-id');
         state.selectionSource = 'endpoint-list';
+        state.selectedFindingIdx = -1;
         renderEndpointRows();
         renderEndpointDetail();
         focusSelectedRow();
@@ -264,9 +279,23 @@
     if (detail.findings.length === 0) {
       findings += "<p class='subtle'>No findings on this endpoint in the current spec-derived slice.</p>";
     } else {
-      findings += "<ul class='finding-list'>" + detail.findings.map(function (f) {
+      findings += "<ul class='finding-list'>" + detail.findings.map(function (f, idx) {
+        var isSelected = idx === state.selectedFindingIdx;
         var impact = f.impact ? '<p class="finding-impact">' + escapeHtml(f.impact) + '</p>' : '';
-        return '<li class="finding-item"><div class="finding-head"><span class="badge ' + f.severity + '">' + f.severity + '</span><code class="finding-code">' + escapeHtml(f.code) + '</code></div><p class="finding-message">' + escapeHtml(f.message) + '</p>' + impact + '</li>';
+        var expandContent = '';
+        if (isSelected) {
+          var hint = findingExamineHint(f.code, f.message);
+          var wfCtx = findingWorkflowContext(detail.endpoint.id, f.code, detail.relatedWorkflows);
+          expandContent = '<div class="finding-expand">'
+            + (hint ? '<p class="finding-examine-label">What to examine</p><p class="finding-examine">' + escapeHtml(hint) + '</p>' : '')
+            + wfCtx
+            + '</div>';
+        }
+        var expandArrow = '<span class="finding-toggle">' + (isSelected ? '\u25be' : '\u25b8') + '</span>';
+        return '<li class="finding-item' + (isSelected ? ' selected' : '') + '" data-idx="' + idx + '">'
+          + '<div class="finding-head"><span class="badge ' + f.severity + '">' + f.severity + '</span><code class="finding-code">' + escapeHtml(f.code) + '</code>' + expandArrow + '</div>'
+          + '<p class="finding-message">' + escapeHtml(f.message) + '</p>'
+          + impact + expandContent + '</li>';
       }).join("") + "</ul>";
     }
 
@@ -283,43 +312,59 @@
     }).join('') + '</ul>' : '';
 
     el.endpointDetail.innerHTML = '<div class="detail-header"><div class="detail-title"><span class="eyebrow">Selected endpoint</span><span class="detail-path">' + detail.endpoint.method + ' ' + detail.endpoint.path + '</span></div><div class="detail-meta"><span class="badge ' + detail.endpoint.priority + '">' + detail.endpoint.priority + '</span><span class="endpoint-chip">' + detail.endpoint.family + '</span><span class="risk-copy">' + detail.endpoint.riskSummary + '</span></div><div class="detail-context">' + escapeHtml(detailContextText(detail)) + '</div></div><div class="investigation-summary"><h3>Why this needs attention</h3><p>' + escapeHtml(summary.why) + '</p><p class="subtle">Inspect next: ' + escapeHtml(summary.next) + '</p></div>' + findings + workflows + chains + diffs;
+
+    Array.prototype.forEach.call(el.endpointDetail.querySelectorAll('.finding-item'), function (item, idx) {
+      item.addEventListener('click', function (e) {
+        e.stopPropagation();
+        state.selectedFindingIdx = state.selectedFindingIdx === idx ? -1 : idx;
+        renderEndpointDetail();
+      });
+    });
   }
 
   function renderWorkflowPanel() {
     var wf = state.payload.workflows;
     var endpointFamilies = buildEndpointFamilySummaries(state.payload.endpoints || []);
     var kindSummaries = buildWorkflowKindSummaries(wf.entries || []);
+    var familyPatterns = buildFamilyWorkflowPatterns(wf.entries || [], state.payload.endpointDetails || {});
 
     if (el.workflowHelp) {
-      if (endpointFamilies.length > 0 || kindSummaries.length > 0) {
-        var topFamily = endpointFamilies.length > 0 ? endpointFamilies[0].family : 'n/a';
-        var topKind = kindSummaries.length > 0 ? kindSummaries[0].kind : 'n/a';
-        el.workflowHelp.textContent = 'Start with family ' + topFamily + ' and workflow kind ' + topKind + '. Click a row below to open representative endpoint evidence.';
+      if (endpointFamilies.length > 0) {
+        el.workflowHelp.textContent = 'Each row answers: where is burden concentrated, and what multi-step pattern is involved? Click any row to jump to its highest-evidence endpoint.';
       } else {
         el.workflowHelp.textContent = 'No workflow/family concentration evidence is available in this run.';
       }
     }
 
-    var families = endpointFamilies.slice(0, 8).map(function (f, idx) {
+    var families = endpointFamilies.slice(0, 10).map(function (f, idx) {
       var prefix = idx === 0 ? 'Most findings \u2014 ' : '';
-      return '<li class="workflow-click" data-id="' + (f.targetID || '') + '"><strong>' + prefix + f.family + '</strong> \u2014 ' + f.findings + ' finding' + (f.findings === 1 ? '' : 's') + ' across ' + f.endpoints + ' endpoint' + (f.endpoints === 1 ? '' : 's') + '<br><span class="subtle">dominant burden: ' + f.dominantBurden + '</span></li>';
+      var pattern = familyPatterns[f.family];
+      var patternTag = pattern ? ' <span class="family-pattern">' + workflowKindShort(pattern) + '</span>' : '';
+      return '<li class="workflow-click" data-id="' + (f.targetID || '') + '">'
+        + '<div class="family-row-head"><strong>' + prefix + f.family + '</strong>' + patternTag + '</div>'
+        + '<span class="subtle">' + f.findings + ' finding' + (f.findings === 1 ? '' : 's') + ' across ' + f.endpoints + ' endpoint' + (f.endpoints === 1 ? '' : 's') + ' \u00b7 ' + f.dominantBurden + ' burden</span>'
+        + '</li>';
     }).join('');
 
-    var paths = kindSummaries.slice(0, 8).map(function (k, idx) {
-      var prefix = idx === 0 ? 'Most common \u2014 ' : '';
+    var paths = kindSummaries.slice(0, 6).map(function (k) {
       var kindDesc = workflowKindLabel(k.kind);
-      var scoreNote = k.score ? ' <span class="subtle score-inline">(scores: ' + k.score + ' \u00b7 schema/client/version \u00b7 5=best)</span>' : '';
-      return '<li class="workflow-click" data-id="' + (k.targetID || '') + '"><strong>' + prefix + k.kind.replaceAll('-', ' \u2192 ') + '</strong>: ' + k.count + ' instance' + (k.count === 1 ? '' : 's') + scoreNote + '<br><span class="subtle">' + kindDesc + '</span></li>';
+      return '<li class="workflow-click" data-id="' + (k.targetID || '') + '">'
+        + '<strong>' + k.kind.replaceAll('-', ' \u2192 ') + '</strong>: ' + k.count + ' instance' + (k.count === 1 ? '' : 's')
+        + '<br><span class="subtle">' + kindDesc + '</span>'
+        + '</li>';
     }).join('');
 
-    var reps = (wf.chains || []).slice(0, 6).map(function (c) {
-      var id = c.endpointIds[0] || '';
-      return '<li class="workflow-click" data-id="' + id + '"><strong>' + c.kind + '</strong><br>' + escapeHtml(c.summary) + '</li>';
-    }).join('');
+    el.workflowPanel.innerHTML = '<div class="workflow-sections">'
+      + '<section class="workflow-group"><h3>Where burden concentrates</h3>'
+      + '<ul id="familyList">' + (families || "<li class='subtle'>No family summaries in this run.</li>") + '</ul>'
+      + '</section>'
+      + '<section class="workflow-group"><h3>Detected multi-step patterns</h3>'
+      + '<p class="workflow-caveat subtle">Inferred from path shapes \u2014 not live API behavior.</p>'
+      + '<ul id="workflowKindList">' + (paths || "<li class='subtle'>No workflow patterns detected.</li>") + '</ul>'
+      + '</section>'
+      + '</div>';
 
-    el.workflowPanel.innerHTML = '<div class="workflow-sections"><section class="workflow-group"><h3>Endpoint families by burden</h3><ul id="familyList">' + (families || "<li class='subtle'>No family summaries in this run.</li>") + '</ul></section><section class="workflow-group"><h3>Inferred handoff patterns by type</h3><ul id="workflowKindList">' + (paths || "<li class='subtle'>No workflow paths.</li>") + '</ul></section><section class="workflow-group"><h3>Inferred multi-step paths</h3><p class=\'workflow-caveat subtle\'>Assembled from path shapes and ID conventions in the spec \u2014 not from live API behavior. Click any entry to inspect its most evidence-bearing endpoint.</p><ul id="chainList">' + (reps || "<li class='subtle'>No multi-step paths in this run.</li>") + '</ul></section></div>';
-
-    ['familyList', 'workflowKindList', 'chainList'].forEach(function (listID) {
+    ['familyList', 'workflowKindList'].forEach(function (listID) {
       var list = document.getElementById(listID);
       if (!list) return;
       Array.prototype.forEach.call(list.querySelectorAll('li[data-id]'), function (li) {
@@ -345,6 +390,7 @@
     }
     state.selectedEndpointId = id;
     state.selectionSource = 'family-workflow';
+    state.selectedFindingIdx = -1;
     renderEndpointRows();
     renderEndpointDetail();
     focusSelectedRow();
@@ -458,6 +504,112 @@
     var idx = order.indexOf(id);
     return idx === -1 ? '•' : String(idx + 1);
   }
+
+  function renderFixFirstContext() {
+    if (!el.fixFirstContext) return;
+    if (!state.fixFirstActiveId) { el.fixFirstContext.innerHTML = ''; return; }
+    var item = state.payload.fixFirst.find(function (x) { return x.id === state.fixFirstActiveId; });
+    if (!item) { el.fixFirstContext.innerHTML = ''; return; }
+    var rows = filteredRows();
+    var codeCounts = {};
+    rows.slice(0, 20).forEach(function (r) {
+      var d = state.payload.endpointDetails[r.id];
+      if (!d) return;
+      d.findings.forEach(function (f) { codeCounts[f.code] = (codeCounts[f.code] || 0) + 1; });
+    });
+    var topCode = Object.entries(codeCounts).sort(function (a, b) { return b[1] - a[1]; })[0];
+    var hint = topCode ? findingExamineHint(topCode[0], '') : '';
+    var patternLine = topCode
+      ? '<p class="fix-context-pattern">Most common: <code class="finding-code">' + escapeHtml(topCode[0]) + '</code> \u2014 ' + topCode[1] + ' instance' + (topCode[1] === 1 ? '' : 's') + (hint ? '. ' + escapeHtml(hint) : '') + '</p>'
+      : '';
+    var top3 = rows.slice(0, 3).map(function (r) {
+      var shortPath = r.path.split('/').slice(0, 4).join('/') + (r.path.split('/').length > 4 ? '\u2026' : '');
+      return '<span class="ctx-chip" data-id="' + r.id + '">' + escapeHtml(r.method) + ' ' + escapeHtml(shortPath) + (r.findings > 0 ? ' <span class="ctx-chip-count">\u00b7\u202f' + r.findings + '</span>' : '') + '</span>';
+    }).join('');
+    el.fixFirstContext.innerHTML = '<div class="fix-context-inner">'
+      + '<p class="fix-context-label">Investigating <strong>' + escapeHtml(item.label) + '</strong> \u2014 ' + rows.length + ' endpoint' + (rows.length === 1 ? '' : 's') + ' in this lens</p>'
+      + patternLine
+      + (top3 ? '<p class="fix-context-top-label">Jump to:</p><div class="ctx-chips">' + top3 + '</div>' : '')
+      + '</div>';
+    Array.prototype.forEach.call(el.fixFirstContext.querySelectorAll('.ctx-chip[data-id]'), function (chip) {
+      chip.addEventListener('click', function () { jumpToEndpoint(chip.getAttribute('data-id')); });
+    });
+  }
+
+  function findingExamineHint(code, message) {
+    switch (code) {
+      case 'weak-list-detail-linkage':
+      case 'weak-follow-up-linkage': {
+        var m = (message || '').match(/\(no ([^)]+)\)/);
+        var props = m ? m[1] : 'an id or identifier field';
+        return 'Add ' + props + ' to the response item schema so clients can form the next request without a separate lookup.';
+      }
+      case 'weak-action-follow-up-linkage':
+        return 'Add a state field or resource ID to the action response so clients can confirm the outcome without issuing a follow-up GET.';
+      case 'weak-accepted-tracking-linkage':
+        return 'Add a tracking URL or task ID to the 202 Accepted body so clients can poll for completion without guessing the status endpoint.';
+      case 'likely-missing-enum': {
+        var m = (message || '').match(/property '([^']+)'/);
+        var prop = m ? "'" + m[1] + "'" : 'this property';
+        return 'Declare explicit enum values on ' + prop + ' so generated clients type-check valid values and version changes are tracked.';
+      }
+      case 'prerequisite-task-burden': {
+        var m = (message || '').match(/requires (\d+) identifier/);
+        var n = m ? m[1] : 'multiple';
+        return 'This endpoint needs ' + n + ' identifier input' + (n === '1' ? '' : 's') + '. Consider pre-including them in a parent response to avoid multi-step pre-fetch chains.';
+      }
+      case 'contract-shape-workflow-guidance-burden':
+        return 'Return a compact outcome response instead of a full snapshot. Include a status field or follow-up link so clients know what changed and what to call next.';
+      case 'sibling-path-shape-drift':
+        return 'Align path parameter naming and response structure with the other endpoints in this group to make the API surface predictable.';
+      case 'generic-object-request':
+        return 'Replace the generic object with concrete named properties in the request schema so clients know exactly what to send.';
+      case 'generic-object-response':
+        return 'Replace the generic object with concrete named properties in the response schema so clients know exactly what to expect back.';
+      case 'deprecated-operation':
+        return 'Do not use this endpoint for new integrations. Locate the recommended replacement and migrate existing callers.';
+      default:
+        return '';
+    }
+  }
+
+  function findingWorkflowContext(endpointId, code, relatedWorkflows) {
+    if (!relatedWorkflows || relatedWorkflows.length === 0) return '';
+    var linkageCodes = { 'weak-list-detail-linkage': true, 'weak-follow-up-linkage': true, 'weak-action-follow-up-linkage': true, 'weak-accepted-tracking-linkage': true };
+    if (!linkageCodes[code]) return '';
+    var asSource = relatedWorkflows.filter(function (w) { return w.fromId === endpointId; });
+    if (asSource.length === 0) return '';
+    var kindNames = uniq(asSource.map(function (w) { return w.kind.replaceAll('-', '\u00a0\u2192\u00a0'); })).slice(0, 2).join(', ');
+    return '<p class="finding-workflow-ctx">This endpoint is the <strong>source</strong> in ' + asSource.length + ' inferred step-pair' + (asSource.length === 1 ? '' : 's') + ' (' + kindNames + '). The downstream target expects a linkage value this response does not currently expose.</p>';
+  }
+
+  function buildFamilyWorkflowPatterns(entries, details) {
+    var familyKinds = {};
+    entries.forEach(function (e) {
+      var d = details[e.fromId];
+      if (!d) return;
+      var fam = d.endpoint.family;
+      if (!familyKinds[fam]) familyKinds[fam] = {};
+      familyKinds[fam][e.kind] = (familyKinds[fam][e.kind] || 0) + 1;
+    });
+    var result = {};
+    Object.keys(familyKinds).forEach(function (fam) {
+      var kinds = Object.entries(familyKinds[fam]).sort(function (a, b) { return b[1] - a[1]; });
+      result[fam] = kinds.length > 0 ? kinds[0][0] : null;
+    });
+    return result;
+  }
+
+  function workflowKindShort(kind) {
+    switch (kind) {
+      case 'create-to-detail': return 'create \u2192 detail';
+      case 'list-to-detail': return 'list \u2192 detail';
+      case 'action-to-detail': return 'action \u2192 detail';
+      case 'list-to-detail-to-update': return 'list \u2192 detail \u2192 update';
+      default: return kind.replaceAll('-', ' \u2192 ');
+    }
+  }
+
   function dominantBurdenCode(rows) {
     if (!rows || rows.length === 0) return '';
     var counts = {};

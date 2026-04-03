@@ -377,6 +377,97 @@ tr.active {
   color: var(--muted-soft);
   line-height: 1.42;
 }
+.finding-item { cursor: pointer; transition: background 80ms ease; }
+.finding-item.selected {
+  border-color: rgba(118, 227, 234, 0.6);
+  background: linear-gradient(135deg, rgba(232, 251, 253, 0.85), rgba(244, 250, 255, 0.9));
+}
+.finding-toggle {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--muted-soft);
+  line-height: 1;
+}
+.finding-expand {
+  margin-top: 0.55rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(194, 201, 223, 0.4);
+}
+.finding-examine-label {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-soft);
+}
+.finding-examine {
+  margin: 0 0 0.3rem;
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.48;
+}
+.finding-workflow-ctx {
+  margin: 0.3rem 0 0;
+  padding: 0.38rem 0.55rem;
+  border-radius: 8px;
+  background: rgba(183, 216, 255, 0.2);
+  font-size: 0.82rem;
+  color: #2b3f50;
+  line-height: 1.45;
+}
+.fix-context { margin-top: 0.6rem; }
+.fix-context-inner {
+  padding: 0.6rem 0.85rem;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(118, 227, 234, 0.09), rgba(183, 216, 255, 0.11));
+  border: 1px solid rgba(118, 227, 234, 0.3);
+}
+.fix-context-label {
+  margin: 0 0 0.3rem;
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+.fix-context-pattern {
+  margin: 0 0 0.45rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.fix-context-top-label {
+  margin: 0 0 0.28rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted-soft);
+}
+.ctx-chips { display: flex; flex-wrap: wrap; gap: 0.38rem; }
+.ctx-chip {
+  cursor: pointer;
+  padding: 0.26rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(118, 227, 234, 0.48);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 0.8rem;
+  color: #20303a;
+  transition: background 100ms ease, border-color 100ms ease;
+  white-space: nowrap;
+}
+.ctx-chip:hover { background: rgba(118, 227, 234, 0.18); border-color: rgba(118, 227, 234, 0.72); }
+.ctx-chip-count { color: var(--muted-soft); }
+.family-row-head { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-bottom: 0.12rem; }
+.family-pattern {
+  font-size: 0.72rem;
+  padding: 0.08rem 0.42rem;
+  border-radius: 999px;
+  background: rgba(157, 231, 196, 0.32);
+  border: 1px solid rgba(157, 231, 196, 0.55);
+  color: #1a4a33;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .detail-header {
   display: grid;
   gap: 0.65rem;
