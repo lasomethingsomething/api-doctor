@@ -883,21 +883,21 @@
     var topSignals = topFamilyBurdenSignals(family, burden, 2);
     if (burden === 'workflow-burden') {
       if (topSignals.length) {
-        return 'Appears here because ' + topSignals.join(' and ') + ' in this family, which likely increases workflow burden.';
+        return topSignals.map(function(s) { return humanizeSignalLabel(s); }).join(' and ') + ' patterns.';
       }
-      return 'Appears here because one or more endpoints suggest missing follow-up identifiers or brittle workflow sequencing.';
+      return 'Potential workflow sequencing or follow-up linkage issues.';
     }
     if (burden === 'contract-shape') {
       if (topSignals.length) {
-        return 'Appears here because ' + topSignals.join(' and ') + ' in this family, suggesting storage-shaped contract emphasis.';
+        return topSignals.map(function(s) { return humanizeSignalLabel(s); }).join(' and ') + ' patterns.';
       }
-      return 'Appears here because schema patterns suggest storage-shaped or overly generic contracts rather than task-oriented responses.';
+      return 'Response schema appears storage-shaped rather than task-oriented.';
     }
     if (burden === 'consistency') {
       if (topSignals.length) {
-        return 'Appears here because ' + topSignals.join(' and ') + ' across similar operations in this family.';
+        return topSignals.map(function(s) { return humanizeSignalLabel(s); }).join(' and ') + ' drift.';
       }
-      return 'Appears here because similar operations in this family appear to drift in path style, parameter naming, or response shape conventions.';
+      return 'Similar operations drift in path style, parameters, or response shape.';
     }
     return '';
   }
@@ -2016,6 +2016,19 @@
     if (value.endsWith('ies')) return value.slice(0, -3) + 'y';
     if (value.endsWith('s') && value.length > 1) return value.slice(0, -1);
     return value;
+  }
+
+  function humanizeSignalLabel(signal) {
+    var map = {
+      'snapshot-heavy-response': 'snapshot-heavy',
+      'deeply-nested-response-structure': 'deeply-nested',
+      'duplicated-state-response': 'duplicated state',
+      'incidental-internal-field-exposure': 'incidental fields',
+      'weak-outcome-next-action-guidance': 'weak guidance',
+      'missing-next-action': 'missing next-action',
+      'storage-shaped-response': 'storage-shaped'
+    };
+    return map[signal] || signal.replaceAll('-', ' ');
   }
 
   function renderRecoveryActions(actions) {
