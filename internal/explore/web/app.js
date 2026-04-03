@@ -1093,70 +1093,92 @@
     var topGroup = groups[0] || null;
     var topContext = topGroup ? topGroup.context : {};
     var shapeTotals = collectShapeSignalTotalsForDetail(detail);
+
+    // Pain signals — organized around developer pain, not schema categories
+    var painSignals = collectShapePainSignals(endpoint, findings);
+    var painHtml = renderShapePainSignals(painSignals);
+
+    // Comparison is always visible — not hidden in a details element
     var comparisonHtml = renderInspectorContractShapeComparison(detail, findings, {
       title: 'Current contract shape vs workflow-first contract shape',
       context: 'shape'
     });
+
     var guidance = collectTrapGuidance(endpoint, findings, { prereq: [], establish: [], nextNeeds: [], hidden: [] }, [], [], null, '', false);
     var guidanceHtml = renderTrapGuidanceList(guidance, {
       title: 'Shape trap guidance',
       className: 'inspector-trap-guidance',
       limit: 3
     });
-    var consistencySupportHtml = renderConsistencySupportCard(detail, {
-      title: 'Consistency / drift (supporting view)',
-      emptyText: 'No clear drift signal is attached to this endpoint in the current evidence.'
-    });
 
-    var topDimensions = groups.slice(0, 3).map(function (group) {
-      return group.title;
-    });
+    // Compact numeric profile badge row
+    var activeSignalCodes = painSignals.map(function (s) { return s.code; });
+    var profileItems = [
+      { key: 'deep', label: 'deep nesting', val: shapeTotals.deep },
+      { key: 'dup',  label: 'duplicated state', val: shapeTotals.dup },
+      { key: 'internal-fields', label: 'internal fields', val: shapeTotals.internal },
+      { key: 'snapshot-heavy', label: 'snapshot-heavy', val: shapeTotals.snapshot },
+      { key: 'missing-outcome', label: 'missing outcome', val: shapeTotals.outcome },
+      { key: 'missing-next-action', label: 'missing next action', val: shapeTotals.nextAction }
+    ].filter(function (item) { return item.val > 0; });
+
+    var profileHtml = profileItems.length
+      ? '<div class="shape-profile-row">'
+          + profileItems.map(function (item) {
+              return '<span class="shape-profile-chip">'
+                + '<strong>' + item.val + '</strong> ' + escapeHtml(item.label)
+                + '</span>';
+            }).join('')
+          + '</div>'
+      : '';
+
+    // Top schema locations (compact, supporting)
     var locationHighlights = topOpenAPIHighlights(groups).slice(0, 3);
-    var profileParts = [
-      'deep nesting: ' + shapeTotals.deep,
-      'internal fields: ' + shapeTotals.internal,
-      'duplicated state: ' + shapeTotals.dup,
-      'snapshot-heavy: ' + shapeTotals.snapshot,
-      'unclear source-of-truth: ' + shapeTotals.source,
-      'missing outcome framing: ' + shapeTotals.outcome,
-      'missing next-action cues: ' + shapeTotals.nextAction
-    ];
-    var bullets = [];
-    bullets.push('Endpoint-local evidence: ' + findings.length + ' shape finding' + (findings.length === 1 ? '' : 's') + ' grouped into ' + groups.length + ' evidence cluster' + (groups.length === 1 ? '' : 's') + '.');
-    if (topGroup) {
-      bullets.push('Most concentrated local shape issue: ' + topGroup.title + ' (' + topGroup.count + ').');
-    }
-    if (locationHighlights.length) {
-      bullets.push('Primary schema locations to inspect next: ' + locationHighlights.join(' | ') + '.');
-    }
-    if (!topGroup && !locationHighlights.length) {
-      bullets.push('Shape evidence is limited in this endpoint slice; use Exact evidence to inspect remaining grouped messages.');
-    }
+    var locationHtml = locationHighlights.length
+      ? '<p class="shape-location-hint">Schema locations with most signals: '
+          + locationHighlights.map(function (l) { return '<code>' + escapeHtml(l) + '</code>'; }).join(' · ')
+          + '</p>'
+      : '';
+
+    // Lead issue as collapsible fallback when no pain signals fire
+    var noSignalsHtml = !painSignals.length
+      ? '<div class="family-insight-card">'
+          + '<p class="insight-kicker">Endpoint-local shape evidence</p>'
+          + '<p class="subtle"><strong>' + escapeHtml(endpoint.method + ' ' + endpoint.path) + '</strong> has '
+          + findings.length + ' shape finding' + (findings.length === 1 ? '' : 's')
+          + ' grouped into ' + groups.length + ' cluster' + (groups.length === 1 ? '' : 's')
+          + '. No specific pain-signal pattern matched in this slice — use Exact evidence below for the raw grouped messages.</p>'
+          + (topGroup
+              ? '<p class="subtle"><strong>Lead cluster:</strong> ' + escapeHtml(topGroup.title) + ' (' + topGroup.count + ')</p>'
+              : '')
+          + '</div>'
+      : '';
 
     return '<div class="endpoint-diag-pane">'
-      + '<div class="family-insight-card">'
-      + '<p class="insight-kicker">Endpoint-local shape DX profile</p>'
-      + '<p class="subtle"><strong>' + escapeHtml(endpoint.method + ' ' + endpoint.path) + '</strong> is inspected for response shape DX burden: where backend graph detail hides outcome meaning, next actions, and authoritative state.</p>'
-      + '<p class="subtle"><strong>Shape profile:</strong> ' + escapeHtml(profileParts.join(' | ')) + '.</p>'
-      + '<ul class="family-top-evidence">'
-      + bullets.map(function (line) {
-          return '<li>' + escapeHtml(line) + '</li>';
-        }).join('')
-      + '</ul>'
-      + consistencySupportHtml
+      + '<div class="shape-summary-intro">'
+      + '<p class="shape-summary-kicker">Why this response is hard to use</p>'
+      + '<p class="shape-summary-head"><strong>' + escapeHtml(endpoint.method + ' ' + endpoint.path) + '</strong> — '
+      + (painSignals.length
+          ? escapeHtml(painSignals.length + ' active DX pain signal' + (painSignals.length === 1 ? '' : 's') + ' detected')
+          : 'shape signals present — see profile below')
+      + '</p>'
+      + profileHtml
+      + locationHtml
+      + '</div>'
+      + noSignalsHtml
+      + painHtml
       + comparisonHtml
       + guidanceHtml
-      + '</div>'
       + '<details class="detail-evidence-drawer">'
-      + '<summary>Open shape lead-issue context</summary>'
+      + '<summary>Open shape evidence clusters (' + groups.length + ')</summary>'
       + '<div class="family-insight-card">'
-      + '<p class="insight-kicker">Lead shape issue</p>'
+      + '<p class="insight-kicker">Lead shape cluster</p>'
       + '<p class="family-insight-lead-message">' + escapeHtml(topGroup && topGroup.messages[0] ? topGroup.messages[0] : 'No shape-specific issue message extracted.') + '</p>'
       + '<div class="family-insight-grounding">'
       + renderOpenAPIContextPills(topContext, true)
       + '</div>'
-      + (topDimensions.length
-          ? '<p class="subtle"><strong>Top shape dimensions in this endpoint:</strong> ' + escapeHtml(topDimensions.join(', ')) + '.</p>'
+      + (groups.slice(0, 3).map(function (g) { return g.title; }).filter(Boolean).length
+          ? '<p class="subtle"><strong>Top dimensions:</strong> ' + escapeHtml(groups.slice(0, 3).map(function (g) { return g.title; }).join(', ')) + '.</p>'
           : '')
       + '</div>'
       + '</details>'
@@ -1224,22 +1246,56 @@
 
   function renderEndpointDiagnosticsCleaner(detail) {
     var findings = findingsForActiveLens(detail.findings || []);
-    var topGroup = groupFindings(findings)[0] || null;
-    var cleaner = renderWorkflowShapedExample(detail, findings);
-    if (cleaner) {
-      return '<div class="endpoint-diag-pane">' + cleaner + '</div>';
-    }
-
+    var endpoint = detail.endpoint || {};
     var shapeTabActive = state.activeTopTab === 'shape';
 
+    // Try the richer workflow-shaped example renderer first
+    var cleaner = renderWorkflowShapedExample(detail, findings);
+    if (cleaner) {
+      // Prepend the pain signals for quick context
+      var painSignals = collectShapePainSignals(endpoint, findings);
+      var signalSummaryHtml = painSignals.length
+        ? '<div class="cleaner-signal-summary">'
+            + painSignals.map(function (s) {
+                return '<span class="cleaner-signal-chip">'
+                  + s.icon + ' ' + escapeHtml(s.label)
+                  + '</span>';
+              }).join('')
+            + '</div>'
+        : '';
+      return '<div class="endpoint-diag-pane">' + signalSummaryHtml + cleaner + '</div>';
+    }
+
+    // Fallback: show a caller-needed section for each active pain signal
+    var painSignals = collectShapePainSignals(endpoint, findings);
+    if (painSignals.length) {
+      var callerNeededHtml = '<section class="cleaner-caller-needed-section">'
+        + '<h3>What callers of ' + escapeHtml(endpoint.method + ' ' + endpoint.path) + ' most likely need</h3>'
+        + '<p class="workflow-example-note">Derived from active shape burden signals. Not a generated replacement — an illustrative contract improvement direction.</p>'
+        + '<ul class="cleaner-caller-needed-list">'
+        + painSignals.map(function (s) {
+            return '<li class="cleaner-caller-needed-item">'
+              + '<span class="cleaner-signal-icon">' + s.icon + '</span>'
+              + '<div>'
+              + '<strong>' + escapeHtml(s.label) + '</strong>'
+              + '<samp class="shape-pain-needed-code">' + escapeHtml(s.callerNeeded) + '</samp>'
+              + '</div>'
+              + '</li>';
+          }).join('')
+        + '</ul>'
+        + '</section>';
+      return '<div class="endpoint-diag-pane">' + callerNeededHtml + '</div>';
+    }
+
+    var topGroup = groupFindings(findings)[0] || null;
     return '<div class="endpoint-diag-pane">'
       + '<div class="family-insight-card">'
       + '<p class="insight-kicker">' + escapeHtml(shapeTabActive ? 'Cleaner shape emphasis' : 'Cleaner contract emphasis') + '</p>'
       + '<p class="subtle">' + escapeHtml(topGroup && topGroup.dimension
           ? dimensionCleanerHint(topGroup.dimension)
           : (shapeTabActive
-              ? 'No cleaner shape-emphasis signals are available for this endpoint in the current shape view.'
-              : 'No cleaner contract emphasis signals are available for this endpoint in the current view.')) + '</p>'
+              ? 'No cleaner shape-emphasis signals available for this endpoint in the current shape view.'
+              : 'No cleaner contract-emphasis signals available in the current view.')) + '</p>'
       + '</div>'
       + '</div>';
   }
@@ -4285,6 +4341,189 @@
 
     if (!labels.length) return 'workflow continuity signals are limited for this endpoint';
     return 'primary continuity signals: ' + labels.join(', ');
+  }
+
+  // ---------------------------------------------------------------------------
+  // SHAPE BURDEN: pain-signal analysis
+  // Maps real finding codes → developer pain, concrete examples, caller-needed
+  // ---------------------------------------------------------------------------
+
+  function collectShapePainSignals(endpoint, findings) {
+    var path = ((endpoint && endpoint.path) || '').toLowerCase();
+    var method = ((endpoint && endpoint.method) || '').toUpperCase();
+    var signals = [];
+
+    function hasCode(code) {
+      return findings.some(function (f) { return (f.code || '') === code; });
+    }
+    function hasMsgMatch(re) {
+      return findings.some(function (f) { return re.test((f.message || '').toLowerCase()); });
+    }
+
+    // Derive commerce workflow context from path
+    var isOrder    = /\/order/.test(path);
+    var isCart     = /\/cart/.test(path);
+    var isPayment  = /\/payment|\/checkout/.test(path);
+    var isProduct  = /\/product/.test(path);
+    var isCustomer = /\/customer/.test(path);
+    var isAuth     = /\/login|\/auth|\/session|\/register/.test(path);
+    var isAction   = path.indexOf('/_action/') !== -1;
+    var isMutation = method === 'POST' || method === 'PATCH' || method === 'PUT';
+
+    // 1. Deep nesting
+    if (hasCode('deeply-nested-response-structure') || hasMsgMatch(/nested|deep/)) {
+      var nestEx = isOrder
+        ? 'An order creation response returns the full order graph: lineItems[].product.media[].thumbnails.url alongside billing/shipping addresses, all at equal depth. The "did my order succeed?" answer is buried 3–4 levels down in a structure meant for the database, not the client.'
+        : isCart
+        ? 'Cart mutation returns the full cart snapshot. The updated price the developer actually needs requires traversing lineItems[] → unitPrice → gross, while product thumbnails and nested options sit at the same depth.'
+        : 'The response nests outcome data inside multiple levels of objects or arrays, placing immediately-relevant fields (status, id, next action) at the same depth as incidental configuration data.';
+      var nestNeeded = isOrder
+        ? '{ "orderId": "…", "status": "open", "paymentRequired": true, "paymentUrl": "…" }'
+        : isCart
+        ? '{ "token": "…", "itemCount": 3, "total": { "gross": 99.95, "currency": "EUR" }, "nextAction": "checkout" }'
+        : 'A flat outcome block with changed state and next action near the top, not buried inside nested objects.';
+      signals.push({
+        code: 'deep-nesting',
+        label: 'Deep nesting hides outcome meaning',
+        pain: 'Developers must traverse multiple nesting levels to reach what actually changed. Access paths like response.lineItems[0].product.price.gross become fragile — a schema change at any level silently breaks the client. The fields needed for the next API call may require 4+ chained property lookups.',
+        example: nestEx,
+        callerNeeded: nestNeeded,
+        icon: '⬇'
+      });
+    }
+
+    // 2. Storage-shaped / snapshot-heavy
+    if (hasCode('snapshot-heavy-response') || hasCode('contract-shape-workflow-guidance-burden') || hasMsgMatch(/snapshot|storage|model structure|full model/)) {
+      var snapEx = isOrder || isPayment
+        ? 'POST /order returns the full persisted entity: internal tracking fields, all audit timestamps, every configuration object, every address format — when the developer only needed to know: order was created, here\'s your ID and payment URL. The "created" confirmation is on equal footing with versionId and autoIncrement.'
+        : isCart
+        ? 'PATCH /line-item returns the full cart snapshot including product metadata, nested shipping options, and pricing rules — when the developer only needed to confirm the line item was added and see the updated total.'
+        : 'The response mirrors the internal storage model rather than summarising the task outcome. Outcome-critical fields (status, authoritative ID, next step) are equally weighted with internal bookkeeping.';
+      var snapNeeded = isOrder
+        ? '{ "id": "…", "orderNumber": "10001", "status": "open", "paymentUrl": "/payment/handle/…", "confirmationRequired": false }'
+        : isCart
+        ? '{ "token": "…", "gross": 99.95, "net": 84.00, "tax": 15.95, "currency": "EUR", "itemCount": 3 }'
+        : 'A compact outcome-first payload: status, authoritative identifiers, and next action close to the top level with incidental fields omitted.';
+      signals.push({
+        code: 'snapshot-heavy',
+        label: 'Storage-shaped response — the database model mirrors back',
+        pain: 'The response reflects what the server stores rather than what the caller needs next. Developers must reverse-engineer which fields are authoritative, which are incidental, and what the operation actually changed. Onboarding cost multiplies because there is no contract-level hint about purpose — developers read the whole object hoping to find the relevant fragment.',
+        example: snapEx,
+        callerNeeded: snapNeeded,
+        icon: '📦'
+      });
+    }
+
+    // 3. Duplicated state
+    if (hasCode('duplicated-state-response') || hasMsgMatch(/duplicate|source of truth|authoritative/)) {
+      var dupEx = isOrder
+        ? 'order.status, order.stateMachineState.name, and order.stateMachineState.technicalName all appear in the same response and express the same concept. If any diverge (due to cache lag or partial write), the developer has no contract-based way to decide which is authoritative.'
+        : 'The same conceptual state appears under multiple keys in the response — for example price appearing in both lineItem.price and lineItem.unitPrice.gross — with no documented source-of-truth.';
+      var dupNeeded = isOrder
+        ? 'A single explicit status field. If state machine detail is needed separately, expose it as a sub-resource: { "status": "open", "stateDetail": "/order/{id}/state" }'
+        : 'One canonical field name mapped to one authoritative value. Derived representations removed or explicitly labelled as read-only views.';
+      signals.push({
+        code: 'duplicated-state',
+        label: 'Duplicated state — no clear source of truth',
+        pain: "When the same concept appears under multiple keys, developers pick one and rely on it. When those values diverge in production (cache lag, eventual consistency, partial update), the bug is silent until a customer notices. Client code that picked the \"wrong\" duplicate is correct until the day it isn't.",
+        example: dupEx,
+        callerNeeded: dupNeeded,
+        icon: '♊'
+      });
+    }
+
+    // 4. Incidental internal fields
+    if (hasCode('incidental-internal-field-exposure') || hasMsgMatch(/internal|incidental|audit|raw id/)) {
+      var intEx = isOrder || isProduct
+        ? 'The order response includes fields like createdById, updatedAt, versionId, autoIncrement, childCount, and raw UUID join columns alongside the orderNumber, status, and total that the developer actually uses. Every internal field adds cognitive load and becomes a silent coupling surface.'
+        : isCustomer
+        ? 'Customer detail includes internal fields like legacyEncoderKey, versionId, and raw storage IDs. Developers who key off these create coupling to the backend\'s storage layer, not the domain model.'
+        : 'Storage-level identifiers, audit timestamps, and backend join columns appear alongside domain-level response data at equal depth.';
+      var intNeeded = isOrder
+        ? 'Domain fields only: { "id": "…", "orderNumber": "…", "customerId": "…", "status": "…", "total": { "gross": …, "currency": "…" } }'
+        : 'Only fields that carry domain meaning or are needed for the next API call. Internal/audit fields behind a separate admin-scoped endpoint if tooling genuinely needs them.';
+      signals.push({
+        code: 'internal-fields',
+        label: 'Incidental internal fields crowd out domain meaning',
+        pain: "Internal fields force developers to figure out which fields matter. They become accidental documentation targets: once a developer couples client code to versionId or autoIncrement, those fields can't be renamed without a breaking change. The contract grows stickier in the wrong direction.",
+        example: intEx,
+        callerNeeded: intNeeded,
+        icon: '🔧'
+      });
+    }
+
+    // 5. Missing outcome framing
+    if (hasCode('weak-outcome-next-action-guidance') || hasMsgMatch(/outcome|what changed|result mean/)) {
+      var outEx = isPayment
+        ? "POST /handle-payment returns 200 but the body doesn't indicate whether payment was accepted, deferred, or requires redirect. The developer writes a secondary GET to confirm state — a round-trip the contract could have eliminated."
+        : isAction
+        ? 'An /_action/ endpoint returns 200 with data but no outcome framing. Was the action applied? Is it pending? Does the caller need to poll? The developer must infer this from context or read docs each time.'
+        : isMutation
+        ? "A mutation (POST/PATCH/PUT) returns the resource but doesn't clearly distinguish between 'I applied your changes immediately' and 'I queued them' or 'this requires a follow-up confirmation step'."
+        : 'The response contains populated fields but no framing that contextualises the result. Success vs partial success vs async acceptance look the same to the caller.';
+      var outNeeded = isPayment
+        ? '{ "outcome": "redirect_required", "redirectUrl": "…", "transactionId": "…", "pollFor": "transaction.status" }'
+        : isAction
+        ? '{ "outcome": "accepted", "appliedNow": false, "transitionTo": "in_progress", "followUp": "/order/{id}/state" }'
+        : '{ "applied": true, "status": "confirmed", "nextAction": null } — or for async: { "accepted": true, "pendingConfirmation": true, "confirmUrl": "…" }';
+      signals.push({
+        code: 'missing-outcome',
+        label: 'Missing outcome framing — caller must infer what happened',
+        pain: "Without explicit outcome framing, developers write defensive code that checks 3–4 fields to infer state. 'Did it work?' becomes a runtime question that should have a contract-level answer. Integration tests grow complex because they must mock guesses rather than trust explicit outcome fields.",
+        example: outEx,
+        callerNeeded: outNeeded,
+        icon: '❓'
+      });
+    }
+
+    // 6. Missing next-action cues
+    if (hasCode('weak-follow-up-linkage') || hasCode('weak-action-follow-up-linkage') || hasCode('weak-accepted-tracking-linkage') || hasMsgMatch(/next[-\s]?step|follow[-\s]?up|tracking/)) {
+      var nextEx = isOrder
+        ? "POST /order succeeds but the response doesn't include a payment URL, whether confirmation is needed, or any indication of required customer steps. The developer reads the API docs or asks in Slack to learn these rules — then hard-codes assumptions that can break when the payment provider changes."
+        : isCart
+        ? "PATCH /cart returns the updated cart but doesn't indicate whether the cart is now ready for checkout or if there are blockers (e.g., shipping method not selected, item now out of stock). The developer polls or adds defensive checks."
+        : 'The operation completes but the response does not expose what the next call should be, which ID to carry forward, or whether additional steps are required before the workflow continues.';
+      var nextNeeded = isOrder
+        ? '{ "orderId": "…", "status": "open", "nextActions": [{ "type": "payment", "url": "…", "required": true }] }'
+        : isCart
+        ? '{ "token": "…", "readyForCheckout": false, "blockers": [{ "type": "shippingMethod", "message": "Select a shipping method to continue" }] }'
+        : 'An explicit nextAction field or _links object that guides the caller to the next step without requiring out-of-band documentation.';
+      signals.push({
+        code: 'missing-next-action',
+        label: 'Missing next-action cues — handoff requires reading docs',
+        pain: "Without next-step cues, developers learn the call sequence from documentation, Slack questions, or reverse-engineering prior implementations. This multiplies per-developer integration time and produces brittle hard-coded assumptions about workflow sequencing — assumptions that break when the workflow changes.",
+        example: nextEx,
+        callerNeeded: nextNeeded,
+        icon: '➡'
+      });
+    }
+
+    return signals;
+  }
+
+  function renderShapePainSignals(signals) {
+    if (!signals || !signals.length) return '';
+    return '<div class="shape-pain-signals">'
+      + signals.map(function (signal) {
+          return '<div class="shape-pain-signal">'
+            + '<div class="shape-pain-signal-header">'
+            + '<span class="shape-pain-icon">' + signal.icon + '</span>'
+            + '<strong class="shape-pain-label">' + escapeHtml(signal.label) + '</strong>'
+            + '</div>'
+            + '<p class="shape-pain-why">' + escapeHtml(signal.pain) + '</p>'
+            + (signal.example
+                ? '<details class="shape-pain-detail">'
+                  + '<summary>Concrete example</summary>'
+                  + '<blockquote class="shape-pain-example">' + escapeHtml(signal.example) + '</blockquote>'
+                  + '</details>'
+                : '')
+            + '<div class="shape-pain-needed">'
+            + '<span class="shape-pain-needed-label">Caller probably needed:</span>'
+            + '<samp class="shape-pain-needed-code">' + escapeHtml(signal.callerNeeded) + '</samp>'
+            + '</div>'
+            + '</div>';
+        }).join('')
+      + '</div>';
   }
 
   function collectShapeSignalTotalsForDetail(detail) {

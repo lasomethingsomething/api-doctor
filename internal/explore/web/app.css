@@ -3053,6 +3053,274 @@ tbody tr.active .row-next-step {
   color: var(--muted);
 }
 
+/* ============================================================================
+ * SHAPE BURDEN — pain-signal sections
+ * "Why is this response too big, nested, or internal?"
+ * ============================================================================ */
+
+/* Summary intro block at the top of shape summary tab */
+.shape-summary-intro {
+  margin-bottom: 0.7rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid #dce8f0;
+}
+
+.shape-summary-kicker {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #647789;
+}
+
+.shape-summary-head {
+  margin: 0.28rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.38;
+  color: #17212f;
+}
+
+/* Compact chip row showing numeric profile */
+.shape-profile-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  margin-top: 0.44rem;
+}
+
+.shape-profile-chip {
+  font-size: 0.7rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  background: #eef1f7;
+  border: 1px solid #d6dde8;
+  color: #3e566b;
+  white-space: nowrap;
+}
+
+.shape-profile-chip strong {
+  color: #17212f;
+  font-weight: 700;
+}
+
+.shape-location-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.shape-location-hint code {
+  font-size: 0.7rem;
+  background: #eef2f7;
+  padding: 0.1rem 0.26rem;
+  border-radius: 4px;
+  color: #17212f;
+}
+
+/* Pain signal list */
+.shape-pain-signals {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+/* Single pain signal */
+.shape-pain-signal {
+  border: 1px solid #e3eaf2;
+  border-left: 3px solid #b5c8d8;
+  border-radius: 8px;
+  padding: 0.6rem 0.72rem;
+  background: linear-gradient(180deg, #fafcfe 0%, #f6f9fc 100%);
+  display: grid;
+  gap: 0.28rem;
+}
+
+.shape-pain-signal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.36rem;
+}
+
+.shape-pain-icon {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.shape-pain-label {
+  font-size: 0.84rem;
+  color: #17212f;
+  line-height: 1.3;
+}
+
+/* Why this slows DX */
+.shape-pain-why {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: #3a5060;
+}
+
+/* Concrete example as a blockquote inside a details element */
+.shape-pain-detail {
+  border: none;
+  background: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shape-pain-detail > summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 0.1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.22rem;
+}
+
+.shape-pain-detail > summary::-webkit-details-marker { display: none; }
+
+.shape-pain-detail > summary::before {
+  content: '\25B6';
+  font-size: 0.55rem;
+  transition: transform 0.13s ease;
+  transform-origin: 40% 50%;
+}
+
+.shape-pain-detail[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.shape-pain-example {
+  margin: 0.28rem 0 0;
+  padding: 0.4rem 0.56rem;
+  border-left: 3px solid #c0d0dc;
+  border-radius: 0 6px 6px 0;
+  background: #f2f7fb;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: #2a3e4e;
+  font-style: normal;
+}
+
+/* Caller-needed section */
+.shape-pain-needed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+  margin-top: 0.12rem;
+  padding: 0.32rem 0.44rem;
+  border-radius: 6px;
+  background: #eef8f2;
+  border: 1px solid #c4dccb;
+}
+
+.shape-pain-needed-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #2d6b44;
+}
+
+.shape-pain-needed-code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: #1a4030;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Cleaner shape emphasis tab */
+.cleaner-signal-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  margin-bottom: 0.7rem;
+}
+
+.cleaner-signal-chip {
+  font-size: 0.7rem;
+  padding: 0.14rem 0.44rem;
+  border-radius: 999px;
+  background: #f0f4fb;
+  border: 1px solid #cad5e4;
+  color: #2e4a62;
+  white-space: nowrap;
+}
+
+/* Caller-needed list in Cleaner tab fallback */
+.cleaner-caller-needed-section {
+  border: 1px solid #dfe7ef;
+  border-left: 3px solid #2f6f8d;
+  border-radius: 10px;
+  padding: 0.6rem 0.72rem;
+  background: linear-gradient(180deg, #fbfdff 0%, #f6f9fc 100%);
+  margin-bottom: 0.5rem;
+}
+
+.cleaner-caller-needed-section h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.82rem;
+  color: #17212f;
+}
+
+.cleaner-caller-needed-list {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.cleaner-caller-needed-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.cleaner-signal-icon {
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 0.04rem;
+}
+
+.cleaner-caller-needed-item strong {
+  display: block;
+  font-size: 0.76rem;
+  color: #17212f;
+  margin-bottom: 0.14rem;
+}
+
+@media (max-width: 900px) {
+  .shape-pain-signal {
+    padding: 0.5rem 0.6rem;
+  }
+
+  .shape-pain-label {
+    font-size: 0.78rem;
+  }
+
+  .shape-pain-why,
+  .shape-pain-example {
+    font-size: 0.7rem;
+  }
+
+  .shape-pain-needed {
+    padding: 0.26rem 0.36rem;
+  }
+
+  .shape-pain-needed-code {
+    font-size: 0.68rem;
+  }
+}
+
 .inspector-contract-compare {
   margin-top: 0.3rem;
   border: 1px solid #dfe7ef;
