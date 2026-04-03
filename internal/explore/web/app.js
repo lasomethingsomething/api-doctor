@@ -1208,7 +1208,6 @@
       + '<td>'
       + '<div class="row-cause">' + pressureBadge(row.priority, 'pressure') + '</div>'
       + '<div class="row-cause-label">' + escapeHtml(dominant.label) + '</div>'
-      + '<div class="code-line">' + escapeHtml(dominant.code) + '</div>'
       + '</td>'
       + '<td>'
       + (firstFinding ? severityBadge(severity) : '')
