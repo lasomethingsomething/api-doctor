@@ -1214,10 +1214,10 @@ tbody tr.active {
 .row-next-step {
   margin-top: 0.26rem;
   font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 400;
+  color: var(--muted);
+  font-style: italic;
+  letter-spacing: 0;
 }
 
 .context-inline,

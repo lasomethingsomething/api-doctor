@@ -1216,7 +1216,7 @@
       + (firstFinding ? severityBadge(severity) : '')
       + '<div class="message-line">' + escapeHtml(firstFinding ? firstFinding.message : 'No direct issue messages') + '</div>'
       + '<div class="context-inline-wrap">' + contextLine + '</div>'
-        + '<div class="row-next-step">Inspect detail</div>'
+        + '<div class="row-next-step">→ select row to inspect</div>'
       + '</td>'
       + '</tr>';
   }
