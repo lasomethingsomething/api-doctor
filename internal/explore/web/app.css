@@ -546,8 +546,9 @@ select:focus {
 
 /* Primary (first, most-burdened) chain within a kind group */
 .workflow-chain {
-  background: #fafbfe;
-  padding: 0.64rem 0.8rem;
+  background: transparent;
+  padding: 0.48rem 0 0.64rem;
+  border-bottom: 1px solid #e6edf4;
 }
 
 .chain-resource-label {
@@ -583,10 +584,10 @@ select:focus {
 
 .chain-burden-count {
   font-size: 0.71rem;
-  font-weight: 700;
+  font-weight: 600;
   color: #7a1510;
-  background: #ffe7e2;
-  border: 1px solid rgba(180, 35, 24, 0.28);
+  background: #fff5f3;
+  border: 1px solid #e8c8c0;
   border-radius: 999px;
   padding: 0.12rem 0.42rem;
 }
@@ -601,12 +602,12 @@ select:focus {
 .workflow-burden-item {
   display: grid;
   gap: 0.06rem;
-  border: 1px solid #dbe4ed;
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 0.18rem 0.36rem;
-  min-width: 180px;
-  max-width: 280px;
+  border: 1px solid #e3eaf2;
+  background: #f9fbfd;
+  border-radius: 6px;
+  padding: 0.16rem 0.32rem;
+  min-width: 170px;
+  max-width: 260px;
 }
 
 .workflow-burden-item strong {
@@ -713,33 +714,32 @@ select:focus {
 /* Step role pill — replaces "Step N of M" */
 .step-role-pill {
   display: inline-block;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  border-radius: 5px;
-  padding: 0.14rem 0.38rem;
-  margin-bottom: 0.24rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border-radius: 4px;
+  padding: 0.12rem 0.35rem;
+  margin-bottom: 0.20rem;
   text-transform: uppercase;
-  background: #eef2f7;
-  color: #4a5a70;
-  border: 1px solid #d0dce6;
+  background: #f0f3f8;
+  color: #5a6e80;
+  border: none;
 }
 
-.step-role-list    { background: #eef4fb; color: #1a4a78; border-color: #b8d4ee; }
-.step-role-search  { background: #eef4fb; color: #1a4a78; border-color: #b8d4ee; }
-.step-role-detail  { background: #f0f4ff; color: #3444a0; border-color: #c0ccf0; }
-.step-role-create  { background: #edfaf2; color: #1a6b3a; border-color: #a8dfbe; }
-.step-role-update  { background: #fff8e8; color: #7a5200; border-color: #e8d090; }
-.step-role-delete  { background: #fff0ef; color: #7a1510; border-color: #f0b8b4; }
-.step-role-action  { background: #f4effe; color: #5020a0; border-color: #c8a8f0; }
+.step-role-list    { background: #eef5fc; color: #1a4a78; }
+.step-role-search  { background: #eef5fc; color: #1a4a78; }
+.step-role-detail  { background: #f0f3ff; color: #3a44a0; }
+.step-role-create  { background: #eef8f2; color: #1a6b3a; }
+.step-role-update  { background: #fff9eb; color: #7a5200; }
+.step-role-delete  { background: #fff5f2; color: #7a1510; }
+.step-role-action  { background: #f6f0ff; color: #5020a0; }
 
 /* Active step (persists after click until another step is clicked) */
 .step-box.step-active {
   border-color: var(--accent) !important;
-  border-width: 2px !important;
-  background: linear-gradient(180deg, #e8f6fb 0%, #fff 100%) !important;
-  box-shadow: 0 0 0 3px rgba(19, 93, 114, 0.22), 0 3px 12px rgba(19, 93, 114, 0.15) !important;
-  animation: step-pulse 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border-width: 1.5px !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(19, 93, 114, 0.15) !important;
 }
 
 @keyframes step-pulse {
@@ -777,19 +777,19 @@ select:focus {
 
 .step-box {
   flex: 1;
-  border: 1px solid #d4dde6;
+  border: 1px solid #dce5ed;
   background: #fff;
-  border-radius: 10px;
-  padding: 0.52rem 0.58rem;
+  border-radius: 8px;
+  padding: 0.48rem 0.54rem;
   cursor: pointer;
   position: relative;
-  transition: all 0.15s ease;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .step-box:hover {
-  border-color: #b0c5d3;
-  box-shadow: 0 2px 6px rgba(23, 33, 47, 0.08);
-  transform: translateY(-1px);
+  border-color: #c0d0e0;
+  box-shadow: none;
+  transform: none;
 }
 
 .step-inspect-hint {
