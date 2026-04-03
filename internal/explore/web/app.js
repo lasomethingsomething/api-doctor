@@ -842,11 +842,10 @@
           ? 'spec-level-must' : 'spec-level-should';
         var endpointNote = rule.endpointCount === 1 ? '1 endpoint' : rule.endpointCount + ' endpoints';
         return '<tr class="spec-agg-row">'
-          + '<td class="spec-agg-id"><code>' + escapeHtml(rule.ruleId) + '</code></td>'
+          + '<td class="spec-agg-id"><code>' + escapeHtml(rule.ruleId) + '</code><div class="spec-agg-summary">' + escapeHtml(rule.summary) + '</div></td>'
           + '<td class="spec-agg-level"><span class="spec-norm-badge ' + levelClass + '">' + escapeHtml(rule.normativeLevel) + '</span></td>'
           + '<td class="spec-agg-count">' + rule.occurrences + '</td>'
           + '<td class="spec-agg-scope">' + escapeHtml(endpointNote) + '</td>'
-          + '<td class="spec-agg-summary">' + escapeHtml(rule.summary) + '</td>'
           + '</tr>';
       }).join('');
     }
@@ -860,7 +859,7 @@
         + 'These reflect a consistent gap across the whole API, not a local hotspot.'
         + '</p>'
         + '<table class="spec-agg-table"><thead><tr>'
-        + '<th>Rule ID</th><th>Level</th><th>Count</th><th>Scope</th><th>Summary</th>'
+        + '<th>Rule ID &amp; summary</th><th>Level</th><th>Count</th><th>Scope</th>'
         + '</tr></thead><tbody>' + buildTableRows(apiWide) + '</tbody></table>'
         + '</div>';
     }
@@ -871,7 +870,7 @@
             ? '<p class="spec-agg-section-label">Concentrated issues \u2014 affects a smaller share of endpoints. Easier to fix endpoint\u2011by\u2011endpoint.</p>'
             : '<p class="spec-agg-label">Sorted by normative level, then breadth of impact. Click an endpoint row to inspect instances.</p>')
         + '<table class="spec-agg-table"><thead><tr>'
-        + '<th>Rule ID</th><th>Level</th><th>Count</th><th>Scope</th><th>Summary</th>'
+        + '<th>Rule ID &amp; summary</th><th>Level</th><th>Count</th><th>Scope</th>'
         + '</tr></thead><tbody>' + buildTableRows(localized) + '</tbody></table>'
         + '</div>';
     }

@@ -1534,13 +1534,13 @@ tbody tr.active {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
-  border: 1px solid #d0e8d8;
+  border: 1px solid #cdd8e2;
   border-radius: 6px;
   overflow: hidden;
 }
 
 .spec-agg-table thead tr {
-  background: #e8f5ec;
+  background: #f0f4f8;
 }
 
 .spec-agg-table th {
@@ -1549,13 +1549,13 @@ tbody tr.active {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #2a5a3a;
+  color: #3a5068;
   font-weight: 700;
-  border-bottom: 1px solid #c4e0cc;
+  border-bottom: 1px solid #c4d0dc;
 }
 
 .spec-agg-row {
-  border-bottom: 1px solid #eff6f1;
+  border-bottom: 1px solid #edf2f7;
 }
 
 .spec-agg-row:last-child {
@@ -1563,7 +1563,7 @@ tbody tr.active {
 }
 
 .spec-agg-row:nth-child(even) {
-  background: #f8fcf9;
+  background: #f8fafc;
 }
 
 .spec-agg-id {
@@ -1572,8 +1572,8 @@ tbody tr.active {
 }
 
 .spec-agg-id code {
-  font-size: 0.74rem;
-  color: #1a5a2a;
+  font-size: 0.73rem;
+  color: #2a455a;
   font-weight: 600;
 }
 
@@ -1598,48 +1598,49 @@ tbody tr.active {
 }
 
 .spec-agg-summary {
-
-  .spec-agg-section {
-    margin-bottom: 0.55rem;
-  }
-
-  .spec-agg-section-label {
-    margin: 0 0 0.3rem;
-    font-size: 0.77rem;
-    color: var(--muted);
-    font-style: italic;
-  }
-
-  .spec-agg-apiwide .spec-agg-table {
-    border-color: #e0c8a0;
-  }
-
-  .spec-agg-apiwide .spec-agg-table thead tr {
-    background: #fef6e4;
-  }
-
-  .spec-agg-apiwide .spec-agg-table th {
-    color: #7a4e00;
-    border-bottom-color: #f0d888;
-  }
-
-  .spec-agg-apiwide .spec-agg-row {
-    border-bottom-color: #fdf2d0;
-  }
-
-  .spec-agg-apiwide .spec-agg-row:nth-child(even) {
-    background: #fffbf0;
-  }
-
-  .spec-agg-footer {
-    margin: 0.3rem 0 0;
-    font-size: 0.75rem;
-    color: var(--muted);
-    font-style: italic;
-  }
   padding: 0.3rem 0.5rem;
-  color: var(--text);
+  color: var(--muted);
   font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.spec-agg-section {
+  margin-bottom: 0.55rem;
+}
+
+.spec-agg-section-label {
+  margin: 0 0 0.3rem;
+  font-size: 0.77rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.spec-agg-apiwide .spec-agg-table {
+  border-color: #d8cca0;
+}
+
+.spec-agg-apiwide .spec-agg-table thead tr {
+  background: #fef6e4;
+}
+
+.spec-agg-apiwide .spec-agg-table th {
+  color: #7a4e00;
+  border-bottom-color: #e8d888;
+}
+
+.spec-agg-apiwide .spec-agg-row {
+  border-bottom-color: #fdf2d0;
+}
+
+.spec-agg-apiwide .spec-agg-row:nth-child(even) {
+  background: #fffbf0;
+}
+
+.spec-agg-footer {
+  margin: 0.3rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-style: italic;
 }
 
 /* ── Spec-rule expandable instances in issue group ── */
