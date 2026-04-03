@@ -125,9 +125,11 @@ Why it matters:
 
 ---
 
-## TUI status
+## Explorer and TUI status
 
-The TUI is read-only and meant for fast local triage.
+Explorer is the primary interactive surface.
+
+The TUI is read-only and secondary, meant for fast terminal triage when browser use is not preferred.
 
 Current focus areas:
 

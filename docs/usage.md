@@ -63,7 +63,7 @@ This is documentation for local development usage only. Packaging and external t
 ### PM/stakeholder: get a quick current-state summary for planning
 
 1. Run `go run . analyze --spec ./adminapi.json`.
-2. Capture total findings, severity split, and endpoint score summary.
+2. Capture total findings, severity split, and top fix-first areas.
 3. Open `go run . explore --spec ./adminapi.json` and read Overview totals plus `Fix first` lines.
 4. Check Workflows totals for single-step and multi-step usability signal.
 5. If comparing releases, run `go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json`.
@@ -72,13 +72,14 @@ This is documentation for local development usage only. Packaging and external t
 
 ### What it does
 
-analyze reads one Shopware Admin API spec and reports integration-risk findings.
+analyze reads one Shopware Admin API spec and reports workflow burden and contract-shape findings with evidence-first summaries.
 
-It checks for things like:
+It focuses on:
 
 - Workflow burden signals (where common call sequences are hard to follow)
-- Contract-shape burden signals (where response shapes are hard to use for next steps)
-- Consistency outliers across related endpoints and routes
+- Contract-shape burden signals (where response contracts are hard to use for next steps)
+- Consistency drift across related endpoints and routes
+- Diff-oriented change risk when comparing versions
 
 It is spec-only analysis: it works from the OpenAPI document and does not observe live runtime behavior.
 
@@ -100,7 +101,7 @@ go run . analyze --spec ./adminapi.json
 
 ### What kind of output to expect
 
-You get a summary of findings grouped by severity, plus compact burden/consistency/risk-oriented summaries that help you decide what to fix first.
+You get findings grouped by severity plus practical fix-first summaries that stay grounded in spec evidence.
 
 By default, output is text.
 You can also choose markdown or JSON with --format.
@@ -223,25 +224,11 @@ go run . explore --spec ./adminapi.json --base ./adminapi-v1.json --head ./admin
 
 ### What it does
 
-tui opens a read-only terminal interface for browsing results from analyze, workflows, and optional diff data.
-
-For daily use, the key value is faster triage: move from overview signals (workflow burden, contract-shape burden, consistency, change risk) to concrete endpoints and findings.
-
-Current maturity:
-
-- This is an early dashboard-style browsing layer for triage and review.
-- It already supports practical drill-down flows, but remains intentionally read-only and scope-limited.
-- For strict automation and complete downstream processing, JSON command output is still the primary interface.
+tui opens a read-only terminal surface over the same deterministic CLI analysis/workflow/diff outputs.
 
 ### Why you would use it
 
-Use tui when plain command output feels too dense and you want a quick visual summary without changing any data.
-
-Good moments to run it:
-
-- Local review sessions
-- Pair-review of issues and workflow signals
-- Quick triage before digging into JSON output
+Use tui for quick local terminal triage. Treat Explorer as the primary interactive surface.
 
 ### Launch command
 
@@ -249,73 +236,14 @@ Good moments to run it:
 go run . tui --spec ./adminapi.json
 ```
 
-Diff mode in TUI (important):
-
-- Treat `./adminapi.json` as the current local spec.
-- To populate the Diff screen, you must provide both an older spec file and a newer spec file.
-- The TUI does not auto-discover spec versions in this mode; pass both flags explicitly.
-
-Optional: include diff data for the Diff screen:
+Optional diff data:
 
 ```sh
 go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2.json
 ```
 
-### Navigation keys
-
-- Sidebar navigation (primary): up/down (or j/k), Enter to open selected section
-- Pane focus: Tab or left/right moves focus across Navigation, Main, and Detail panes
-- Secondary screen shortcuts: number keys map to the screens available in the current run; Diff is included only when launched with --old and --new
-- Legacy quick cycling: [ and ] (or h/l)
-- Quit: q (or Ctrl+C)
-- Open related detail: Enter or o (context-dependent)
-- Endpoints sort mode: r toggles priority-first and path order
-- Open/close bucket preview: Enter or d (Issue categories/Workflows lists)
-- Close detail pane/preview: Esc
-- Issue categories move: up/down (or j/k)
-- Workflows list move: up/down (or j/k)
-- Workflows section toggle (single-step vs multi-step): w or s
-
-### Current screens and views
-
-The layout is menu-driven:
-
-- Left sidebar: always-visible section menu for guided navigation
-- Main content pane: selected section summary/list content
-- Detail/drill-down pane: shown when endpoint/workflow/issue detail is opened
-- Persistent footer: key hints via Charm help component
-
-Recommended first-run navigation:
-
-- Start in the sidebar and choose a section with up/down.
-- Press Enter to load that section in the Main pane.
-- Use Enter, o, d, and Esc in Main to open and close drill-down detail.
-- Move to the Detail pane with Tab or right arrow when a drill-down is open.
-
-- Overview: totals, severity summary, and a compact deterministic "Fix first" snapshot for workflow burden, contract-shape burden, consistency outliers, and endpoint priorities
-- Hotspots: ranked priority areas across issue categories, endpoint areas, and workflow patterns
-- Endpoints: browsable endpoint list with explicit row labels (`issues`, `quality`, `priority`) and sort toggle (`r`: priority-first/path)
-- Issue categories: grouped issue-code categories with structured detail (summary, affected count, representative examples, why it matters, plus hidden-items note)
-- Workflows: single-step and multi-step pattern summaries with inline examples so equal counts are easier to interpret
-- Diff: available only when started with --old and --new
-
-### Drill-down supported today
-
-- Endpoints: select an endpoint row, then open a detail pane with operation info, endpoint score summary, matching findings, related workflows/chains, and a short why-this-matters summary
-- Issue categories: select an issue-code category to open structured detail (meaning, affected count, representative examples, why it matters), or press o to jump to a related endpoint detail
-- Workflows: select single-step or multi-step section, preview a pattern bucket with explanation/examples, then press o to open a specific workflow/chain item detail (kind, step sequence, scores, bottleneck summary, related endpoints/issues, why-this-matters)
-- Hotspots: select a hotspot row, then press Enter or o to jump into related endpoint detail or workflow/chain detail when available
-
 ### Current limitations
 
-- Read-only only: no editing, no inline spec changes, no live fetching
-- No graph rendering yet
-- Uses existing analyzer/workflow/diff outputs only; it does not add new inference logic
-- Best suited for Shopware Admin API specs within the validated project scope
-
-### What kind of output to expect
-
-You get an interactive text UI in your terminal.
-
-It is read-only and uses the same deterministic analysis/workflow/diff logic as the CLI commands.
-If you provide --old and --new together, the Diff screen is populated too.
+- Read-only only
+- Secondary surface compared with Explorer
+- Uses existing analyzer/workflow/diff outputs only

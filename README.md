@@ -13,6 +13,27 @@ It is deterministic and local-only.
 - No AI calls
 - Spec-only analysis; it does not observe live runtime behavior
 
+## What this is (and is not)
+
+api-doctor is not primarily a generic API linter.
+
+It is a workflow burden and contract-shape analyzer for improving the Shopware Admin API toward JSON/OpenAPI as the source of truth.
+
+What it is strongest at today:
+
+- contract trustworthiness
+- workflow burden
+- contract shape
+- consistency drift
+- deterministic fix-first prioritization
+- spec-version diff change risk
+
+What it is not:
+
+- runtime traffic analysis
+- production behavior tracing
+- a replacement for real runtime validation
+
 ## What problem this helps solve
 
 When API specs grow, it gets hard to spot workflow friction, contract drift, and change risk by eye.
@@ -129,7 +150,7 @@ If you are an internal API owner/team and you need to prioritize fixes:
 If you are a PM or stakeholder and you need a fast status snapshot:
 
 1. Run `go run . analyze --spec ./adminapi.json`.
-2. Capture top-line metrics: total findings, severity split, endpoint score summary.
+2. Capture top-line metrics: total findings, severity split, and top fix-first areas.
 3. Open `go run . explore --spec ./adminapi.json` and check Overview for deterministic `Fix first` lines.
 4. Review Workflows totals (single-step and multi-step) for usability signal.
 5. If release comparison is needed, run `go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json`.
@@ -157,73 +178,30 @@ Important runtime notes:
 - No persistence, no websocket/live-reload behavior
 - Uses existing analyzer/workflow/diff outputs; no separate analysis engine
 
-## TUI (secondary interactive surface)
+## TUI (secondary surface)
 
-The TUI is an interactive terminal view over the same analysis data that the CLI commands produce.
+The TUI is a read-only terminal surface over the same CLI engine outputs.
 
-Maturity note:
+Use it for quick local triage when you want terminal navigation, but treat it as secondary to Explorer.
 
-- Current state is an early dashboard-style interface meant for fast triage and drill-downs.
-- Polished enough for daily local use, but still intentionally narrow and evolving.
-- Not a full replacement for exported JSON in advanced automation/reporting workflows.
-
-Why use it instead of plain CLI output:
-
-- Easier to scan large result sets quickly.
-- Easier to move from summary to concrete endpoint/finding/workflow context.
-- Useful for triage sessions before exporting or scripting against JSON output.
-
-How to launch:
+Launch:
 
 ```sh
 go run . tui --spec ./adminapi.json
 ```
 
-Diff mode note:
-
-- `./adminapi.json` is your current local spec in this common workflow.
-- Diff mode requires two additional files: an older spec (`--old`) and a newer spec (`--new`).
-- Diff data is not auto-discovered in this TUI mode; you must pass both flags explicitly at launch.
-
-Example:
+Optional diff in TUI:
 
 ```sh
 go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2.json
 ```
-
-The TUI is read-only. It does not edit specs or change analyzer logic.
-
-Current high-level screens:
-
-- Overview: top-level totals, severity summary, and a compact deterministic "Fix first" snapshot for workflow burden, contract-shape burden, consistency outliers, and endpoint priorities
-- Hotspots: ranked priority areas across issue categories, endpoint areas, and workflow patterns
-- Endpoints: browsable endpoint list with explicit labels (`issues`, `quality`, `priority`) and risk/path sort toggle
-- Issue categories: grouped issue-code categories with structured detail (summary, affected count, representative examples, why it matters)
-- Workflows: single-step and multi-step workflow pattern summaries with inline examples
-- Diff: available only when launched with --old and --new
-
-Common keybindings:
-
-- Sidebar-first navigation: Up/down to choose section, Enter to open
-- Focus switching: Tab or left/right moves focus across Navigation, Main, and Detail panes
-- Quick section shortcuts: number keys for the screens available in the current run (Diff is included only when loaded)
-- Legacy section cycling: [ and ] (or h/l)
-- Open related detail: Enter or o (context-dependent)
-- Endpoints sort mode: r toggles priority-first and path order
-- Close detail pane: Esc
-
-First-time flow:
-
-- Move in the left menu with up/down.
-- Press Enter to open a section in the Main pane.
-- Use Tab or right arrow to move to the Detail pane when a drill-down is open.
 
 
 ## Command overview
 
 Use one command at a time based on what you need:
 
-- analyze: one-spec review of workflow burden, contract-shape burden, consistency findings, and prioritized summaries
+- analyze: one-spec evidence review for workflow burden, contract-shape burden, consistency drift, and fix-first prioritization
 - workflows: inspect likely single-step and multi-step call chains inferred from the same spec
 - diff: compare two spec versions for breaking changes and release risk checks
 - explore: primary local browser surface for interactive triage and endpoint/workflow drill-down

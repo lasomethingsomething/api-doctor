@@ -1,5 +1,11 @@
 # Explorer Refactor: Evidence-Driven, Spec-Grounded Design
 
+Historical planning note:
+
+- This document captures a prior design exploration pass.
+- Current canonical product framing is in [README.md](README.md) and [docs/usage.md](docs/usage.md).
+- If wording conflicts, prefer the canonical docs.
+
 ## 1. EVIDENCE SIGNAL INVENTORY
 
 ### Existing Signals (Already in Payload)
