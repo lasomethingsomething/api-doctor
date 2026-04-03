@@ -853,6 +853,239 @@
       + '</div>';
   }
 
+  function renderCommonWorkflowJourneys() {
+    // Render guidance for common workflow journey patterns found in the API.
+    // This is the "problem-finding version of a docs guide" that helps developers
+    // understand where the contract fails to guide them through common workflows.
+    var allChains = state.payload.workflows.chains || [];
+    if (!allChains.length) return '';
+
+    // Group chains by kind to identify common journey patterns
+    var byKind = {};
+    allChains.forEach(function (chain) {
+      var kind = chain.kind || 'workflow';
+      if (!byKind[kind]) byKind[kind] = [];
+      byKind[kind].push(chain);
+    });
+
+    // Focus on the most common journey types (those with multiple chains or high burden)
+    var journeyPatterns = Object.keys(byKind)
+      .map(function (kind) {
+        var chains = byKind[kind];
+        var totalBurden = chains.reduce(function (s, c) { return s + chainBurdenScore(c); }, 0);
+        return { kind: kind, chains: chains, totalBurden: totalBurden };
+      })
+      .filter(function (j) { return j.totalBurden > 0; })
+      .sort(function (a, b) { return b.totalBurden - a.totalBurden; })
+      .slice(0, 4); // Show top 4 journey patterns
+
+    if (!journeyPatterns.length) return '';
+
+    var journeyHtml = journeyPatterns.map(function (pattern) {
+      return renderWorkflowJourneyGuidance(pattern.kind, pattern.chains);
+    }).join('');
+
+    return '<div class="workflow-journeys-section">'
+      + '<div class="workflow-journeys-header">'
+      + '<p class="workflow-journeys-kicker">Common workflow journeys</p>'
+      + '<p class="workflow-journeys-copy">Problem-finding guide for developers. Identifies where the contract fails to guide you through each workflow and what a workflow-first contract should expose.</p>'
+      + '</div>'
+      + journeyHtml
+      + '</div>';
+  }
+
+  function renderWorkflowJourneyGuidance(kind, chains) {
+    // Render detailed guidance for a specific workflow journey pattern.
+    // Shows: current problems (hidden prereqs, fragile transitions, learned rules)
+    // and what the contract should expose.
+    var label = kindGroupLabel(kind);
+    var totalBurden = chains.reduce(function (s, c) { return s + chainBurdenScore(c); }, 0);
+    var chainCount = chains.length;
+
+    // Analyze the chain(s) to extract problems and expected contract changes
+    var analysis = analyzeWorkflowPattern(kind, chains);
+
+    var burdenLabel = totalBurden === 1 ? 'issue' : 'issues';
+    var chainLabel = chainCount === 1 ? 'chain' : 'chains';
+
+    return '<details class="workflow-journey-card">'
+      + '<summary class="workflow-journey-summary">'
+      + '<span class="journey-label">' + escapeHtml(label) + '</span>'
+      + '<span class="journey-meta">' + chainCount + ' ' + chainLabel + ' · ' + totalBurden + ' burden ' + burdenLabel + '</span>'
+      + '</summary>'
+      + '<div class="workflow-journey-body">'
+      + renderWorkflowJourneyProblems(analysis.problems)
+      + renderWorkflowJourneyContractGaps(analysis.contractGaps)
+      + renderWorkflowJourneyProposal(kind, analysis)
+      + '</div>'
+      + '</details>';
+  }
+
+  function analyzeWorkflowPattern(kind, chains) {
+    // Deep analysis of a workflow pattern to identify DX problems and contract gaps.
+    var allProblems = [];
+    var allTokens = [];
+    var allContext = [];
+    var allHiddenDeps = [];
+    var allLearnedRules = [];
+    var contractGaps = {};
+
+    chains.forEach(function (chain) {
+      var steps = chain.endpointIds || [];
+      var roles = parseChainRoles(chain.summary, steps.length);
+      var summary = collectWorkflowBurdenSummary(chain, roles);
+
+      summary.forEach(function (burden) {
+        if (allProblems.indexOf(burden.label) === -1) {
+          allProblems.push(burden.label);
+        }
+      });
+
+      steps.forEach(function (endpointId, idx) {
+        var detail = state.payload.endpointDetails[endpointId];
+        if (!detail) return;
+        var endpoint = detail.endpoint || {};
+        var findings = detail.findings || [];
+        var role = roles[idx] || '';
+        var nextEndpointId = idx < (steps.length - 1) ? steps[idx + 1] : '';
+        var nextDetail = nextEndpointId ? state.payload.endpointDetails[nextEndpointId] : null;
+        var nextEndpoint = nextDetail ? nextDetail.endpoint : null;
+        var nextRole = roles[idx + 1] || '';
+
+        var linkageFindings = findings.filter(function (f) {
+          return f.code === 'weak-follow-up-linkage' || f.code === 'weak-action-follow-up-linkage' || f.code === 'weak-accepted-tracking-linkage' || f.code === 'weak-outcome-next-action-guidance';
+        });
+        var prerequisiteFindings = findings.filter(function (f) {
+          return f.code === 'prerequisite-task-burden';
+        });
+        var clues = buildWorkflowDependencyClues(endpoint, findings, idx, steps.length, role, nextEndpoint, nextRole, linkageFindings, prerequisiteFindings);
+
+        // Extract token/context changes
+        if (/(auth|token|session|context)/i.test((clues.establish || []).join(' '))) {
+          allTokens.push(role + ' establishes context/token');
+        }
+        if (/(auth|token|header|context)/i.test((clues.nextNeeds || []).join(' '))) {
+          allContext.push('step ' + (idx + 1) + ' needs ' + (clues.nextNeeds[0] || 'context'));
+        }
+
+        // Track hidden dependencies
+        if ((clues.hidden || []).length) {
+          clues.hidden.forEach(function (h) {
+            allHiddenDeps.push(h);
+          });
+        }
+        if (prerequisiteFindings.length) {
+          allHiddenDeps.push(humanizeStepRole(role) + ' depends on prior state');
+        }
+
+        // Identify learned rules (fragile assumptions)
+        if (endpoint.path.indexOf('{') > -1 && idx > 0) {
+          allLearnedRules.push('Step ' + (idx + 1) + ' path requires resource ID from prior response');
+        }
+        if ((clues.prereq || []).some(function (p) { return /prior state|earlier|mutation/i.test(p); })) {
+          allLearnedRules.push('Step ' + (idx + 1) + ' depends on mutations from earlier steps');
+        }
+
+        // Identify contract gaps
+        if (linkageFindings.length && !contractGaps.missing_next_action) {
+          contractGaps.missing_next_action = true;
+        }
+        if (!endpoint.description || endpoint.description.length < 20) {
+          contractGaps.weak_guidance = true;
+        }
+        if ((clues.hidden || []).length > 0) {
+          contractGaps.hidden_context = true;
+        }
+      });
+    });
+
+    return {
+      problems: allProblems.slice(0, 3),
+      tokens: allTokens,
+      context: allContext,
+      hiddenDeps: allHiddenDeps.slice(0, 3),
+      learnedRules: allLearnedRules.slice(0, 3),
+      contractGaps: contractGaps
+    };
+  }
+
+  function renderWorkflowJourneyProblems(problems) {
+    if (!problems || !problems.length) return '';
+    return '<div class="journey-problems">'
+      + '<p class="journey-section-kicker">DX Problems Found in This Journey</p>'
+      + '<ul class="journey-problem-list">'
+      + problems.map(function (problem) {
+          return '<li><strong>' + escapeHtml(problem) + '</strong></li>';
+        }).join('')
+      + '</ul>'
+      + '</div>';
+  }
+
+  function renderWorkflowJourneyContractGaps(gaps) {
+    if (!gaps || Object.keys(gaps).length === 0) return '';
+    var items = [];
+    if (gaps.missing_next_action) {
+      items.push('<li><strong>Missing next action:</strong> Responses don\'t clearly signal what the workflow should do next</li>');
+    }
+    if (gaps.hidden_context) {
+      items.push('<li><strong>Hidden context:</strong> Authoritative state or required context for next steps is not explicitly exposed</li>');
+    }
+    if (gaps.weak_guidance) {
+      items.push('<li><strong>Weak guidance:</strong> Workflow purpose and continuity requirements are implicit, not documented</li>');
+    }
+    if (!items.length) return '';
+    return '<div class="journey-gaps">'
+      + '<p class="journey-section-kicker">Contract Gaps</p>'
+      + '<ul class="journey-gap-list">'
+      + items.join('')
+      + '</ul>'
+      + '</div>';
+  }
+
+  function renderWorkflowJourneyProposal(kind, analysis) {
+    // Propose what a workflow-first contract should expose for this journey.
+    var proposals = [];
+
+    if (kind.indexOf('create') !== -1) {
+      proposals.push('Each POST response should include the new resource ID and minimal authoritative state');
+      proposals.push('Clearly indicate whether creation is complete or requires follow-up (e.g., email confirmation)');
+    }
+    if (kind.indexOf('update') !== -1 || kind.indexOf('detail') !== -1) {
+      proposals.push('PATCH/PUT responses should clearly expose what changed and what\'s now authoritative');
+      proposals.push('Every mutation should indicate the next valid action (e.g., "ready to checkout", "awaiting confirmation")');
+    }
+    if (kind.indexOf('action') !== -1) {
+      proposals.push('Action endpoints should expose the outcome state, not just echo the request');
+      proposals.push('Clearly signal required follow-up steps (if any) and what information is needed for them');
+    }
+    if (kind.indexOf('follow-up') !== -1) {
+      proposals.push('Follow-up endpoints should accept identifiers from prior responses without additional lookup');
+      proposals.push('Responses should clearly indicate workflow completion or next required state changes');
+    }
+    if (kind.indexOf('list') !== -1) {
+      proposals.push('List responses should include pagination context to guide fetching additional items');
+      proposals.push('Include minimal resource detail needed to decide whether to load full details');
+    }
+
+    if (analysis.hiddenDeps && analysis.hiddenDeps.length) {
+      proposals.push('Explicitly expose hidden dependencies: clients should not have to infer prior state requirements');
+    }
+    if (analysis.learnedRules && analysis.learnedRules.length) {
+      proposals.push('Document learned sequencing rules in handler descriptions (e.g., path parameter origins)');
+    }
+
+    if (!proposals.length) return '';
+
+    return '<div class="journey-proposal">'
+      + '<p class="journey-section-kicker">Workflow-First Contract Proposal</p>'
+      + '<ul class="journey-proposal-list">'
+      + proposals.slice(0, 4).map(function (proposal) {
+          return '<li>' + escapeHtml(proposal) + '</li>';
+        }).join('')
+      + '</ul>'
+      + '</div>';
+  }
+
   function renderEndpointDiagnosticsShapeSummary(detail) {
     var endpoint = detail.endpoint || {};
     var findings = findingsForActiveLens(detail.findings || []);
@@ -1451,10 +1684,13 @@
 
     el.workflowSection.style.display = 'block';
 
+    // Always include the journey guidance at the top
+    var journeyGuidanceHtml = renderCommonWorkflowJourneys();
+
     if (filteredChains.length) {
       el.workflowHelp.textContent = 'Step-by-step call chain surface for the current lens. Selecting a step updates Endpoint diagnostics and exact evidence for that endpoint.';
       var groups = groupChainsByKind(filteredChains);
-      el.workflowChains.innerHTML = groups.map(renderWorkflowKindGroup).join('');
+      el.workflowChains.innerHTML = journeyGuidanceHtml + groups.map(renderWorkflowKindGroup).join('');
       bindWorkflowStepInteractions();
       syncWorkflowStepSelectionHighlight();
       return;
@@ -1463,7 +1699,7 @@
     if (scopedChains.length) {
       el.workflowHelp.textContent = 'No chains overlap the current evidence-only slice. Showing inferred call chains from scoped endpoints so the sequence remains visible.';
       var scopedGroups = groupChainsByKind(scopedChains);
-      el.workflowChains.innerHTML = '<div class="workflow-no-match">'
+      el.workflowChains.innerHTML = journeyGuidanceHtml + '<div class="workflow-no-match">'
         + '<p class="workflow-empty-kicker">Workflow view</p>'
         + '<p class="workflow-empty-title"><strong>Call chain surface restored for this lens</strong></p>'
         + '<p class="workflow-empty-copy">Visible issue rows are currently too narrow for direct chain overlap, so this section keeps the inferred sequence visible from the scoped endpoint set.</p>'
@@ -1477,7 +1713,7 @@
     }
 
     el.workflowHelp.textContent = '';
-    el.workflowChains.innerHTML = renderWorkflowEmptyState('filtered');
+    el.workflowChains.innerHTML = journeyGuidanceHtml + renderWorkflowEmptyState('filtered');
     bindRecoveryButtons(el.workflowChains);
   }
 
