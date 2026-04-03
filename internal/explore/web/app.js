@@ -454,14 +454,22 @@
       }
     });
 
-    return Object.keys(burdens).map(function (k) { return burdens[k]; }).filter(function (b) { return b.steps.length > 0; });
+    var priorityOrder = ['hidden', 'outcome', 'auth', 'sequence'];
+    return Object.keys(burdens)
+      .map(function (k) { return burdens[k]; })
+      .filter(function (b) { return b.steps.length > 0; })
+      .sort(function (a, b) {
+        if (b.steps.length !== a.steps.length) return b.steps.length - a.steps.length;
+        return priorityOrder.indexOf(a.key) - priorityOrder.indexOf(b.key);
+      });
   }
 
   function renderWorkflowBurdenSummary(chain, roles) {
     var items = collectWorkflowBurdenSummary(chain, roles);
     if (!items.length) return '';
-    var html = items.map(function (item) {
-      return '<span class="workflow-burden-item workflow-burden-' + item.key + '">'
+    var html = items.map(function (item, idx) {
+      var priorityCls = idx === 0 ? ' workflow-burden-primary' : ' workflow-burden-secondary';
+      return '<span class="workflow-burden-item workflow-burden-' + item.key + priorityCls + '">'
         + '<strong>' + escapeHtml(item.label) + '</strong>'
         + '<em>' + escapeHtml(formatWorkflowStepRefs(item.steps)) + '</em>'
         + '<span>' + escapeHtml(item.why) + '</span>'

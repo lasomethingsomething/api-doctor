@@ -646,6 +646,30 @@ select:focus {
   line-height: 1.25;
 }
 
+.workflow-burden-primary {
+  border-width: 1.5px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+
+.workflow-burden-primary strong {
+  font-weight: 700;
+  color: #1a3146;
+}
+
+.workflow-burden-secondary {
+  opacity: 0.65;
+  min-width: 0;
+  max-width: 210px;
+}
+
+.workflow-burden-secondary strong {
+  font-weight: 500;
+}
+
+.workflow-burden-secondary span {
+  display: none;
+}
+
 .workflow-burden-hidden {
   background: #fff6e9;
   border-color: #f1d6ad;
