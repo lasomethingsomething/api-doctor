@@ -43,12 +43,12 @@ go run . explore --spec ./adminapi.json --base ./adminapi-v1.json --head ./admin
 ```
 
 How to use it quickly:
-1. Click a **Fix first** preset to activate a burden lens (workflow burden, shape burden, consistency, or spec-rule violations).
+1. Click a top-level lens/tab to activate a family triage view or open **Endpoint diagnostics** for selected-endpoint inspection.
 2. In the top shortcut row, each lens card uses a subtle pastel tint so lens intent is visually distinct at a glance; the reset control remains a separate utility control.
 3. Use the **Family investigation clusters** section as the primary entry point — each card explains why that family appears in the current view.
-4. Scroll to the **Evidence list** to see concrete endpoints with matching issues; the burden explanation above the list summarizes what to look for.
-5. Click an endpoint row to open its detail pane with grouped issue evidence and OpenAPI location cues.
-6. For workflow-specific investigation, use the **Call chain diagnostics** section to see multi-step sequences and identify follow-up linkage issues.
+4. Use **Endpoint diagnostics** as the primary selected-endpoint inspection surface. It now contains summary, exact evidence, cleaner contract emphasis, and consistency/drift inspection for the current selection.
+5. Use the **Evidence list** to change the current endpoint selection; selecting a row updates Endpoint diagnostics.
+6. Use **Call chain diagnostics and continuity** as a lower secondary layer when you need workflow sequence context.
 
 ## Explorer vs CLI (quick decision)
 
@@ -76,7 +76,7 @@ Command roles:
 ## Main surfaces
 
 - CLI engine (canonical): analyze, workflows, diff, and machine-readable output
-- Explorer (primary): interactive family/workflow/endpoint evidence inspection
+- Explorer (primary): interactive family triage plus Endpoint diagnostics for selected-endpoint inspection
 - TUI (secondary): compact terminal triage over the same deterministic data
 
 ## What api-doctor helps you find

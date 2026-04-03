@@ -15,9 +15,10 @@ Use `analyze` for deterministic baseline output, then use `explore` as the prima
 ## Explorer vs CLI
 
 - Explorer (`explore`): primary way to inspect burden lenses, family clusters, endpoint evidence, and workflow context.
-  - Clean information hierarchy: lens choice → family overview → endpoint list with guidance → detail evidence
+   - Clean information hierarchy: lens choice → family overview → Endpoint diagnostics → workflow context
   - No redundant explanations; each section builds on the previous without repetition
-  - Support for four view types: spec-rule violations (rules-based view), workflow burden, shape burden, consistency (all guidance views)
+   - Top-level navigation now focuses on family triage lenses plus Endpoint diagnostics
+   - Endpoint diagnostics is the primary selected-endpoint inspection surface, with compact sub-tabs for Summary, Exact evidence, Consistency / drift, and Cleaner contract emphasis
    - Top shortcut/lens cards use subtle per-lens pastel tinting for fast visual distinction; reset remains a separate neutral utility control
 - CLI (`analyze`, `workflows`, `diff`): canonical deterministic engine for local scripts, CI, and machine-readable outputs.
 - TUI (`tui`): secondary terminal read-only view of the same deterministic data.
@@ -48,7 +49,7 @@ api-doctor organizes findings around four complementary views, accessible via ca
    - What: where similar operations stop feeling interchangeable
    - When to use: ensuring API surface cohesion across related routes
 
-Each view is isolated and independent. Selecting a category or burden filter will sync the view appropriately—for example, choosing workflow burden automatically switches the category filter to workflow-burden view.
+Each view is isolated and independent. Selecting a category or burden filter will sync the view appropriately—for example, choosing workflow burden automatically switches the category filter to workflow-burden view. In the current Explorer layout, endpoint-local consistency inspection lives inside Endpoint diagnostics rather than as a separate top-level shortcut.
 
 Scope reminder:
 
