@@ -191,21 +191,24 @@ h2 {
 }
 
 .quick-action-reset {
-  border-color: #cdd5dc;
-  border-left-color: #7f8e9a;
-  border-left-style: dashed;
-  background: linear-gradient(180deg, #f6f8fa 0%, #edf1f4 100%);
+  border-color: #cbd2db;
+  border-left-color: #cbd2db;
+  border-left-style: solid;
+  background: #f5f6f8;
+  font-size: 0.9em;
 }
 
 .quick-action-reset:hover {
-  border-color: #b4bec8;
-  border-left-color: #667786;
-  background: linear-gradient(180deg, #edf1f4 0%, #e5eaef 100%);
+  border-color: #b8bfc8;
+  background: #eff0f3;
 }
 
-.quick-action-reset .quick-label,
+.quick-action-reset .quick-label {
+  color: #4a5568;
+}
+
 .quick-action-reset .quick-copy {
-  color: var(--muted);
+  color: #718096;
 }
 
 .quick-label {
@@ -235,7 +238,15 @@ h2 {
 
 .reset-control .quick-action {
   flex: 0 1 auto;
-  min-width: 220px;
+  min-width: auto;
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.reset-control .quick-action:hover {
+  background: #eff0f3;
 }
 
 .lens-controls {
