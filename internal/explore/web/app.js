@@ -19,7 +19,6 @@
     hasFindingsOnly: document.getElementById("hasFindingsOnly"),
     sortBy: document.getElementById("sortBy"),
     endpointRows: document.getElementById("endpointRows"),
-    evidenceListHelp: document.getElementById("evidenceListHelp"),
     evidenceScope: document.getElementById("evidenceScope"),
     detailHelp: document.getElementById("detailHelp"),
     endpointDetail: document.getElementById("endpointDetail"),
@@ -70,6 +69,11 @@
       { value: "contract-shape", label: "burden focus: contract shape" },
       { value: "consistency", label: "burden focus: consistency" }
     ]);
+    var datalist = document.getElementById('searchSuggestions');
+    if (datalist) {
+      var families = uniq(state.payload.endpoints.map(function (row) { return row.family; })).sort();
+      datalist.innerHTML = families.concat(['GET', 'POST', 'PATCH', 'PUT', 'DELETE']).map(function (v) { return '<option value="' + escapeHtml(v) + '">'; }).join('');
+    }
   }
 
   function setOptions(select, options) {
@@ -101,21 +105,38 @@
 
   function renderSummary() {
     var s = state.payload.summary;
-    var trustPressure = s.endpointsAnalyzed === 0 ? "n/a" : (s.endpointsWithIssue + " of " + s.endpointsAnalyzed + " endpoints need trust review");
     var rows = state.payload.endpoints || [];
     var highPriorityCount = rows.filter(function (r) { return r.priority === "high"; }).length;
     var topFamily = topFamilyByFindings(rows);
     var topWorkflowKind = topWorkflowFamily(state.payload.workflows || {});
-    var burdenSummary = dominantBurdenFocus(rows);
+    var burdenCode = dominantBurdenCode(rows);
+    var withFindings = s.endpointsWithIssue || 0;
+    var pct = s.endpointsAnalyzed > 0 ? Math.round(100 * withFindings / s.endpointsAnalyzed) : 0;
     var cards = [
-      { label: "Contract trust pressure", value: trustPressure, meta: "Endpoints currently carrying direct burden, contract-shape, consistency, or change-risk evidence.", tone: "tone-trust" },
-      { label: "Workflow burden concentration", value: burdenSummary, meta: "Dominant burden focus across evidence-bearing endpoints in the current run.", tone: "tone-workflow" },
-      { label: "Fix-first load", value: String(s.totalFindings) + " findings", meta: highPriorityCount + " high-priority endpoints currently rise to the top of the queue.", tone: "tone-fix" },
-      { label: "Family concentration", value: topFamily, meta: "Highest-density endpoint family based on current finding distribution.", tone: "tone-family" },
-      { label: "Severity split", value: "E " + (s.severityCounts.error || 0) + " / W " + (s.severityCounts.warning || 0) + " / I " + (s.severityCounts.info || 0), meta: "Current analysis mix across error, warning, and informational signals.", tone: "tone-trust" },
-      { label: "Workflow coverage", value: s.workflowsInferred + " paths / " + s.chainsInferred + " chains", meta: "Spec-derived handoffs and larger chains inferred from the current contract.", tone: "tone-workflow" },
-      { label: "Dominant workflow kind", value: topWorkflowKind, meta: "Most common inferred path type, useful for deciding where to inspect first.", tone: "tone-family" },
-      { label: "Endpoints in scope", value: String(s.endpointsAnalyzed), meta: "Total endpoints analyzed from the current spec payload.", tone: "tone-fix" }
+      {
+        label: "Where to start",
+        value: topFamily,
+        meta: pct + "% of " + s.endpointsAnalyzed + " endpoints (" + withFindings + ") carry at least one finding. This family has the highest burden concentration.",
+        tone: "tone-trust"
+      },
+      {
+        label: "Primary burden type",
+        value: burdenLabel(burdenCode),
+        meta: burdenDescription(burdenCode),
+        tone: "tone-workflow"
+      },
+      {
+        label: "Highest-pressure endpoints",
+        value: highPriorityCount + (highPriorityCount === 1 ? " endpoint" : " endpoints"),
+        meta: "Rise to the top based on low schema or client scores combined with multiple findings (" + s.totalFindings + " signals total across all endpoints). Use the fix-first priorities below to decide where to start.",
+        tone: "tone-fix"
+      },
+      {
+        label: "Spec-inferred workflows",
+        value: s.workflowsInferred + " step-pairs \u00b7 " + s.chainsInferred + " chains",
+        meta: "Inferred from path shapes and ID patterns \u2014 not from live API behavior. Dominant handoff type: " + topWorkflowKind + ".",
+        tone: "tone-family"
+      }
     ];
     el.summaryCards.innerHTML = cards.map(function (card) {
       return '<article class="card ' + card.tone + '"><p class="card-label">' + card.label + '</p><p class="card-value">' + card.value + '</p><p class="card-meta">' + card.meta + '</p></article>';
@@ -131,7 +152,8 @@
     }
     el.fixFirstList.innerHTML = state.payload.fixFirst.map(function (item) {
       var rank = fixFirstRank(item.id);
-      return '<button class="fix-item" data-id="' + item.id + '"><span class="fix-rank">' + rank + '</span><span class="fix-copy"><strong>' + item.label + '</strong><span class="fix-value">' + item.value + '</span><span>' + item.description + '</span></span></button>';
+      var meaning = fixFirstMeaning(item.id);
+      return '<button class="fix-item" data-id="' + item.id + '"><span class="fix-rank">' + rank + '</span><span class="fix-copy"><strong>' + item.label + '</strong><span class="fix-value">' + item.value + '</span><span class="fix-desc">' + item.description + '</span>' + (meaning ? '<span class="fix-meaning">' + meaning + '</span>' : '') + '</span></button>';
     }).join("");
     Array.prototype.forEach.call(el.fixFirstList.querySelectorAll("button"), function (btn) {
       btn.addEventListener("click", function () {
@@ -242,9 +264,10 @@
     if (detail.findings.length === 0) {
       findings += "<p class='subtle'>No findings on this endpoint in the current spec-derived slice.</p>";
     } else {
-      findings += "<ul>" + detail.findings.map(function (f) {
-        return '<li><strong>' + f.severity.toUpperCase() + '</strong> ' + f.code + '<br>' + escapeHtml(f.impact) + '</li>';
-      }).join('') + "</ul>";
+      findings += "<ul class='finding-list'>" + detail.findings.map(function (f) {
+        var impact = f.impact ? '<p class="finding-impact">' + escapeHtml(f.impact) + '</p>' : '';
+        return '<li class="finding-item"><div class="finding-head"><span class="badge ' + f.severity + '">' + f.severity + '</span><code class="finding-code">' + escapeHtml(f.code) + '</code></div><p class="finding-message">' + escapeHtml(f.message) + '</p>' + impact + '</li>';
+      }).join("") + "</ul>";
     }
 
     var workflows = detail.relatedWorkflows.length ? '<h3>Related workflow paths</h3><ul>' + detail.relatedWorkflows.slice(0, 6).map(function (w) {
@@ -278,13 +301,15 @@
     }
 
     var families = endpointFamilies.slice(0, 8).map(function (f, idx) {
-      var prefix = idx === 0 ? 'Start here - ' : '';
-      return '<li class="workflow-click" data-id="' + (f.targetID || '') + '"><strong>' + prefix + f.family + '</strong><br>' + f.findings + ' findings across ' + f.endpoints + ' endpoints | dominant burden: ' + f.dominantBurden + '</li>';
+      var prefix = idx === 0 ? 'Most findings \u2014 ' : '';
+      return '<li class="workflow-click" data-id="' + (f.targetID || '') + '"><strong>' + prefix + f.family + '</strong> \u2014 ' + f.findings + ' finding' + (f.findings === 1 ? '' : 's') + ' across ' + f.endpoints + ' endpoint' + (f.endpoints === 1 ? '' : 's') + '<br><span class="subtle">dominant burden: ' + f.dominantBurden + '</span></li>';
     }).join('');
 
     var paths = kindSummaries.slice(0, 8).map(function (k, idx) {
-      var prefix = idx === 0 ? 'Start here - ' : '';
-      return '<li class="workflow-click" data-id="' + (k.targetID || '') + '"><strong>' + prefix + k.kind + '</strong>: ' + k.count + ' paths<br>' + k.example + (k.score ? (' (' + k.score + ')') : '') + '</li>';
+      var prefix = idx === 0 ? 'Most common \u2014 ' : '';
+      var kindDesc = workflowKindLabel(k.kind);
+      var scoreNote = k.score ? ' <span class="subtle score-inline">(scores: ' + k.score + ' \u00b7 schema/client/version \u00b7 5=best)</span>' : '';
+      return '<li class="workflow-click" data-id="' + (k.targetID || '') + '"><strong>' + prefix + k.kind.replaceAll('-', ' \u2192 ') + '</strong>: ' + k.count + ' instance' + (k.count === 1 ? '' : 's') + scoreNote + '<br><span class="subtle">' + kindDesc + '</span></li>';
     }).join('');
 
     var reps = (wf.chains || []).slice(0, 6).map(function (c) {
@@ -292,7 +317,7 @@
       return '<li class="workflow-click" data-id="' + id + '"><strong>' + c.kind + '</strong><br>' + escapeHtml(c.summary) + '</li>';
     }).join('');
 
-    el.workflowPanel.innerHTML = '<div class="workflow-sections"><section class="workflow-group"><h3>Family summaries (by findings)</h3><ul id="familyList">' + (families || "<li class='subtle'>No family summaries in this run.</li>") + '</ul></section><section class="workflow-group"><h3>Workflow path summaries (by kind)</h3><ul id="workflowKindList">' + (paths || "<li class='subtle'>No workflow paths.</li>") + '</ul></section><section class="workflow-group"><h3>Representative chains (click to jump)</h3><ul id="chainList">' + (reps || "<li class='subtle'>No chains.</li>") + '</ul></section></div>';
+    el.workflowPanel.innerHTML = '<div class="workflow-sections"><section class="workflow-group"><h3>Endpoint families by burden</h3><ul id="familyList">' + (families || "<li class='subtle'>No family summaries in this run.</li>") + '</ul></section><section class="workflow-group"><h3>Inferred handoff patterns by type</h3><ul id="workflowKindList">' + (paths || "<li class='subtle'>No workflow paths.</li>") + '</ul></section><section class="workflow-group"><h3>Inferred multi-step paths</h3><p class=\'workflow-caveat subtle\'>Assembled from path shapes and ID conventions in the spec \u2014 not from live API behavior. Click any entry to inspect its most evidence-bearing endpoint.</p><ul id="chainList">' + (reps || "<li class='subtle'>No multi-step paths in this run.</li>") + '</ul></section></div>';
 
     ['familyList', 'workflowKindList', 'chainList'].forEach(function (listID) {
       var list = document.getElementById(listID);
@@ -433,7 +458,55 @@
     var idx = order.indexOf(id);
     return idx === -1 ? '•' : String(idx + 1);
   }
+  function dominantBurdenCode(rows) {
+    if (!rows || rows.length === 0) return '';
+    var counts = {};
+    rows.forEach(function (row) {
+      (row.burdenFocuses || []).forEach(function (focus) {
+        counts[focus] = (counts[focus] || 0) + (row.findings > 0 ? row.findings : 1);
+      });
+    });
+    var ranked = Object.entries(counts).sort(function (a, b) { return b[1] - a[1]; });
+    return ranked.length > 0 ? ranked[0][0] : '';
+  }
 
+  function burdenLabel(code) {
+    switch (code) {
+      case 'workflow-burden': return 'Workflow linkage burden';
+      case 'contract-shape': return 'Contract-shape burden';
+      case 'consistency': return 'Consistency drift';
+      default: return code ? code.replaceAll('-', ' ') : 'Mixed signals';
+    }
+  }
+
+  function burdenDescription(code) {
+    switch (code) {
+      case 'workflow-burden': return 'Most findings flag missing next-step linkage: the spec does not expose the ID or state a client needs to call the next endpoint in a two-step flow.';
+      case 'contract-shape': return 'Most findings flag write operations that return snapshot data instead of task outcomes: clients cannot confirm what changed without issuing a follow-up GET.';
+      case 'consistency': return 'Most findings flag naming or shape drift across related paths: path parameters, response structures, or operation names are inconsistent.';
+      default: return 'Findings are distributed across multiple burden types. Use the fix-first priorities below to decide where to focus.';
+    }
+  }
+
+  function fixFirstMeaning(id) {
+    switch (id) {
+      case 'workflow-burden': return 'Clients cannot reliably chain operations: the spec does not surface the ID or state needed to call the next endpoint in a two-step flow.';
+      case 'contract-shape': return 'After a write, the response does not confirm the outcome \u2014 clients must issue a separate GET to confirm what actually changed.';
+      case 'consistency': return 'Naming or shape drift across similar routes makes the API harder to learn and predict without reading every endpoint individually.';
+      case 'families': return 'These families have the highest finding density. Fixing the most-concentrated family typically has the broadest impact per hour of review.';
+      default: return '';
+    }
+  }
+
+  function workflowKindLabel(kind) {
+    switch (kind) {
+      case 'create-to-detail': return 'POST creates a resource; GET by ID retrieves it. The create response should expose the new resource\u2019s ID.';
+      case 'list-to-detail': return 'GET list and GET by ID are linked \u2014 the list response must include the ID the detail endpoint expects.';
+      case 'action-to-detail': return 'POST action transitions state; GET by ID confirms the result. The action response should surface the new state.';
+      case 'list-to-detail-to-update': return '3-step chain: list \u2192 detail \u2192 update. Each step depends on an ID or state value exposed by the previous response.';
+      default: return kind.replaceAll('-', ' \u2192 ');
+    }
+  }
   function dominantBurdenFocus(rows) {
     if (!rows || rows.length === 0) return 'n/a';
     var counts = {};
