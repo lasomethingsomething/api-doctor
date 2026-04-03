@@ -49,10 +49,12 @@
     });
     el.categoryFilter.addEventListener("change", function (e) {
       state.filters.category = e.target.value;
+      normalizeLensFilters('category');
       render();
     });
     el.burdenFilter.addEventListener("change", function (e) {
       state.filters.burden = e.target.value;
+      normalizeLensFilters('burden');
       render();
     });
     el.familyPriorityFilter.addEventListener("change", function (e) {
@@ -65,21 +67,50 @@
     });
   }
 
+  function normalizeLensFilters(changed) {
+    var category = state.filters.category;
+    var burden = state.filters.burden;
+    var heuristicTracks = {
+      'workflow-burden': true,
+      'contract-shape': true,
+      'consistency': true
+    };
+
+    if (category === 'spec-rule' && burden !== 'all') {
+      if (changed === 'burden' && heuristicTracks[burden]) {
+        state.filters.category = burden;
+      } else {
+        state.filters.burden = 'all';
+      }
+      return;
+    }
+
+    if (burden === 'all' || category === 'all') return;
+    if (!heuristicTracks[category] || !heuristicTracks[burden] || category === burden) return;
+
+    if (changed === 'burden') {
+      state.filters.category = burden;
+      return;
+    }
+
+    state.filters.burden = category;
+  }
+
   function renderFilterOptions() {
     var categoryValues = uniq(flatMap(state.payload.endpoints, function (row) {
       return Object.keys(row.categoryCounts || {});
     })).sort();
     setOptions(el.categoryFilter, [{ value: "all", label: "all categories" }].concat(
       categoryValues.map(function (c) {
-        return { value: c, label: c === 'spec-rule' ? 'spec rule violations' : c.replaceAll("-", " ") };
+        return { value: c, label: c === 'spec-rule' ? 'spec rule violations (rules-based view)' : c.replaceAll("-", " ") };
       })
     ));
 
     setOptions(el.burdenFilter, [
       { value: "all", label: "all burdens" },
-      { value: "workflow-burden", label: "workflow burden" },
-      { value: "contract-shape", label: "shape burden" },
-      { value: "consistency", label: "consistency" }
+      { value: "workflow-burden", label: "workflow burden (guidance view)" },
+      { value: "contract-shape", label: "shape burden (guidance view)" },
+      { value: "consistency", label: "consistency (guidance view)" }
     ]);
 
     var datalist = document.getElementById("searchSuggestions");
@@ -119,9 +150,9 @@
     var topFamily = topFamilyByFindings(rows);
     var actions = [
       { id: "family", label: "Top family shortcut", copy: topFamily.name ? ('Jump to ' + humanFamilyLabel(topFamily.name)) : 'Jump to the highest-finding family', color: 'family' },
-      { id: "spec-rule", label: "Spec rule violations", copy: "OpenAPI MUST/SHOULD violations grounded in normative spec language", color: 'spec-rule' },
+      { id: "spec-rule", label: "Spec rule violations", copy: "OpenAPI MUST/SHOULD issues backed by explicit rule language", color: 'spec-rule' },
       { id: "workflow", label: "Workflow burden", copy: "Missing next-step IDs or continuity context across call chains", color: 'workflow' },
-      { id: "shape", label: "Shape burden", copy: "Schemas are too generic or storage-shaped for clean client use", color: 'shape' },
+      { id: "shape", label: "Shape burden", copy: "Responses are too broad or model-heavy for clean client use", color: 'shape' },
       { id: "consistency", label: "Consistency", copy: "Similar endpoints drift in path style, parameter names, or response shape", color: 'consistency' }
     ];
 
@@ -208,19 +239,19 @@
     var lensContext = buildFamilySurfaceContext(summaries);
 
     if (!summaries.length) {
-      el.familySurfaceHelp.textContent = "No families match the current lens.";
+      el.familySurfaceHelp.textContent = '';
       el.familySurfaceContext.innerHTML = lensContext;
       bindRecoveryButtons(el.familySurfaceContext);
       el.familySurface.innerHTML = '<div class="empty">'
         + '<strong>No matching families.</strong>'
-        + '<p class="subtle">The current lens removed every family. Use the buttons below to restore a wider view.</p>'
+        + '<p class="subtle">The current filters removed every family. Use the buttons below to widen the view.</p>'
         + renderRecoveryActions(["clear-search", "reset-burden", "show-all-families", "clear-current-lens"])
         + '</div>';
       bindRecoveryButtons(el.familySurface);
       return;
     }
 
-    el.familySurfaceHelp.textContent = "Family clusters \u2014 click a card to focus on its endpoints. Urgency is in the pressure tag, not the card color.";
+    el.familySurfaceHelp.textContent = '';
     el.familySurfaceContext.innerHTML = lensContext;
     bindRecoveryButtons(el.familySurfaceContext);
     el.familySurface.innerHTML = summaries.map(function (family) {
@@ -241,7 +272,9 @@
   function renderWorkflowChains() {
     var allChains = state.payload.workflows.chains || [];
     if (!allChains.length) {
-      el.workflowSection.style.display = 'none';
+      el.workflowSection.style.display = 'block';
+      el.workflowHelp.textContent = '';
+      el.workflowChains.innerHTML = renderWorkflowEmptyState('absent');
       return;
     }
 
@@ -258,21 +291,14 @@
 
     if (!filteredChains.length) {
       el.workflowSection.style.display = 'block';
-      el.workflowHelp.textContent = 'No call chains match the current lens. Broaden the filters to see workflow patterns.';
-      el.workflowChains.innerHTML = '<div class="workflow-no-match">'
-        + '<p><strong>No matching workflows</strong></p>'
-        + '<p class="subtle">The current filters removed all relevant call chains.</p>'
-        + '<div class="recovery-actions">'
-        + '<button type="button" class="secondary-action" data-recovery-action="show-all-workflows">Show all workflow patterns</button>'
-        + '</div>'
-        + '<p class="recovery-secondary-hint">Or: <button type="button" class="recovery-link" data-recovery-action="reset-burden">reset burden</button> · <button type="button" class="recovery-link" data-recovery-action="clear-search">clear search</button></p>'
-        + '</div>';
+      el.workflowHelp.textContent = '';
+      el.workflowChains.innerHTML = renderWorkflowEmptyState('filtered');
       bindRecoveryButtons(el.workflowChains);
       return;
     }
 
     el.workflowSection.style.display = 'block';
-    el.workflowHelp.textContent = 'Call chains inferred from path structure. Step cards summarize continuity cues; inspect detail for exact issue evidence and OpenAPI grounding where available.';
+    el.workflowHelp.textContent = '';
 
     var groups = groupChainsByKind(filteredChains);
     el.workflowChains.innerHTML = groups.map(renderWorkflowKindGroup).join('');
@@ -295,6 +321,25 @@
         }, 50);
       });
     });
+  }
+
+  function renderWorkflowEmptyState(mode) {
+    if (mode === 'absent') {
+      return '<div class="workflow-no-match workflow-no-match-final">'
+        + '<p class="workflow-empty-kicker">Workflow view</p>'
+        + '<p class="workflow-empty-title"><strong>No inferred workflow chains</strong></p>'
+        + '<p class="workflow-empty-copy">This spec currently reads as isolated endpoints rather than a linked call sequence, so there is nothing to expand in this section.</p>'
+        + '<p class="workflow-empty-note">That is a final state for this spec, not a filter mismatch.</p>'
+        + '</div>';
+    }
+
+    return '<div class="workflow-no-match">'
+      + '<p class="workflow-empty-kicker">Workflow view</p>'
+      + '<p class="workflow-empty-title"><strong>No workflows in the current view</strong></p>'
+      + '<p class="workflow-empty-copy">The active filters removed all visible call chains. The fastest recovery is to reopen the full workflow view.</p>'
+      + renderRecoveryActions(['show-all-workflows', 'clear-current-lens'])
+      + '<p class="workflow-empty-note">Need a narrower reset instead? <button type="button" class="recovery-link" data-recovery-action="reset-burden">Reset burden</button> or <button type="button" class="recovery-link" data-recovery-action="clear-search">clear search</button>.</p>'
+      + '</div>';
   }
 
   function groupChainsByKind(chains) {
@@ -572,6 +617,25 @@
       + '</div>';
   }
 
+  function inferWorkflowCueSubject(text) {
+    if (!text) return '';
+
+    if (/(auth|bearer|authorization|access\s*key|api[-\s]?key|auth\/header)/.test(text)) return 'auth header';
+    if (/(token|context)/.test(text)) return 'context token';
+    if (/(payment|transaction)/.test(text)) return 'payment';
+    if (/order identity/.test(text)) return 'order id';
+    if (/cart/.test(text) && /(identity|identifier|selected resource context)/.test(text)) return 'cart id';
+    if (/customer/.test(text) && /(identity|identifier)/.test(text)) return 'customer id';
+    if (/order/.test(text) && /(state|changed state|prior state|authoritative state|order context)/.test(text)) return 'order state';
+    if (/cart/.test(text) && /(state|changed state|prior state|authoritative state|cart context)/.test(text)) return 'cart state';
+    if (/customer/.test(text) && /(state|context)/.test(text)) return 'customer context';
+    if (/(action|lookup)/.test(text)) return 'action prerequisite';
+    if (/(identifier|header)/.test(text)) return 'id/header';
+    if (/(state transition|changed state|prior state|authoritative state)/.test(text)) return 'state change';
+
+    return '';
+  }
+
   function inferWorkflowTransitionCue(clues, roleLabel) {
     var prereq = clues && clues.prereq ? clues.prereq : [];
     var establish = clues && clues.establish ? clues.establish : [];
@@ -580,33 +644,57 @@
     var role = (roleLabel || '').toLowerCase();
     var allText = (prereq.concat(establish, nextNeeds, hidden)).join(' | ').toLowerCase();
     var handoffText = (establish.concat(nextNeeds)).join(' | ').toLowerCase();
+    var subject = inferWorkflowCueSubject(allText);
+    var handoffSubject = inferWorkflowCueSubject(handoffText) || subject;
 
     // Derive the most specific applicable label from available clue text,
     // including when hidden signals are present.
     if (/(auth|bearer|authorization|access\s*key|api[-\s]?key)/.test(allText)) {
-      return { kind: 'context', label: hidden.length ? 'auth/header dependency' : 'auth/header dependency' };
+      return { kind: 'context', label: hidden.length ? 'auth header dependency' : 'auth header handoff' };
     }
     if (/(token|context)/.test(allText)) {
-      return { kind: 'context', label: hidden.length ? 'context token handoff' : 'context handoff' };
+      return { kind: 'context', label: hidden.length ? 'context token dependency' : 'context token handoff' };
     }
     if (/(order identity|order state|order context)/.test(allText)) {
       return { kind: 'state', label: 'order identity handoff' };
     }
     if (/(cart|order|customer)/.test(allText) && hidden.length) {
-      return { kind: 'state', label: 'cart/order state dependency' };
+      if (subject === 'order state' || subject === 'cart state' || subject === 'customer context') {
+        return { kind: 'state', label: subject + ' dependency' };
+      }
+      if (subject === 'order id' || subject === 'cart id' || subject === 'customer id') {
+        return { kind: 'state', label: subject + ' dependency' };
+      }
+      return { kind: 'state', label: 'resource state dependency' };
     }
     if (/(cart|order|customer|state)/.test(handoffText) || role === 'action' || role === 'update') {
-      return { kind: 'state', label: 'state transition' };
+      if (handoffSubject === 'order id' || handoffSubject === 'cart id' || handoffSubject === 'customer id') {
+        return { kind: 'state', label: handoffSubject + ' handoff' };
+      }
+      if (handoffSubject === 'order state' || handoffSubject === 'cart state' || handoffSubject === 'customer context') {
+        return { kind: 'state', label: handoffSubject + ' handoff' };
+      }
+      return { kind: 'state', label: 'state change handoff' };
     }
     if (/(payment|follow-up|follow up|transaction)/.test(allText) || role === 'payment' || role === 'checkout') {
-      return { kind: 'followup', label: hidden.length ? 'follow-up action dependency' : 'follow-up dependency' };
+      if (/transaction/.test(allText)) {
+        return { kind: 'followup', label: hidden.length ? 'transaction follow-up' : 'transaction handoff' };
+      }
+      return { kind: 'followup', label: hidden.length ? 'payment follow-up' : 'payment handoff' };
     }
     if (hidden.length) {
-      if (prereq.length) return { kind: 'weak', label: 'prior-state dependency' };
-      return { kind: 'weak', label: 'implicit handoff' };
+      if (subject === 'action prerequisite') return { kind: 'weak', label: 'action prerequisite' };
+      if (subject === 'id/header') return { kind: 'weak', label: 'hidden id/header' };
+      if (subject === 'state change') return { kind: 'weak', label: 'hidden state handoff' };
+      if (prereq.length) return { kind: 'weak', label: 'prior state handoff' };
+      return { kind: 'weak', label: 'hidden handoff' };
     }
     if (prereq.length) {
-      return { kind: 'prereq', label: 'prior-state dependency' };
+      if (subject === 'action prerequisite') return { kind: 'prereq', label: 'action prerequisite' };
+      if (subject === 'order state' || subject === 'cart state' || subject === 'customer context') {
+        return { kind: 'prereq', label: subject + ' dependency' };
+      }
+      return { kind: 'prereq', label: 'prior state dependency' };
     }
     return null;
   }
@@ -771,7 +859,7 @@
       + (dependencyHtml || '')
       + (warningBadges ? '<div class="step-warnings">' + warningBadges + '</div>' : '')
       + (continuityBurden || '')
-      + '<span class="step-inspect-hint">\u2197 inspect detail: exact issue evidence</span>'
+      + '<span class="step-inspect-hint">\u2197 inspect detail: exact issue text</span>'
       + '</div>'
       + arrow
       + '</div>';
@@ -850,7 +938,7 @@
   // distinct sub-table above concentrated/localized rules.
   function renderSpecRuleAggregate(ruleGroups) {
     if (!ruleGroups.length) {
-      return '<p class="subtle">No spec-rule findings visible in the current lens.</p>';
+      return '<p class="subtle">No spec-rule findings are visible in the current view.</p>';
     }
     var apiWide = ruleGroups.filter(function (r) { return r.isApiWide; });
     var localized = ruleGroups.filter(function (r) { return !r.isApiWide; });
@@ -927,10 +1015,16 @@
       return lead + secondary;
     }
     if (burden === 'consistency') {
-      if (topSignals.length) {
-        return topSignals.map(function(s) { return humanizeSignalLabel(s); }).join(' and ') + ' drift.';
-      }
-      return 'Similar operations drift in path style, parameters, or response shape.';
+      var dominant = topSignals[0] || '';
+      var secondary = topSignals[1] ? ' Also: ' + humanizeSignalLabel(topSignals[1]) + '.' : '';
+      var consistencySentences = {
+        'parameter naming drift appears likely': 'Similar routes use different parameter names for the same idea.',
+        'path style drift appears likely': 'Similar routes use different path patterns for similar actions.',
+        'outcome modeled differently across similar endpoints': 'Similar actions describe the result differently.',
+        'response shape drift appears likely': 'Similar endpoints return different response shapes.'
+      };
+      var lead = consistencySentences[dominant] || 'Similar operations drift in names, paths, or response shape.';
+      return lead + secondary;
     }
     var allDimensions = (family.topDimensions || []).slice(0, 2);
     if (allDimensions.length) {
@@ -977,7 +1071,7 @@
     } else {
       chipItems = (family.topDimensions || []).slice(0, 2);
     }
-    var chipsHtml = (activeBurden === 'contract-shape')
+    var chipsHtml = (activeBurden === 'contract-shape' || activeBurden === 'consistency')
       ? chipItems.map(function (c, i) {
           var cls = i === 0 ? 'chip chip-primary' : 'chip chip-secondary';
           return '<span class="' + cls + '">' + escapeHtml(humanizeSignalLabel(c)) + '</span>';
@@ -1025,24 +1119,13 @@
 
     var tierLabel = state.filters.familyPressure === 'all' ? 'all tiers' : state.filters.familyPressure + ' tier';
 
-    var burdenIntro = '';
-    if (state.filters.burden === 'workflow-burden') {
-      burdenIntro = '<p class="burden-lens-intro">Workflow burden lens \u2014 highlights families where contracts appear to rely on hidden handoffs, brittle sequencing, or weak next-step guidance. Card text explains why each family appears here; exact evidence lives in endpoint detail below.</p>';
-    } else if (state.filters.burden === 'contract-shape') {
-      burdenIntro = '<p class="burden-lens-intro">Shape burden lens \u2014 highlights families whose contracts appear storage-shaped (deep nesting, incidental/internal fields, weaker task-outcome emphasis). Card text explains why each family appears here; exact evidence lives in endpoint detail below.</p>';
-    } else if (state.filters.burden === 'consistency') {
-      burdenIntro = '<p class="burden-lens-intro">Consistency lens \u2014 highlights families where similar operations appear to drift in parameter names, path style, or response/outcome shape. Card text explains why each family appears here; exact evidence lives in endpoint detail below.</p>';
-    }
-
     var copy = '<div class="context-block family-context-block">';
-    if (burdenIntro) copy += burdenIntro;
     copy += '<ul class="count-semantics">';
       + '<li><strong>Families in spec:</strong> ' + specTotal + ' (all distinct family labels, no filters)</li>'
-      + '<li><strong>Matching search / category / burden:</strong> ' + totalInLens + ' (families with at least one finding-bearing endpoint in the current lens)</li>'
+      + '<li><strong>Matching search / category / burden:</strong> ' + totalInLens + ' (families with at least one endpoint carrying matching issues in the current view)</li>'
       + '<li><strong>In ' + tierLabel + ':</strong> ' + familiesInPressureTier + ' (of those ' + totalInLens + ')</li>'
       + '<li><strong>Cards shown:</strong> ' + visibleFamilies + (showingTruncated ? ' — top 24 of ' + familiesInPressureTier + ' (' + (familiesInPressureTier - visibleFamilies) + ' not shown)' : '') + '</li>'
       + '</ul>';
-    copy += '<p class="detail-location-hint">Card = summary of why this family is flagged. Click a card, then select an endpoint row below to see exact issue messages and OpenAPI grounding in the detail pane \u2192</p>';
     copy += '<div class="context-actions">'
       + '<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all matching families</button>'
       + '<button type="button" class="secondary-action" data-recovery-action="clear-current-lens">Clear lens</button>'
@@ -1053,10 +1136,10 @@
 
   function familyScopeReason() {
     if (state.filters.search) {
-      return 'The search lens currently matches a specific family or endpoint pattern, so the family surface is narrowed.';
+      return 'The current search matches a specific family or endpoint pattern, so the family list is narrower.';
     }
     if (state.filters.category !== 'all' || state.filters.burden !== 'all') {
-      return 'Category or burden filters removed families that do not carry matching evidence.';
+      return 'Category or burden filters removed families that do not carry matching issues.';
     }
     if (state.filters.familyPressure !== 'all') {
       return 'The family pressure filter is showing only families at the chosen urgency level.';
@@ -1208,8 +1291,8 @@
       state.selectedEndpointId = "";
       el.endpointRows.innerHTML = '<tr><td colspan="3">'
         + '<div class="empty inline-empty">'
-        + '<strong>No endpoints match this evidence lens.</strong>'
-        + '<p class="subtle">No evidence-bearing endpoints are left after the current filters.</p>'
+        + '<strong>No endpoints match this view.</strong>'
+        + '<p class="subtle">No endpoints with matching issues are left after the current filters.</p>'
         + renderRecoveryActions(["clear-search", "reset-burden", "include-no-issue-rows", "clear-current-lens"])
         + '</div>'
         + '</td></tr>';
@@ -1242,7 +1325,7 @@
     var intent = endpointIntentCue(row.method, row.path);
     var severity = dominantSeverity(detail.findings || []);
     var firstContext = firstFinding ? extractOpenAPIContext(firstFinding) : null;
-    var contextLine = firstContext ? renderOpenAPIContextPills(firstContext, true) : '<span class="context-inline subtle">OpenAPI location not derivable from the top message.</span>';
+    var contextLine = firstContext ? renderOpenAPIContextPills(firstContext, true) : '<span class="context-inline subtle">OpenAPI location is not clear from the top message.</span>';
 
     return '<tr class="' + selected + ' row-pressure-' + row.priority + '" data-id="' + row.id + '">'
       + '<td>'
@@ -1262,7 +1345,7 @@
       + (firstFinding ? severityBadge(severity) : '')
       + '<div class="message-line">' + escapeHtml(firstFinding ? firstFinding.message : 'No direct issue messages') + '</div>'
       + '<div class="context-inline-wrap">' + contextLine + '</div>'
-        + '<div class="row-next-step">→ select row to inspect</div>'
+        + '<div class="row-next-step">Select row for details</div>'
       + '</td>'
       + '</tr>';
   }
@@ -1285,47 +1368,47 @@
 
         if (burdenLens === 'workflow-burden') {
           if (code === 'weak-follow-up-linkage' || code === 'weak-action-follow-up-linkage' || code === 'weak-accepted-tracking-linkage' || code === 'weak-outcome-next-action-guidance' || code === 'prerequisite-task-burden') {
-            bumpCounter(counts, 'hidden context/token handoff appears likely');
+            bumpCounter(counts, 'hidden context/token handoff');
           }
           if (code === 'weak-follow-up-linkage' || code === 'weak-action-follow-up-linkage' || code === 'weak-accepted-tracking-linkage' || code === 'weak-outcome-next-action-guidance' || /next[-\s]?step|follow[-\s]?up|tracking|identifier|what changed|workflow guidance/.test(msg)) {
             bumpCounter(counts, 'next required step is not clearly exposed');
           }
           if (code === 'prerequisite-task-burden' || /prior state|earlier|prerequisite|lookup/.test(msg)) {
-            bumpCounter(counts, 'sequencing appears brittle across steps');
+            bumpCounter(counts, 'workflow sequence feels brittle');
           }
           if (/auth|authorization|header|token|context|access\s*key|api[-\s]?key/.test(msg)) {
-            bumpCounter(counts, 'auth/header/context requirements appear spread across calls');
+            bumpCounter(counts, 'auth/header/context requirements spread across calls');
           }
         }
 
         if (burdenLens === 'contract-shape') {
           if (code === 'deeply-nested-response-structure' || dim === 'shape / nesting complexity' || /nested|deep/.test(msg)) {
-            bumpCounter(counts, 'deep nesting appears frequently in this slice');
+            bumpCounter(counts, 'deep nesting shows up often in this view');
           }
           if (code === 'contract-shape-workflow-guidance-burden' || code === 'snapshot-heavy-response' || /snapshot|storage|model structure/.test(msg)) {
-            bumpCounter(counts, 'duplicated or snapshot-style state appears common');
+            bumpCounter(counts, 'snapshot-style state shows up often');
           }
           if (code === 'duplicated-state-response' || /duplicate|duplicated/.test(msg)) {
             bumpCounter(counts, 'similar state appears repeated across response branches');
           }
           if (code === 'incidental-internal-field-exposure' || dim === 'internal/incidental fields' || /internal|incidental|audit|raw id/.test(msg)) {
-            bumpCounter(counts, 'incidental/internal field emphasis appears often');
+            bumpCounter(counts, 'incidental/internal fields show up often');
           }
           if (code === 'contract-shape-workflow-guidance-burden' || code === 'snapshot-heavy-response' || dim === 'workflow outcome weakness' || /outcome|next action/.test(msg)) {
-            bumpCounter(counts, 'task outcome / next action emphasis appears weak');
+            bumpCounter(counts, 'task outcome / next action is easy to miss');
           }
         }
 
         if (burdenLens === 'consistency') {
           if (code === 'detail-path-parameter-name-drift') {
-            bumpCounter(counts, 'parameter naming drift appears often');
+            bumpCounter(counts, 'parameter names differ');
           }
           if (code === 'endpoint-path-style-drift' || code === 'sibling-path-shape-drift') {
-            bumpCounter(counts, 'path style drift appears across similar routes');
+            bumpCounter(counts, 'path patterns differ');
           }
           if (code === 'inconsistent-response-shape' || code === 'inconsistent-response-shape-family' || code === 'inconsistent-response-shapes' || code === 'inconsistent-response-shapes-family') {
-            bumpCounter(counts, 'response shape drift appears across similar endpoints');
-            bumpCounter(counts, 'outcome is modeled differently across similar endpoints');
+            bumpCounter(counts, 'response shapes differ');
+            bumpCounter(counts, 'outcome wording differs');
           }
         }
       });
@@ -1345,11 +1428,14 @@
     if (!signals.length) return '';
 
     var chips = signals.map(function (signal) {
-      return '<span class="chip">' + escapeHtml(signal.label) + ' (' + signal.count + ')</span>';
+      var label = burdenLens === 'consistency' ? humanizeSignalLabel(signal.label) : signal.label;
+      return '<span class="chip">' + escapeHtml(label) + ' (' + signal.count + ')</span>';
     }).join('');
 
+    var heading = burdenLens === 'consistency' ? 'Most common differences in this view:' : 'Most common in this slice:';
+
     return '<div class="burden-dynamic-signals">'
-      + '<strong>Most common in this slice:</strong>'
+      + '<strong>' + escapeHtml(heading) + '</strong>'
       + '<div class="chips">' + chips + '</div>'
       + '</div>';
   }
@@ -1357,8 +1443,9 @@
   function buildListContext(matches, total) {
     var lens = [];
     if (state.filters.search) lens.push('\u201c' + state.filters.search + '\u201d');
-    if (state.filters.category !== "all") lens.push(state.filters.category.replaceAll("-", " "));
-    if (state.filters.burden !== "all") lens.push(state.filters.burden.replaceAll("-", " "));
+    if (state.filters.category === 'spec-rule') lens.push('rules-based view: spec rule');
+    else if (state.filters.category !== "all") lens.push('category: ' + state.filters.category.replaceAll("-", " "));
+    if (state.filters.burden !== "all") lens.push('guidance view: ' + state.filters.burden.replaceAll("-", " "));
     if (state.filters.familyPressure !== "all") lens.push('pressure: ' + state.filters.familyPressure);
 
     var mode = state.filters.includeNoIssueRows ? 'all rows' : 'evidence-only';
@@ -1367,49 +1454,48 @@
     if (state.filters.category === 'spec-rule') {
       var ruleGroups = aggregateSpecRuleFindings(filteredRows());
       burdenExplanation = '<div class="burden-explanation spec-rule-explanation">'
-        + '<strong>Spec rule violations</strong> \u2014 findings grounded in explicit OpenAPI normative language. '
-        + 'REQUIRED / MUST violations are <strong>errors</strong>; SHOULD / RECOMMENDED concerns are <strong>warnings</strong>. '
-        + 'These are distinct from heuristic workflow-burden or shape-burden findings.'
+        + '<span class="evidence-track-label evidence-track-normative">Rules-based view</span>'
+        + '<strong>Spec rule violations</strong> \u2014 findings backed by explicit OpenAPI rule language. '
+        + 'REQUIRED / MUST violations are <strong>errors</strong>; SHOULD / RECOMMENDED concerns are <strong>warnings</strong>.'
         + renderSpecRuleAggregate(ruleGroups)
-        + '<p class="burden-evidence-cue">Click any endpoint row to see its exact instances. Normative grounding (rule ID + level) appears in each issue group in the detail pane.</p>'
         + '</div>';
     } else if (state.filters.burden === 'workflow-burden') {
       burdenExplanation = '<div class="burden-explanation">'
-        + '<strong>Workflow burden</strong> — this slice highlights contracts that appear to make real call chains harder to complete safely.'
+        + '<span class="evidence-track-label evidence-track-heuristic">Guidance view</span>'
+        + '<strong>Workflow burden</strong> — responses that make real call paths harder to complete safely.'
         + '<ul>'
         + '<li>Hidden token/context/header dependencies appear across steps.</li>'
         + '<li>Sequencing suggests brittle handoffs where the next required step is not clearly exposed.</li>'
         + '<li>Outcome guidance appears weak, so callers likely infer what to do next.</li>'
         + '</ul>'
         + renderDynamicBurdenSignals(visibleRows, 'workflow-burden')
-        + '<span class="burden-evidence-cue">Cards summarize why each family/endpoint appears here. Open a row, then use the detail pane for exact issue messages and OpenAPI grounding where derivable.</span>'
         + '</div>';
     } else if (state.filters.burden === 'contract-shape') {
       burdenExplanation = '<div class="burden-explanation">'
-        + '<strong>Shape burden</strong> — this slice highlights contracts that appear storage-shaped or snapshot-heavy instead of task-shaped.'
+        + '<span class="evidence-track-label evidence-track-heuristic">Guidance view</span>'
+        + '<strong>Shape burden</strong> — responses that feel too broad or snapshot-heavy instead of task-focused.'
         + '<ul>'
         + '<li>Deep nesting, duplicated state, or incidental/internal fields dominate the response.</li>'
         + '<li>Generic object/array typing weakens what the caller can safely infer.</li>'
         + '<li>Task outcome and next action emphasis appears weaker than backend structure emphasis.</li>'
         + '</ul>'
         + renderDynamicBurdenSignals(visibleRows, 'contract-shape')
-        + '<span class="burden-evidence-cue">Cards summarize why each family/endpoint appears here. Open a row, then use the detail pane for exact schema-facing messages and location cues.</span>'
         + '</div>';
     } else if (state.filters.burden === 'consistency') {
       burdenExplanation = '<div class="burden-explanation">'
-        + '<strong>Consistency</strong> — this slice highlights drift across similar operations and contracts.'
+        + '<span class="evidence-track-label evidence-track-heuristic">Guidance view</span>'
+        + '<strong>Consistency</strong> — families where similar operations stop feeling interchangeable.'
         + '<ul>'
-        + '<li>Parameter naming drift (for example <code>id</code> vs <code>userId</code>).</li>'
-        + '<li>Path style drift across sibling routes.</li>'
-        + '<li>Outcome/response shape drift across endpoints that appear similar.</li>'
+        + '<li>Compare sibling routes that should feel like the same action.</li>'
+        + '<li>Check whether parameter names and path patterns line up.</li>'
+        + '<li>Check whether the response shape and outcome wording tell the same story.</li>'
         + '</ul>'
         + renderDynamicBurdenSignals(visibleRows, 'consistency')
-        + '<span class="burden-evidence-cue">Cards summarize where drift appears. Open a row, then use the detail pane for exact path/shape evidence and affected operation messages.</span>'
         + '</div>';
     }
     var guide = matches > 0
-      ? 'Cards and rows are summary signals. Click a row to inspect exact issue evidence in detail.'
-      : 'No rows match. Use the buttons below to broaden the lens.';
+      ? 'Click any row to see exact issue text and OpenAPI location cues. Card text summarizes why each endpoint appears in this view.'
+      : 'No rows match. Use the buttons below to widen the view.';
 
     return '<div class="context-block compact-context-block">'
       + '<p><strong>' + matches + ' / ' + total + '</strong> endpoints \u2014 ' + escapeHtml(mode)
@@ -1458,55 +1544,55 @@
       if (evidence.indexOf(code) === -1) evidence.push(code);
 
       if (code === 'contract-shape-workflow-guidance-burden' || code === 'snapshot-heavy-response') {
-        pushUnique(current, 'Current contract appears to emphasize storage/internal structure over task outcome.');
-        pushUnique(cleaner, 'Workflow-shaped emphasis could surface task outcome first (what changed, what is authoritative now).');
+        pushUnique(current, 'Storage/model structure dominates the response.');
+        pushUnique(cleaner, 'Put task outcome and authoritative state first.');
       }
       if (code === 'deeply-nested-response-structure') {
-        pushUnique(current, 'Response appears deeply nested, which can bury important outcome meaning several levels down.');
-        pushUnique(cleaner, 'Workflow-shaped emphasis could keep outcome and next action fields near the top level.');
+        pushUnique(current, 'Deep nesting hides outcome meaning.');
+        pushUnique(cleaner, 'Keep outcome and next action near the top.');
       }
       if (code === 'duplicated-state-response') {
-        pushUnique(current, 'Similar state appears duplicated across response branches, increasing scan noise.');
-        pushUnique(cleaner, 'Workflow-shaped emphasis could avoid repeated branch snapshots and keep one clear outcome view.');
+        pushUnique(current, 'Repeated state adds scan noise.');
+        pushUnique(cleaner, 'Show one clear outcome view instead of snapshots.');
       }
       if (code === 'incidental-internal-field-exposure') {
-        pushUnique(current, 'Response appears to expose backend-oriented incidental fields that are weakly tied to immediate task outcome.');
-        pushUnique(cleaner, 'Workflow-shaped emphasis could keep only handoff-relevant fields and hide low-level model scaffolding.');
+        pushUnique(current, 'Incidental internal fields crowd the result.');
+        pushUnique(cleaner, 'Keep only handoff-relevant fields visible.');
       }
       if (code === 'weak-follow-up-linkage' || code === 'weak-action-follow-up-linkage' || code === 'weak-accepted-tracking-linkage') {
-        pushUnique(current, 'Next-step requirement appears weakly signaled; caller must infer follow-up details.');
-        pushUnique(cleaner, 'Workflow-shaped emphasis could make next required action and handoff identifier explicit.');
+        pushUnique(current, 'Next step is weakly signaled.');
+        pushUnique(cleaner, 'Make the next action and handoff ID explicit.');
       }
       if (code === 'prerequisite-task-burden') {
-        pushUnique(current, 'Contract appears to depend on hidden prerequisites across earlier calls.');
-        pushUnique(cleaner, 'Workflow-shaped emphasis could clarify authoritative context and prerequisite state for this step.');
+        pushUnique(current, 'Hidden prerequisites are doing too much work.');
+        pushUnique(cleaner, 'Clarify prerequisite context for this step.');
       }
       if (code === 'generic-object-response' || code === 'weak-array-items-schema') {
-        pushUnique(current, 'Response shape appears generic or broad, diluting handoff meaning.');
-        pushUnique(cleaner, 'Workflow-shaped emphasis could reduce incidental fields and keep only handoff-critical state.');
+        pushUnique(current, 'Generic shape weakens handoff meaning.');
+        pushUnique(cleaner, 'Keep only handoff-critical state.');
       }
     });
 
     var path = ((endpoint && endpoint.path) || '').toLowerCase();
     if (/login|auth|session|register/.test(path)) {
-      pushUnique(cleaner, 'Illustrative emphasis: auth/context token now authoritative for subsequent calls.');
+      pushUnique(cleaner, 'Illustrative: make the auth/context token clearly authoritative.');
     }
     if (/customer/.test(path)) {
-      pushUnique(cleaner, 'Illustrative emphasis: customer context authoritative and reusable across later workflow steps.');
+      pushUnique(cleaner, 'Illustrative: keep customer context clearly reusable.');
     }
     if (/cart/.test(path)) {
-      pushUnique(cleaner, 'Illustrative emphasis: cart state change plus minimal handoff fields for order placement.');
+      pushUnique(cleaner, 'Illustrative: show cart state change plus minimal handoff fields.');
     }
     if (/order/.test(path)) {
-      pushUnique(cleaner, 'Illustrative emphasis: order created/updated outcome and next valid actions for payment/follow-up.');
+      pushUnique(cleaner, 'Illustrative: show order outcome and next valid actions.');
     }
     if (/payment|checkout/.test(path)) {
-      pushUnique(cleaner, 'Illustrative emphasis: payment/follow-up meaning and authoritative transaction state for next checks.');
+      pushUnique(cleaner, 'Illustrative: show payment meaning and authoritative transaction state.');
     }
 
     return {
-      current: current.slice(0, 3),
-      cleaner: cleaner.slice(0, 4),
+      current: current.slice(0, 2),
+      cleaner: cleaner.slice(0, 3),
       evidence: evidence.slice(0, 4)
     };
   }
@@ -1526,19 +1612,19 @@
       : '<p class="subtle">Cleaner emphasis would prioritize task outcome, authoritative context, and next action clarity.</p>';
 
     var evidenceHint = points.evidence.length
-      ? '<p class="workflow-example-evidence"><strong>Evidence signals:</strong> ' + escapeHtml(points.evidence.join(', ')) + '</p>'
+      ? '<p class="workflow-example-evidence"><strong>Signals:</strong> ' + escapeHtml(points.evidence.join(', ')) + '</p>'
       : '';
 
     return '<section class="workflow-example-block">'
       + '<h3>Cleaner contract emphasis (illustrative)</h3>'
-      + '<p class="workflow-example-note">Guidance-oriented sketch only — not a literal generated replacement and not a runtime guarantee.</p>'
+      + '<p class="workflow-example-note">Illustrative only — not a generated replacement or runtime guarantee.</p>'
       + '<div class="workflow-example-grid">'
       + '  <div class="workflow-example-col">'
-      + '    <h4>Current contract appears to emphasize</h4>'
+      + '    <h4>Current emphasis</h4>'
       +      currentHtml
       + '  </div>'
       + '  <div class="workflow-example-col">'
-      + '    <h4>Workflow-shaped emphasis could make clearer</h4>'
+      + '    <h4>Clearer emphasis</h4>'
       +      cleanerHtml
       + '  </div>'
       + '</div>'
@@ -1549,10 +1635,10 @@
   function renderEndpointDetail() {
     var detail = state.selectedEndpointId ? state.payload.endpointDetails[state.selectedEndpointId] : null;
     if (!detail) {
-      el.detailHelp.textContent = 'Select a row to inspect exact issue evidence. OpenAPI grounding is shown where derivable from messages.';
+      el.detailHelp.textContent = '';
       el.endpointDetail.innerHTML = '<div class="empty">'
         + '<strong>No endpoint selected.</strong>'
-        + '<p class="subtle">Choose a family cluster or endpoint row to inspect exact issue messages, OpenAPI location cues, and the next spec checks.</p>'
+        + '<p class="subtle">Choose a family or endpoint row to inspect the exact issue text, OpenAPI location cues, and suggested next checks.</p>'
         + '</div>';
       return;
     }
@@ -1560,10 +1646,10 @@
     var findings = detail.findings || [];
     var endpoint = detail.endpoint || {};
     if (!findings.length) {
-      el.detailHelp.textContent = 'No exact issue evidence for this endpoint in the current lens.';
+      el.detailHelp.textContent = '';
       el.endpointDetail.innerHTML = '<div class="empty">'
         + '<strong>' + escapeHtml(endpoint.method + ' ' + endpoint.path) + '</strong>'
-        + '<p class="subtle">This endpoint is visible, but there is no direct issue evidence to inspect in the current lens. Pick another evidence-bearing row.</p>'
+        + '<p class="subtle">This endpoint is visible, but there is no direct issue text to inspect in the current view. Pick another row with matching issues.</p>'
         + renderRecoveryActions(["clear-search", "reset-burden", "clear-current-lens"])
         + '</div>';
       bindRecoveryButtons(el.endpointDetail);
@@ -1583,8 +1669,19 @@
     var contextBadge = buildContextTypeBadge(topContext);
     var cleanerHint = topGroup ? dimensionCleanerHint(topGroup.dimension) : '';
     var moreCount = groupedFindingsCount - 1;
+    var leadNotes = '';
 
-    el.detailHelp.textContent = 'Exact issue-by-issue evidence for the selected endpoint. OpenAPI grounding appears where derivable.';
+    if (topGroup && (topGroup.impact || cleanerHint)) {
+      leadNotes = '<details class="lead-finding-notes">'
+        + '<summary>Why this matters' + (cleanerHint ? ' and what cleaner contract emphasis would do' : '') + '</summary>'
+        + '<div class="lead-finding-notes-body">'
+        + (topGroup.impact ? '<p class="lead-finding-impact"><strong>Why this is problematic:</strong> ' + escapeHtml(topGroup.impact) + '</p>' : '')
+        + (cleanerHint ? '<p class="lead-finding-cleaner"><strong>Cleaner contract would:</strong> ' + escapeHtml(cleanerHint) + '</p>' : '')
+        + '</div>'
+        + '</details>';
+    }
+
+    el.detailHelp.textContent = '';
 
     var workflowExample = renderWorkflowShapedExample(detail);
 
@@ -1606,15 +1703,23 @@
       + '    </div>'
       + '    <p class="lead-finding-message">' + escapeHtml(topMsg) + '</p>'
       + '    <div class="lead-finding-grounding">'
-      + '      <span class="grounding-label">OpenAPI grounding (where available)</span>'
+      + '      <span class="grounding-label">OpenAPI location cues (when available)</span>'
       +        renderOpenAPIContextPills(topContext, false)
       +        (topGroup && topGroup.isSpecRule ? renderSpecRuleGroundingForGroup(topGroup) : '')
       +    '</div>'
-      + '    <p class="lead-finding-impact"><strong>Why this is problematic:</strong> ' + escapeHtml(topGroup ? topGroup.impact : '') + '</p>'
-      + (cleanerHint ? '    <p class="lead-finding-cleaner"><strong>Cleaner contract would:</strong> ' + escapeHtml(cleanerHint) + '</p>' : '')
-      + (moreCount > 0 ? '    <p class="detail-more-hint">' + moreCount + ' more issue group' + (moreCount > 1 ? 's' : '') + ' in the evidence section below.</p>' : '')
+      + leadNotes
       + '  </div>'
       + '</div>';
+
+    html += '<section class="detail-section detail-section-tight">'
+      + '  <h3>Exact issue evidence</h3>'
+      + '  <p class="subtle detail-section-copy">Grouped by location and type. First two groups start open.'
+      + (moreCount > 0 ? ' ' + moreCount + ' additional group' + (moreCount > 1 ? 's' : '') + ' follow the lead issue below.' : '')
+      + '</p>'
+      + groups.map(function (group, index) {
+            return renderIssueGroup(group, index);
+          }).join('')
+      + '</section>';
 
     if (workflowExample) {
       html += workflowExample;
@@ -1623,14 +1728,6 @@
     if (chainContext) {
       html += chainContext;
     }
-
-    html += '<section class="detail-section detail-section-tight">'
-      + '  <h3>Exact issue evidence</h3>'
-      + '  <p class="subtle detail-section-copy">Grouped by location and type. First two groups start open.</p>'
-      + groups.map(function (group, index) {
-            return renderIssueGroup(group, index);
-          }).join('')
-      + '</section>';
 
     el.endpointDetail.innerHTML = html;
   }
@@ -1741,7 +1838,7 @@
       + '  </div>'
       + expandMore
       + specGrounding
-      + '  <div class="issue-group-meta"><span class="grounding-label">OpenAPI grounding (where available)</span>' + openAPI + '</div>'
+      + '  <div class="issue-group-meta"><span class="grounding-label">OpenAPI location cues (when available)</span>' + openAPI + '</div>'
       + '  <p class="issue-inspect-hint"><strong>Inspect in spec:</strong> ' + escapeHtml(group.inspectHint) + '</p>'
       + '  <p class="issue-impact"><strong>Why it matters:</strong> ' + escapeHtml(group.impact) + '</p>'
       + '</div>'
@@ -2084,7 +2181,15 @@
       'hidden token/context handoff appears likely': 'hidden handoff',
       'next step not clearly exposed': 'unclear next-step',
       'sequencing appears brittle': 'brittle sequencing',
-      'auth/header burden spread across steps': 'auth/header spread'
+      'auth/header burden spread across steps': 'auth/header spread',
+      'parameter naming drift appears likely': 'parameter name drift',
+      'path style drift appears likely': 'path style drift',
+      'response shape drift appears likely': 'response shape drift',
+      'outcome modeled differently across similar endpoints': 'outcome mismatch',
+      'parameter names differ': 'parameter name drift',
+      'path patterns differ': 'path pattern drift',
+      'response shapes differ': 'response shape drift',
+      'outcome wording differs': 'outcome mismatch'
     };
     return map[signal] || signal.replaceAll('-', ' ');
   }
@@ -2146,7 +2251,7 @@
     if (action === 'show-all-families') return 'Show all matching families';
     if (action === 'show-all-workflows') return 'Show all workflow patterns';
     if (action === 'include-no-issue-rows') return 'Include no-issue rows';
-    return 'Clear current lens';
+    return 'Reset current view';
   }
 
   function issueDimensionForFinding(code, category, burdenFocus) {
