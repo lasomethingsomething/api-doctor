@@ -44,10 +44,11 @@ go run . explore --spec ./adminapi.json --base ./adminapi-v1.json --head ./admin
 
 How to use it quickly:
 1. Click a **Fix first** preset to activate a burden lens (workflow burden, shape burden, consistency, or spec-rule violations).
-2. Use the **Family investigation clusters** section as the primary entry point — each card explains why that family appears in the current view.
-3. Scroll to the **Evidence list** to see concrete endpoints with matching issues; the burden explanation above the list summarizes what to look for.
-4. Click an endpoint row to open its detail pane with grouped issue evidence and OpenAPI location cues.
-5. For workflow-specific investigation, use the **Call chain diagnostics** section to see multi-step sequences and identify follow-up linkage issues.
+2. In the top shortcut row, each lens card uses a subtle pastel tint so lens intent is visually distinct at a glance; the reset control remains a separate utility control.
+3. Use the **Family investigation clusters** section as the primary entry point — each card explains why that family appears in the current view.
+4. Scroll to the **Evidence list** to see concrete endpoints with matching issues; the burden explanation above the list summarizes what to look for.
+5. Click an endpoint row to open its detail pane with grouped issue evidence and OpenAPI location cues.
+6. For workflow-specific investigation, use the **Call chain diagnostics** section to see multi-step sequences and identify follow-up linkage issues.
 
 ## Explorer vs CLI (quick decision)
 

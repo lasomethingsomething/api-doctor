@@ -135,47 +135,47 @@ h2 {
 /* Pastel colors per action type */
 .quick-action-family {
   border-color: #b8d4ee;
-  background: transparent;
+  background: rgba(174, 210, 248, 0.08);
 }
 .quick-action-family:hover {
   border-color: #8fc0e8;
-  background: rgba(174, 210, 248, 0.12);
+  background: rgba(174, 210, 248, 0.14);
 }
 
 .quick-action-spec-rule {
   border-color: #b8d4c8;
-  background: transparent;
+  background: rgba(184, 212, 200, 0.08);
 }
 .quick-action-spec-rule:hover {
   border-color: #8fc8a8;
-  background: rgba(184, 212, 200, 0.12);
+  background: rgba(184, 212, 200, 0.14);
 }
 
 .quick-action-workflow {
   border-color: #c8a8f0;
-  background: transparent;
+  background: rgba(200, 168, 240, 0.08);
 }
 .quick-action-workflow:hover {
   border-color: #b88ce8;
-  background: rgba(200, 168, 240, 0.12);
+  background: rgba(200, 168, 240, 0.14);
 }
 
 .quick-action-shape {
   border-color: #f0b8b4;
-  background: transparent;
+  background: rgba(240, 184, 180, 0.08);
 }
 .quick-action-shape:hover {
   border-color: #e89890;
-  background: rgba(240, 184, 180, 0.12);
+  background: rgba(240, 184, 180, 0.14);
 }
 
 .quick-action-consistency {
   border-color: #e8d090;
-  background: transparent;
+  background: rgba(232, 208, 144, 0.08);
 }
 .quick-action-consistency:hover {
   border-color: #dcc068;
-  background: rgba(232, 208, 144, 0.12);
+  background: rgba(232, 208, 144, 0.14);
 }
 
 .reset-btn {
