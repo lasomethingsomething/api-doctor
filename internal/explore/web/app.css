@@ -1375,13 +1375,13 @@ tbody tr.active {
 }
 
 .lead-finding {
-  margin-top: 0.64rem;
+  margin-top: 0.48rem;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(207, 217, 226, 0.8);
   border-radius: 10px;
-  padding: 0.62rem 0.72rem;
+  padding: 0.52rem 0.68rem;
   display: grid;
-  gap: 0.38rem;
+  gap: 0.26rem;
 }
 
 .lead-finding-head {
@@ -1422,28 +1422,27 @@ tbody tr.active {
 }
 
 .grounding-label {
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.7rem;
+  font-weight: 600;
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
   margin-right: 0.2rem;
 }
 
 .lead-finding-impact {
   margin: 0;
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   line-height: 1.42;
-  color: var(--text);
+  color: var(--muted);
   border-top: 1px solid #e8edf2;
-  padding-top: 0.36rem;
+  padding-top: 0.3rem;
 }
 
 .lead-finding-cleaner {
   margin: 0;
-  font-size: 0.84rem;
-  line-height: 1.42;
-  color: #2a4a20;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--muted);
 }
 
 .detail-more-hint {

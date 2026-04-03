@@ -1556,7 +1556,6 @@
       + '  </div>'
       + '  <div class="lead-finding">'
       + '    <div class="lead-finding-head">'
-      +        (topGroup ? severityBadge(topGroup.severity) : '')
       +        contextBadge
       + '    </div>'
       + '    <p class="lead-finding-message">' + escapeHtml(topMsg) + '</p>'
