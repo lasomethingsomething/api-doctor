@@ -1,6 +1,6 @@
 # api-doctor
 
-api-doctor analyzes the Shopware Admin API OpenAPI spec for workflow burden, contract shape, consistency drift, and change risk, then helps you inspect concrete evidence in a local Explorer UI.
+api-doctor analyzes the Shopware Admin API OpenAPI spec for workflow burden, contract shape, consistency drift, spec-rule risk, and change risk, then helps you inspect concrete evidence in a local Explorer UI.
 
 ## Quick start
 
@@ -22,6 +22,12 @@ Run a first analysis:
 go run . analyze --spec ./adminapi.json
 ```
 
+Open the primary interactive surface:
+
+```sh
+go run . explore --spec ./adminapi.json
+```
+
 ## Open the Explorer (primary interactive surface)
 
 Launch:
@@ -41,6 +47,12 @@ How to use it quickly:
 2. Use the Family investigation clusters section as the primary entry point.
 3. Click workflow steps or endpoint rows to inspect grouped issue evidence.
 4. Use OpenAPI grounding and inspect-first hints in detail before editing the spec.
+
+## Explorer vs CLI (quick decision)
+
+- Explorer: primary triage surface for family/workflow/endpoint drill-down and fix-first inspection.
+- CLI analyze/workflows/diff: canonical deterministic engine for local scripts, CI, and machine-readable output.
+- TUI: secondary terminal-first read-only surface over the same deterministic data.
 
 ## Common commands
 
@@ -67,11 +79,19 @@ Command roles:
 
 ## What api-doctor helps you find
 
+- Spec-rule risk: OpenAPI-normative rule findings (REQUIRED/RECOMMENDED evidence)
 - Workflow burden: where call chains hide next-step requirements
 - Contract shape burden: where responses are too generic or storage-shaped
 - Consistency drift: where related endpoints diverge in naming/path/shape
 - Change risk: where spec-to-spec changes can break clients
 - Fix-first priorities: deterministic starting points for remediation
+
+Current workflow/shape heuristics include:
+- snapshot-heavy-response
+- deeply-nested-response-structure
+- duplicated-state-response
+- incidental-internal-field-exposure
+- weak-outcome-next-action-guidance
 
 ## What this is (and is not)
 

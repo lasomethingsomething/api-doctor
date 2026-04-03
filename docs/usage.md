@@ -2,6 +2,39 @@
 
 This page explains each api-doctor command in a simple, practical way.
 
+## Start here in 2 minutes
+
+```sh
+cd ~/api-doctor
+go run . analyze --spec ./adminapi.json
+go run . explore --spec ./adminapi.json
+```
+
+Use `analyze` for deterministic baseline output, then use `explore` as the primary interactive triage surface.
+
+## Explorer vs CLI
+
+- Explorer (`explore`): primary way to inspect burden lenses, family clusters, endpoint evidence, and workflow context.
+- CLI (`analyze`, `workflows`, `diff`): canonical deterministic engine for local scripts, CI, and machine-readable outputs.
+- TUI (`tui`): secondary terminal read-only view of the same deterministic data.
+
+## Current analyzer signals (practical framing)
+
+api-doctor is not positioned as generic lint-only output. Current review framing is:
+
+- Spec-rule risk: normative OpenAPI findings with explicit spec-rule evidence.
+- Workflow burden: weak follow-up linkage, hidden prerequisite burden, and weak outcome guidance in state-changing flows.
+- Contract-shape burden: snapshot-heavy response, deep nesting, duplicated state, and incidental/internal-field exposure.
+- Consistency drift: naming/path/shape divergence across related routes.
+
+The current workflow/shape heuristic signal set includes:
+
+- `snapshot-heavy-response`
+- `deeply-nested-response-structure`
+- `duplicated-state-response`
+- `incidental-internal-field-exposure`
+- `weak-outcome-next-action-guidance`
+
 Scope reminder:
 
 - Primary target today: Shopware Admin API OpenAPI spec
@@ -72,10 +105,11 @@ This is documentation for local development usage only. Packaging and external t
 
 ### What it does
 
-analyze reads one Shopware Admin API spec and reports workflow burden and contract-shape findings with evidence-first summaries.
+analyze reads one Shopware Admin API spec and reports workflow burden, contract-shape burden, consistency drift, and spec-rule risk with evidence-first summaries.
 
 It focuses on:
 
+- Spec-rule risk signals (normative OpenAPI rule findings)
 - Workflow burden signals (where common call sequences are hard to follow)
 - Contract-shape burden signals (where response contracts are hard to use for next steps)
 - Consistency drift across related endpoints and routes
