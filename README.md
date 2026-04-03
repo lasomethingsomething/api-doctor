@@ -43,10 +43,11 @@ go run . explore --spec ./adminapi.json --base ./adminapi-v1.json --head ./admin
 ```
 
 How to use it quickly:
-1. Start with the top actions to choose a burden lens.
-2. Use the Family investigation clusters section as the primary entry point.
-3. Click workflow steps or endpoint rows to inspect grouped issue evidence.
-4. Use OpenAPI grounding and inspect-first hints in detail before editing the spec.
+1. Click a **Fix first** preset to activate a burden lens (workflow burden, shape burden, consistency).
+2. Use the **Family investigation clusters** section as the primary entry point — each card shows the dominant local problem for that family.
+3. In the workflow burden lens, workflow chains display burden chips prioritized by impact: the primary (most-affected) burden is visually emphasized; secondary burdens are shown compactly.
+4. In the shape burden lens, family cards distinguish between snapshot-heavy, deep-nesting, duplicated-state, and internal-field signals — each card shows a specific sentence, not a generic label.
+5. Click an endpoint row to open its detail pane with grouped issue evidence and OpenAPI grounding.
 
 ## Explorer vs CLI (quick decision)
 
@@ -87,10 +88,10 @@ Command roles:
 - Fix-first priorities: deterministic starting points for remediation
 
 Current workflow/shape heuristics include:
-- snapshot-heavy-response
-- deeply-nested-response-structure
-- duplicated-state-response
-- incidental-internal-field-exposure
+- snapshot-heavy-response — card text: "Returns full model state rather than task-scoped fields."
+- deeply-nested-response-structure — card text: "Response nesting may complicate client traversal."
+- duplicated-state-response — card text: "State appears repeated across multiple response fields."
+- incidental-internal-field-exposure — card text: "Internal or audit fields appear to dominate the contract."
 - weak-outcome-next-action-guidance
 
 ## What this is (and is not)

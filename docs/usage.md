@@ -29,10 +29,10 @@ api-doctor is not positioned as generic lint-only output. Current review framing
 
 The current workflow/shape heuristic signal set includes:
 
-- `snapshot-heavy-response`
-- `deeply-nested-response-structure`
-- `duplicated-state-response`
-- `incidental-internal-field-exposure`
+- `snapshot-heavy-response` — family card text: "Returns full model state rather than task-scoped fields."
+- `deeply-nested-response-structure` — family card text: "Response nesting may complicate client traversal."
+- `duplicated-state-response` — family card text: "State appears repeated across multiple response fields."
+- `incidental-internal-field-exposure` — family card text: "Internal or audit fields appear to dominate the contract."
 - `weak-outcome-next-action-guidance`
 
 Scope reminder:
@@ -221,6 +221,13 @@ That makes it useful in CI pipelines.
 explore starts a lightweight local browser UI as the primary interactive analysis surface.
 
 It uses the same deterministic analysis/workflow/diff data already produced by the CLI engine, then normalizes that data once server-side for interactive browsing.
+
+The Explorer UI is organized around burden lenses:
+
+- **Workflow burden lens**: family cards highlight hidden token handoff, weak outcome guidance, brittle sequencing, and auth/header spread. Workflow chains show burden summary chips ordered by impact — the primary (most-affected) burden chip is visually emphasized; secondary burdens are shown compactly.
+- **Shape burden lens**: family cards distinguish the dominant local shape problem for each family (snapshot-heavy, deep nesting, duplicated state, or internal-field domination) with a specific sentence per card rather than a generic label. The primary shape signal chip is highlighted; secondary chips are de-emphasized.
+- **Consistency lens**: family cards surface parameter naming drift, path-style drift, and response-shape divergence across related routes.
+- **Spec-rule view**: a separate aggregate table lists normative rule findings by level and breadth, distinct from the burden card system.
 
 ### Why you would use it
 
