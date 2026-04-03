@@ -1056,6 +1056,9 @@
           var code = finding.code || '';
           var msg = (finding.message || '').toLowerCase();
 
+          // Do not let spec-rule findings contaminate heuristic burden signal counts.
+          if (finding.evidenceType === 'spec-rule') return;
+
           if (code === 'weak-follow-up-linkage' || code === 'weak-action-follow-up-linkage' || code === 'weak-accepted-tracking-linkage' || code === 'weak-outcome-next-action-guidance' || code === 'prerequisite-task-burden') {
             bumpFamilySignal(item.workflowSignalCounts, 'hidden token/context handoff appears likely');
           }
