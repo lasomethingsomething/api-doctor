@@ -129,6 +129,12 @@ h2 { margin: 0; font-size: 1.12rem; line-height: 1.15; }
   font-size: 0.84rem;
   line-height: 1.42;
 }
+.card-consequence {
+  margin-top: 0.55rem;
+  color: var(--muted-soft);
+  font-size: 0.84rem;
+  line-height: 1.42;
+}
 .summary-cta {
   margin-top: 0.65rem;
   border: 1px solid rgba(118, 227, 234, 0.45);
@@ -491,6 +497,59 @@ tr.active {
   font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.45;
+}
+.evidence-foundation {
+  margin-bottom: 1.2rem;
+  padding: 0.85rem 0;
+  border-top: 2px solid rgba(118, 227, 234, 0.3);
+  border-bottom: 2px solid rgba(118, 227, 234, 0.3);
+}
+.evidence-foundation h3 {
+  margin: 0.6rem 0 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.evidence-foundation h3:first-child {
+  margin-top: 0;
+}
+.evidence-statement, .evidence-impact, .evidence-examine {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+.dimension-summary {
+  margin: 0.9rem 0;
+  padding-bottom: 0.6rem;
+}
+.dimension-summary h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.dimension-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+.dimension-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.38rem 0.62rem;
+  background: rgba(235, 251, 252, 0.85);
+  border: 1px solid rgba(118, 227, 234, 0.35);
+  border-radius: 12px;
+  font-size: 0.82rem;
+  color: #1e3a42;
+  font-weight: 500;
+}
+.chip-count {
+  font-weight: 700;
+  color: var(--muted);
 }
 .fix-context-top-label {
   margin: 0 0 0.28rem;

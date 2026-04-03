@@ -282,39 +282,39 @@
     var cards = [
       {
         id: "launch-family",
-        label: "Family to inspect first",
+        label: "Start with highest-issue family",
         value: humanFamilyLabel(topFamily.name),
-        meta: topFamily.note + " Click to load endpoints in this family and start with highest-pressure evidence.",
+        consequence: topFamily.note + " This loads all endpoints in the family ranked by evidence.",
         tone: "tone-trust",
         cta: "Inspect family"
       },
       {
         id: "launch-burden",
-        label: "Most common issue dimension",
+        label: "Focus on dominant issue type",
         value: burdenLabel(burdenCode),
-        meta: burdenDescription(burdenCode) + " Click to filter endpoint evidence to this dimension.",
+        consequence: 'This narrows the endpoint list to contract issues showing: ' + burdenLabel(burdenCode).toLowerCase() + '.',
         tone: "tone-workflow",
-        cta: "Filter by dimension"
+        cta: "Filter by evidence"
       },
       {
         id: "launch-high",
-        label: "High-pressure endpoints",
+        label: "Scan highest-pressure endpoints",
         value: highPriorityCount + (highPriorityCount === 1 ? " endpoint" : " endpoints"),
-        meta: pct + "% of analyzed endpoints (" + withFindings + "/" + s.endpointsAnalyzed + ") have at least one issue. Click to focus list on high-pressure endpoints.",
+        consequence: pct + "% of analyzed endpoints (" + withFindings + "/" + s.endpointsAnalyzed + " total) have contract issues, ranked by pressure.",
         tone: "tone-fix",
-        cta: "Focus high pressure"
+        cta: "View high-pressure"
       },
       {
         id: "launch-workflows",
-        label: "Inferred multi-step patterns",
-        value: s.workflowsInferred + " step-pairs \u00b7 " + s.chainsInferred + " chains",
-        meta: "Pattern inference is based on path shapes/ID usage, not runtime traces. Dominant handoff: " + topWorkflowKind + ". Click to focus workflow-linkage issues.",
+        label: "Check workflow linkage issues",
+        value: s.workflowsInferred + " inferred step-pairs",
+        consequence: 'Dominant pattern: ' + topWorkflowKind + '. Focuses on weak follow-up/accepted-tracking/list-detail linkage findings.',
         tone: "tone-family",
-        cta: "Inspect linkage issues"
+        cta: "Inspect workflows"
       }
     ];
     el.summaryCards.innerHTML = cards.map(function (card) {
-      return '<article class="card ' + card.tone + '" data-action="' + card.id + '"><p class="card-label">' + card.label + '</p><p class="card-value">' + card.value + '</p><p class="card-meta">' + card.meta + '</p><button class="summary-cta" data-action="' + card.id + '">' + card.cta + '</button></article>';
+      return '<article class="card ' + card.tone + '" data-action="' + card.id + '"><p class="card-label">' + card.label + '</p><p class="card-value">' + card.value + '</p><p class="card-consequence">' + card.consequence + '</p><button class="summary-cta" data-action="' + card.id + '">' + card.cta + '</button></article>';
     }).join("");
 
     Array.prototype.forEach.call(el.summaryCards.querySelectorAll('.card[data-action]'), function (node) {
@@ -486,13 +486,23 @@
 
     var summary = endpointInvestigationSummary(detail);
     var dimensionSummary = summarizeIssueDimensions(detail.findings || []);
-    var dimensionBlock = '<div class="dimension-summary"><h3>Dominant issue dimensions</h3>'
-      + (dimensionSummary.length > 0
-        ? '<div class="dimension-chips">' + dimensionSummary.map(function (d) { return '<span class="dimension-chip">' + escapeHtml(d.label + ' (' + d.count + ')') + '</span>'; }).join('') + '</div>'
-        : '<p class="subtle">No direct issue dimensions for this endpoint in current lens.</p>')
+    
+    var evidenceBlock = '<div class="evidence-foundation">'
+      + '<h3>What appears problematic</h3>'
+      + '<p class="evidence-statement">' + escapeHtml(summary.problematic) + '</p>'
+      + '<h3>Why this matters</h3>'
+      + '<p class="evidence-impact">' + escapeHtml(summary.why) + '</p>'
+      + '<h3>What to examine in the spec</h3>'
+      + '<p class="evidence-examine">' + escapeHtml(summary.examine) + '</p>'
       + '</div>';
 
-    var findings = "<h3>Contract issues (exact messages)</h3>";
+    var dimensionBlock = dimensionSummary.length > 0
+      ? '<div class="dimension-summary"><h3>Issue dimensions (from contract analysis)</h3>'
+        + '<div class="dimension-chips">' + dimensionSummary.map(function (d) { return '<span class="dimension-chip">' + escapeHtml(d.label) + ' <span class="chip-count">' + d.count + '</span></span>'; }).join('') + '</div>'
+        + '</div>'
+      : '';
+
+    var findings = "<h3>Contract issue messages</h3>";
     if (detail.findings.length === 0) {
       findings += "<p class='subtle'>No contract issues are flagged on this endpoint in the current lens.</p>";
     } else {
@@ -501,7 +511,7 @@
         var impact = f.impact ? '<p class="finding-impact">' + escapeHtml(f.impact) + '</p>' : '';
         var expandContent = '';
         if (isSelected) {
-          var hint = findingExamineHint(f.code, f.message);
+          var hint = findingExamineHint(f.code, [f]);
           var wfCtx = findingWorkflowContext(detail.endpoint.id, f.code, detail.relatedWorkflows);
           expandContent = '<div class="finding-expand">'
             + (hint ? '<p class="finding-examine-label">What to examine</p><p class="finding-examine">' + escapeHtml(hint) + '</p>' : '')
@@ -528,7 +538,7 @@
       return '<li>' + d.code + ': ' + escapeHtml(d.message) + '</li>';
     }).join('') + '</ul>' : '';
 
-    el.endpointDetail.innerHTML = '<div class="detail-header"><div class="detail-title"><span class="eyebrow">Selected endpoint</span><span class="detail-path">' + detail.endpoint.method + ' ' + detail.endpoint.path + '</span></div><div class="detail-meta"><span class="badge ' + detail.endpoint.priority + '">' + detail.endpoint.priority + '</span><span class="endpoint-chip">' + humanFamilyLabel(detail.endpoint.family) + '</span><span class="risk-copy">Score basis (secondary): ' + detail.endpoint.riskSummary + '</span></div><div class="detail-context">' + escapeHtml(detailContextText(detail)) + '</div></div><div class="investigation-summary"><h3>Why this endpoint matters</h3><p>' + escapeHtml(summary.why) + '</p><p class="subtle">Next step: ' + escapeHtml(summary.next) + '</p></div>' + dimensionBlock + findings + workflows + chains + diffs;
+    el.endpointDetail.innerHTML = '<div class="detail-header"><div class="detail-title"><span class="eyebrow">Selected endpoint</span><span class="detail-path">' + detail.endpoint.method + ' ' + detail.endpoint.path + '</span></div><div class="detail-meta"><span class="badge ' + detail.endpoint.priority + '">' + detail.endpoint.priority + '</span><span class="endpoint-chip">' + humanFamilyLabel(detail.endpoint.family) + '</span><span class="risk-copy">Score basis (secondary): ' + detail.endpoint.riskSummary + '</span></div><div class="detail-context">' + escapeHtml(detailContextText(detail)) + '</div></div>' + evidenceBlock + dimensionBlock + findings + workflows + chains + diffs;
 
     Array.prototype.forEach.call(el.endpointDetail.querySelectorAll('.finding-item'), function (item, idx) {
       item.addEventListener('click', function (e) {
@@ -702,7 +712,7 @@
     if (code === 'weak-list-detail-linkage' || code === 'weak-follow-up-linkage' || code === 'weak-action-follow-up-linkage' || code === 'weak-accepted-tracking-linkage') {
       return 'weak workflow outcome modeling';
     }
-    if (code === 'array-items-too-generic') return 'deep nesting';
+    if (code === 'weak-array-items-schema') return 'deep nesting / response complexity';
     if (code === 'internal-incidental-field') return 'internal/incidental fields';
     if (code === 'sibling-path-shape-drift' || code === 'endpoint-path-style-drift' || code === 'detail-path-parameter-name-drift') return 'consistency drift';
     if (code === 'likely-missing-enum' || code === 'generic-object-request' || code === 'generic-object-response') return 'typing/enum weakness';
@@ -711,6 +721,66 @@
     if ((burdenFocus || '') === 'contract-shape') return 'storage-shaped / snapshot-heavy responses';
     if ((burdenFocus || '') === 'consistency') return 'consistency drift';
     return (category || 'other issues').replaceAll('-', ' ');
+  }
+
+  function dimensionProblemStatement(dimension) {
+    switch (dimension) {
+      case 'typing/enum weakness': return 'The spec does not declare explicit enum values or property types, forcing clients to guess or discover valid values at runtime.';
+      case 'storage-shaped / snapshot-heavy responses': return 'Write responses expose full storage snapshots instead of outcome summaries, requiring clients to issue follow-up reads to confirm changes.';
+      case 'hidden dependencies / next-step linkage burden': return 'Responses do not expose the ID, state, or URL clients need to invoke the next operation in a workflow, creating hidden dependencies.';
+      case 'weak workflow outcome modeling': return 'Status responses (e.g., 202 Accepted) or action results do not clearly expose outcome state or tracking identifiers.';
+      case 'deep nesting / response complexity': return 'Response structures are deeply nested or heavily recursive, making client parsing, caching, and type generation fragile.';
+      case 'internal/incidental fields': return 'The response exposes internal implementation fields (like _id, system_state, debug_info) that couple clients to internals.';
+      case 'consistency drift': return 'Path styles, parameter names, or response shapes vary across similar endpoints, making the API harder to predict.';
+      case 'change-risk clues': return 'Endpoints are deprecated or marked for removal, requiring migration planning.';
+      default: return 'The spec shows signals that may impact client generation, performance, or reliability.';
+    }
+  }
+
+  function dimensionImpact(dimension) {
+    switch (dimension) {
+      case 'typing/enum weakness': return 'Generated clients cannot type-check valid values; version changes surprise clients silently; runtime discovery overhead.';
+      case 'storage-shaped / snapshot-heavy responses': return 'Clients must synthesize outcome from response bloat; extra network reads per operation; state confusion if partial updates are missed.';
+      case 'hidden dependencies / next-step linkage burden': return 'Clients must manually keep IDs/state in sync across requests; multi-step flows are fragile; off-path errors are hard to diagnose.';
+      case 'weak workflow outcome modeling': return 'Clients cannot confirm operation success; polling/retry logic must guess endpoint state; workflow chains stall silently.';
+      case 'deep nesting / response complexity': return 'Clients struggle to parse; schema generation creates bloated models; caching strategies become unclear; evolution is risky.';
+      case 'internal/incidental fields': return 'Clients couple to internal schema; API fragility if internals change; client code becomes brittle.';
+      case 'consistency drift': return 'Clients must handle shape variations; generation tools must emit multiple patterns; learning curve increases; error surface expands.';
+      case 'change-risk clues': return 'Clients using deprecated endpoints will fail after the endpoint is removed; unplanned outages and support burden.';
+      default: return 'May impact reliability, performance, or client generation.';
+    }
+  }
+
+  function dimensionExamineHint(dimension, findings) {
+    switch (dimension) {
+      case 'typing/enum weakness':
+        var enumFindings = (findings || []).filter(function (f) { return f.code === 'likely-missing-enum'; });
+        if (enumFindings.length > 0) {
+          var props = uniq(enumFindings.map(function (f) { var m = f.message.match(/property '([^']+)'/); return m ? m[1] : ''; }).filter(Boolean));
+          return 'In the response schema, declare enum values on: ' + props.join(', ') + '.';
+        }
+        return 'In the response schema, add enum constraints to properties where only a fixed set of values is valid.';
+      case 'storage-shaped / snapshot-heavy responses':
+        return 'In the POST/PUT/PATCH response, replace the full entity snapshot with a compact outcome object. Include a status field or @next link so clients know what changed and what to call next.';
+      case 'hidden dependencies / next-step linkage burden':
+        var linkageFindings = (findings || []).filter(function (f) { return f.code && f.code.indexOf('linkage') > -1; });
+        if (linkageFindings.length > 0) {
+          return 'In the response schema, expose the ID or state field that the client needs for the next step. Check each finding message for the required field name.';
+        }
+        return 'In the response, expose the ID, state, or URL the client needs to chain to the next operation.';
+      case 'weak workflow outcome modeling':
+        return 'For status responses (202, 200 on async operations), include a tracking ID, status URL, or state field so clients can poll or confirm completion.';
+      case 'deep nesting / response complexity':
+        return 'In the response schema, flatten or abstract deeply nested structures. Use $ref to extract reusable schemas and reduce parse complexity.';
+      case 'internal/incidental fields':
+        return 'Remove or hide internal-only fields (those starting with _ or marked as system-internal) from the public response schema.';
+      case 'consistency drift':
+        return 'Align path parameter names, response field names, and status codes across this endpoint family. Use consistent representation across similar operations.';
+      case 'change-risk clues':
+        return 'Plan migration and deprecation timeline. Identify replacement endpoints and communicate sunset to clients.';
+      default:
+        return 'In the OpenAPI spec, review the exact findings message to determine the required change.';
+    }
   }
 
   function familyPressureLabel(priorityCounts) {
@@ -1035,37 +1105,27 @@
     var endpoint = detail.endpoint || {};
     if (findings.length === 0) {
       return {
-        why: 'No direct contract issues are flagged here, but this endpoint may still matter through family context or workflow chains.',
-        next: 'Review the related workflow paths and endpoint families below to understand upstream or downstream impact.'
+        problematic: 'No direct contract issues are flagged here.',
+        why: 'But this endpoint may still matter through family context or workflow chains.',
+        examine: 'Review the related workflow paths and endpoint families below to understand impact.'
       };
     }
 
-    var byCategory = {};
-    var byBurden = {};
+    var dimensionCounts = {};
     findings.forEach(function (f) {
-      byCategory[f.category] = (byCategory[f.category] || 0) + 1;
-      if (f.burdenFocus) {
-        byBurden[f.burdenFocus] = (byBurden[f.burdenFocus] || 0) + 1;
-      }
+      var dim = issueDimensionForFinding(f.code, f.category, f.burdenFocus);
+      dimensionCounts[dim] = (dimensionCounts[dim] || 0) + 1;
     });
 
-    var topCategory = Object.entries(byCategory).sort(function (a, b) { return b[1] - a[1]; })[0];
-    var topBurden = Object.entries(byBurden).sort(function (a, b) { return b[1] - a[1]; })[0];
-    var topCode = findings[0].code;
+    var topDimension = Object.entries(dimensionCounts).sort(function (a, b) { return b[1] - a[1]; })[0];
+    var topDim = topDimension[0];
+    var topCount = topDimension[1];
 
-    var why = 'Pressure is ' + endpoint.priority + ' because this endpoint has ' + findings.length + ' issue' + (findings.length === 1 ? '' : 's') + ', mainly in ' + topCategory[0].replaceAll('-', ' ') + ' (' + topCategory[1] + ')';
-    if (topBurden) {
-      why += '. Most concern is ' + topBurden[0].replaceAll('-', ' ') + '.';
-    } else {
-      why += '.';
-    }
-
-    var next = 'Expand the first finding code "' + topCode + '" to see a specific recommendation, then check related workflow paths below.';
-    if ((detail.relatedChains || []).length > 0) {
-      next += ' Related endpoint families are also listed.';
-    }
-
-    return { why: why, next: next };
+    return {
+      problematic: dimensionProblemStatement(topDim) + (topCount > 1 ? ' This endpoint shows ' + topCount + ' findings in this dimension.' : ''),
+      why: dimensionImpact(topDim),
+      examine: dimensionExamineHint(topDim, findings.filter(function (f) { return issueDimensionForFinding(f.code, f.category, f.burdenFocus) === topDim; }))
+    };
   }
 
   function summarizeIssueDimensions(findings) {
