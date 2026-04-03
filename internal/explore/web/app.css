@@ -1318,18 +1318,12 @@ tbody tr.active {
 }
 
 .detail-hero.pressure-high {
-  border-color: rgba(197, 43, 45, 0.35);
-  background: linear-gradient(180deg, var(--high-soft), #fff 55%);
 }
 
 .detail-hero.pressure-medium {
-  border-color: rgba(166, 106, 0, 0.34);
-  background: linear-gradient(180deg, var(--medium-soft), #fff 55%);
 }
 
 .detail-hero.pressure-low {
-  border-color: rgba(32, 115, 77, 0.3);
-  background: linear-gradient(180deg, var(--low-soft), #fff 55%);
 }
 
 .detail-hero-head {
