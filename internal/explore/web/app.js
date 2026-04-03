@@ -140,9 +140,7 @@
   }
 
   function renderResetControl() {
-    el.resetControl.innerHTML = '<button type="button" class="quick-action quick-action-reset" data-id="clear-current-lens" title="Reset filters">'
-      + '<span class="quick-label">Reset filters</span>'
-      + '<span class="quick-copy">Clear all active filters and start over</span>'
+    el.resetControl.innerHTML = '<button type="button" class="reset-btn" data-id="clear-current-lens" title="Reset filters">Reset filters</button>'
 
     Array.prototype.forEach.call(el.resetControl.querySelectorAll("button[data-id]"), function (btn) {
       btn.addEventListener("click", function () {
@@ -161,7 +159,7 @@
     state.filters.familyPressure = "all";
 
     if (id === "family" && topFamilyName) {
-      state.filters.search = String(topFamilyName).toLowerCase();
+      state.filters.search = "";
       state.filters.category = "all";
       state.filters.burden = "all";
     } else if (id === "spec-rule") {
