@@ -7,6 +7,7 @@
 		    endpointDiagnosticsSubTab: "summary",
 		    expandedFamily: "",
 		    expandedFamilyInsight: "",
+		    expandedFamilySignals: {},
 			    expandedEndpointInsightIds: {},
 			    expandedEndpointRowFindings: {},
 			    inspectingEndpointId: "",
@@ -2317,6 +2318,32 @@
 			      btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
 			    });
 
+			    // Inline signal expansion (Response Shape)
+			    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-expand-signals]"), function (btn) {
+			      btn.addEventListener("click", function (event) {
+			        event.preventDefault();
+			        event.stopPropagation();
+			        var family = btn.getAttribute("data-expand-signals") || "";
+			        if (!family) return;
+			        if (!state.expandedFamilySignals) state.expandedFamilySignals = {};
+			        if (state.expandedFamilySignals[family]) {
+			          delete state.expandedFamilySignals[family];
+			        } else {
+			          state.expandedFamilySignals[family] = true;
+			        }
+			        var x = window.scrollX || 0;
+			        var y = window.scrollY || 0;
+			        renderFamilySurface();
+			        requestAnimationFrame(function () {
+			          requestAnimationFrame(function () {
+			            window.scrollTo(x, y);
+			          });
+			        });
+			      });
+			      var expanded = !!(state.expandedFamilySignals && state.expandedFamilySignals[(btn.getAttribute("data-expand-signals") || "")]);
+			      btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+			    });
+
 	    Array.prototype.forEach.call(el.familySurface.querySelectorAll('button[data-inspect-top-endpoint]'), function (btn) {
 	      btn.addEventListener('click', function (event) {
 	        event.preventDefault();
@@ -4085,9 +4112,13 @@
 		      else items = ['mixed contract signals'];
 			    }
 
-		    // If total signals are 2 or 3, render all of them directly.
-		    // Only collapse behind "+N more signals" when there are 4+ total.
-		    var visibleCount = items.length <= 3 ? items.length : 2;
+		    var familyName = (family && family.family) ? family.family : 'unlabeled family';
+		    var inlineExpand = state.activeTopTab === 'shape';
+		    var expanded = inlineExpand && !!(state.expandedFamilySignals && state.expandedFamilySignals[familyName]);
+
+		    // If total signals are 3 or fewer, render all. If more, keep 3 visible by default
+		    // and let users expand inline (Response Shape) rather than burying labels.
+		    var visibleCount = expanded ? items.length : (items.length <= 3 ? items.length : 3);
 		    var visible = items.slice(0, visibleCount);
 		    var hidden = items.slice(visibleCount);
 		    var visibleChips = visible.map(function (c, i) {
@@ -4096,20 +4127,21 @@
 		      return '<span class="' + cls + '" title="' + escapeHtml(label) + '"><span class="family-signal-chip-label">' + escapeHtml(label) + '</span></span>';
 		    }).join('');
 
-	    var hiddenChips = hidden.map(function (c) {
-	      var label = humanizeSignalLabel(c);
-	      return '<span class="chip family-signal-chip" title="' + escapeHtml(label) + '"><span class="family-signal-chip-label">' + escapeHtml(label) + '</span></span>';
+		    var hiddenChips = hidden.map(function (c) {
+		      var label = humanizeSignalLabel(c);
+		      return '<span class="chip chip-secondary family-signal-chip" title="' + escapeHtml(label) + '"><span class="family-signal-chip-label">' + escapeHtml(label) + '</span></span>';
 		    }).join('');
 
-		    var more = hidden.length
-		      ? '<details class="family-signal-more">'
-		          + '<summary>+' + hidden.length + ' more signals</summary>'
-		          + '<div class="chips family-signal-more-chips">' + hiddenChips + '</div>'
-		        + '</details>'
-		      : '';
+		    var more = '';
+		    if (inlineExpand && items.length > 3) {
+		      var label = expanded ? 'Hide extra signals' : ('Show ' + hidden.length + ' more');
+		      more = '<button type="button" class="tertiary-action family-signal-expand" data-expand-signals="' + escapeHtml(familyName) + '" aria-expanded="' + (expanded ? 'true' : 'false') + '">'
+		        + escapeHtml(label)
+		        + '</button>';
+		    }
 
 		    return '<div class="family-signal-cell">'
-		      + '<div class="chips family-signal-chips">' + visibleChips + '</div>'
+		      + '<div class="chips family-signal-chips">' + visibleChips + (expanded ? hiddenChips : '') + '</div>'
 		      + more
 		      + '</div>';
 		  }
@@ -4124,9 +4156,13 @@
 		      else items = ['mixed contract signals'];
 			    }
 
-			    // If total signals are 2 or 3, render them all directly.
-			    // Only collapse behind "+N more signals" when there are 4+ total.
-			    var visibleCount = items.length <= 3 ? items.length : 2;
+			    var familyName = (family && family.family) ? family.family : 'unlabeled family';
+			    var inlineExpand = state.activeTopTab === 'shape';
+			    var expanded = inlineExpand && !!(state.expandedFamilySignals && state.expandedFamilySignals[familyName]);
+
+			    // If total signals are 3 or fewer, render all. If more, keep 3 visible by default
+			    // and let users expand inline (Response Shape) rather than burying labels.
+			    var visibleCount = expanded ? items.length : (items.length <= 3 ? items.length : 3);
 			    var visible = items.slice(0, visibleCount).map(function (raw, idx) {
 			      var label = raw ? humanizeSignalLabel(raw) : '—';
 			      var cls = idx === 0 ? 'chip chip-primary family-signal-chip' : 'chip chip-secondary family-signal-chip';
@@ -4136,19 +4172,19 @@
 
 		    var hiddenChips = hidden.map(function (c) {
 		      var label = humanizeSignalLabel(c);
-		      return '<span class="chip family-signal-chip" title="' + escapeHtml(label) + '"><span class="family-signal-chip-label">' + escapeHtml(label) + '</span></span>';
-			    }).join('');
+		      return '<span class="chip chip-secondary family-signal-chip" title="' + escapeHtml(label) + '"><span class="family-signal-chip-label">' + escapeHtml(label) + '</span></span>';
+		    }).join('');
 
-			    // Only collapse into "+N more signals" when there are 4+ total.
-			    var more = hidden.length
-			      ? '<details class="family-signal-more">'
-			          + '<summary>+' + hidden.length + ' more signals</summary>'
-			          + '<div class="chips family-signal-more-chips">' + hiddenChips + '</div>'
-			        + '</details>'
-			      : '';
+			    var more = '';
+			    if (inlineExpand && items.length > 3) {
+			      var label = expanded ? 'Hide extra signals' : ('Show ' + hidden.length + ' more');
+			      more = '<button type="button" class="tertiary-action family-signal-expand" data-expand-signals="' + escapeHtml(familyName) + '" aria-expanded="' + (expanded ? 'true' : 'false') + '">'
+			        + escapeHtml(label)
+			        + '</button>';
+			    }
 
 		    return '<div class="family-signal-cell family-top-signal-cell">'
-		      + '<div class="chips family-signal-chips">' + visible + '</div>'
+		      + '<div class="chips family-signal-chips">' + visible + (expanded ? hiddenChips : '') + '</div>'
 		      + more
 		      + '</div>';
 		  }

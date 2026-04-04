@@ -913,6 +913,7 @@ select:focus {
 .family-table-shell {
   display: block;
   overflow-x: auto;
+  padding-right: 0.5rem;
 }
 
 .family-table-backbar {
@@ -1325,6 +1326,11 @@ select:focus {
   display: grid;
   gap: 0.16rem;
   min-width: 0;
+}
+
+.family-signal-expand {
+  justify-self: start;
+  align-self: start;
 }
 
 .family-signal-chips {
@@ -3448,19 +3454,19 @@ body.lens-shape .family-table col.family-col-endpoints {
 }
 
 body.lens-shape .family-table col.family-col-name {
-  width: clamp(220px, 18vw, 300px);
+  width: clamp(240px, 20vw, 340px);
 }
 
 body.lens-shape .family-table col.family-col-primary-risk {
-  width: clamp(280px, 22vw, 360px);
+  width: clamp(340px, 28vw, 460px);
 }
 
 body.lens-shape .family-table col.family-col-client-effect {
-  width: clamp(280px, 24vw, 380px);
+  width: clamp(320px, 26vw, 440px);
 }
 
 body.lens-shape .family-table col.family-col-next-click {
-  width: clamp(300px, 24vw, 380px);
+  width: clamp(280px, 22vw, 360px);
 }
 
 /* Ensure family-table chip rows don't add extra top spacing via the shared .chips class. */
@@ -3475,14 +3481,17 @@ body.lens-shape .family-signal-chips {
 
 body.lens-shape .family-signal-chip {
   flex: 0 1 auto;
-  max-width: 18rem;
+  max-width: 16rem;
   white-space: normal;
 }
 
 body.lens-shape .family-signal-chip-label {
-  display: block;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  white-space: nowrap;
+  white-space: normal;
   word-break: normal;
   overflow-wrap: break-word;
   text-overflow: ellipsis;
@@ -3497,6 +3506,11 @@ body.lens-shape .pressure-mix-inline {
 
 body.lens-shape .pressure-mix-chip {
   padding: 0.12rem 0.32rem;
+  font-size: 0.7rem;
+}
+
+body.lens-shape .family-signal-expand {
+  padding: 0.16rem 0.46rem;
   font-size: 0.7rem;
 }
 
