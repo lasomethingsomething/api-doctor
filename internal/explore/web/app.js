@@ -4093,12 +4093,12 @@
 		    var visibleChips = visible.map(function (c, i) {
 		      var cls = i === 0 ? 'chip chip-primary family-signal-chip' : 'chip chip-secondary family-signal-chip';
 		      var label = humanizeSignalLabel(c);
-		      return '<span class="' + cls + '" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</span>';
+		      return '<span class="' + cls + '" title="' + escapeHtml(label) + '"><span class="family-signal-chip-label">' + escapeHtml(label) + '</span></span>';
 		    }).join('');
 
 	    var hiddenChips = hidden.map(function (c) {
 	      var label = humanizeSignalLabel(c);
-	      return '<span class="chip family-signal-chip" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</span>';
+	      return '<span class="chip family-signal-chip" title="' + escapeHtml(label) + '"><span class="family-signal-chip-label">' + escapeHtml(label) + '</span></span>';
 		    }).join('');
 
 		    var more = hidden.length
@@ -4130,13 +4130,13 @@
 			    var visible = items.slice(0, visibleCount).map(function (raw, idx) {
 			      var label = raw ? humanizeSignalLabel(raw) : '—';
 			      var cls = idx === 0 ? 'chip chip-primary family-signal-chip' : 'chip chip-secondary family-signal-chip';
-			      return '<span class="' + cls + '" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</span>';
+			      return '<span class="' + cls + '" title="' + escapeHtml(label) + '"><span class="family-signal-chip-label">' + escapeHtml(label) + '</span></span>';
 			    }).join('');
 			    var hidden = items.slice(visibleCount);
 
 		    var hiddenChips = hidden.map(function (c) {
 		      var label = humanizeSignalLabel(c);
-		      return '<span class="chip family-signal-chip" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</span>';
+		      return '<span class="chip family-signal-chip" title="' + escapeHtml(label) + '"><span class="family-signal-chip-label">' + escapeHtml(label) + '</span></span>';
 			    }).join('');
 
 			    // Only collapse into "+N more signals" when there are 4+ total.
@@ -4782,6 +4782,27 @@
 
   function renderFamilyPriorityCountStack(priorityCounts) {
     var counts = priorityCounts || {};
+
+    // Workflow Guidance + Response Shape treat this column as a compact "Pressure mix"
+    // surface. Keep it one-line to avoid inflating row height.
+    if (state.activeTopTab === 'workflow' || state.activeTopTab === 'shape') {
+      var h = counts.high || 0;
+      var m = counts.medium || 0;
+      var l = counts.low || 0;
+      var title = 'Pressure mix: High ' + h + ', Medium ' + m + ', Low ' + l;
+      function chip(key, shortLabel, value) {
+        return '<span class="pressure-mix-chip mix-' + escapeHtml(key) + '" title="' + escapeHtml(shortLabel + ': ' + value) + '">'
+          + '<span class="pressure-mix-label">' + escapeHtml(shortLabel) + '</span>'
+          + '<span class="pressure-mix-count">' + String(value) + '</span>'
+          + '</span>';
+      }
+      return '<div class="pressure-mix-inline" title="' + escapeHtml(title) + '">'
+        + chip('high', 'High', h)
+        + chip('medium', 'Med', m)
+        + chip('low', 'Low', l)
+        + '</div>';
+    }
+
     var items = [
       { key: 'high', label: 'High:' },
       { key: 'medium', label: 'Medium:' },

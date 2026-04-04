@@ -1177,6 +1177,51 @@ select:focus {
   line-height: 1;
 }
 
+.pressure-mix-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.22rem;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.pressure-mix-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+  border-radius: 999px;
+  padding: 0.14rem 0.38rem;
+  font-size: 0.72rem;
+  font-weight: 850;
+  border: 1px solid transparent;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pressure-mix-chip .pressure-mix-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+}
+
+.pressure-mix-chip.mix-high {
+  color: var(--high);
+  background: var(--high-soft);
+  border-color: rgba(197, 43, 45, 0.24);
+}
+
+.pressure-mix-chip.mix-medium {
+  color: var(--medium);
+  background: var(--medium-soft);
+  border-color: rgba(166, 106, 0, 0.22);
+}
+
+.pressure-mix-chip.mix-low {
+  color: var(--low);
+  background: var(--low-soft);
+  border-color: rgba(32, 115, 77, 0.2);
+}
+
 .family-col-endpoints {
   min-width: 85px;
   text-align: center;
@@ -1298,6 +1343,10 @@ select:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1 1 0;
+}
+
+.family-signal-chip-label {
+  min-width: 0;
 }
 
 .family-signal-more {
@@ -3358,6 +3407,62 @@ body.lens-shape .family-row.is-expanded {
 
 body.lens-shape .family-burden-why {
   color: #5a2f2a;
+}
+
+/* Response Shape: make family rows denser (avoid tall blank padding). */
+body.lens-shape .family-row td {
+  padding: 0.42rem 0.44rem;
+}
+
+body.lens-shape .family-row > td:first-child {
+  padding-left: calc(0.44rem - 3px);
+}
+
+body.lens-shape .family-col-name strong {
+  margin-bottom: 0.06rem;
+  line-height: 1.24;
+}
+
+body.lens-shape .endpoints-expand {
+  padding: 0.22rem 0.56rem;
+  font-size: 0.78rem;
+}
+
+/* Response Shape: keep signal chips readable (2-line clamp + tooltip), avoid hard clipping. */
+body.lens-shape .family-table col.family-col-top-signal {
+  width: clamp(280px, 22vw, 380px);
+}
+
+body.lens-shape .family-table col.family-col-priority {
+  width: 104px;
+}
+
+body.lens-shape .family-table col.family-col-endpoints {
+  width: 96px;
+}
+
+body.lens-shape .family-signal-chips {
+  flex-wrap: wrap;
+  overflow: visible;
+}
+
+body.lens-shape .family-signal-chip {
+  flex: 0 1 auto;
+  max-width: 18rem;
+  white-space: normal;
+}
+
+body.lens-shape .family-signal-chip-label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+  text-overflow: ellipsis;
+  line-height: 1.14;
 }
 
 body.lens-shape .chip-primary {
