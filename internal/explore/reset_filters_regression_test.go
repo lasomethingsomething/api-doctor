@@ -169,7 +169,6 @@ func resetFiltersHarness() string {
         // Make the controls "dirty" so reset has something to undo.
         setInput('searchInput', '/non-default');
         setSelect('categoryFilter', 'spec-rule');
-        setSelect('burdenFilter', 'all');
         setSelect('familyPriorityFilter', 'high');
         setCheckbox('includeNoIssueRows', true);
 
@@ -183,13 +182,11 @@ func resetFiltersHarness() string {
           }
           var search = (document.getElementById('searchInput') || {}).value || '';
           var category = (document.getElementById('categoryFilter') || {}).value || '';
-          var burden = (document.getElementById('burdenFilter') || {}).value || '';
           var pressure = (document.getElementById('familyPriorityFilter') || {}).value || '';
           var includeNoIssue = !!((document.getElementById('includeNoIssueRows') || {}).checked);
 
           if (search !== '') failures.push({ kind: 'search-not-reset', tab: tab.id, got: search });
           if (category !== tab.category) failures.push({ kind: 'category-not-reset', tab: tab.id, expected: tab.category, got: category });
-          if (burden !== tab.burden) failures.push({ kind: 'burden-not-reset', tab: tab.id, expected: tab.burden, got: burden });
           if (pressure !== 'all') failures.push({ kind: 'pressure-not-reset', tab: tab.id, got: pressure });
           if (includeNoIssue) failures.push({ kind: 'include-no-issue-not-reset', tab: tab.id });
 
@@ -205,9 +202,9 @@ func resetFiltersHarness() string {
     }
 
     var tabs = [
-      { id: 'spec-rule', category: 'spec-rule', burden: 'all' },
-      { id: 'workflow', category: 'all', burden: 'workflow-burden' },
-      { id: 'shape', category: 'all', burden: 'contract-shape' }
+      { id: 'spec-rule', category: 'spec-rule' },
+      { id: 'workflow', category: 'all' },
+      { id: 'shape', category: 'all' }
     ];
 
     var failures = [];
@@ -344,4 +341,3 @@ func resetFiltersRegressionPayload() *Payload {
 		GraphSeed: GraphSeed{},
 	}
 }
-

@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func TestCategoryBurdenAndFamilyPressureFiltersAcrossTopTabs(t *testing.T) {
+func TestCategoryAndFamilyPressureFiltersAcrossTopTabs(t *testing.T) {
 	chromePath := findChromeForResetRegression()
 	if chromePath == "" {
 		t.Skip("skipping browser regression: Google Chrome not available")
@@ -51,7 +51,7 @@ func TestCategoryBurdenAndFamilyPressureFiltersAcrossTopTabs(t *testing.T) {
 		t.Fatalf("filters regression script did not finish\n%s", out)
 	}
 	if report.failures != 0 {
-		t.Fatalf("expected category/burden/family pressure filters to work across top tabs, got %d failures\n%s", report.failures, report.detail)
+		t.Fatalf("expected category/family pressure filters to work across top tabs, got %d failures\n%s", report.failures, report.detail)
 	}
 }
 
@@ -221,6 +221,14 @@ func filtersRegressionHarness() string {
     }
   }
 
+  function assertScopeExcludes(needle, tab, step, failures) {
+    var bar = document.getElementById('lensControlHint');
+    var text = bar ? (bar.textContent || '') : '';
+    if (text.toLowerCase().indexOf(String(needle || '').toLowerCase()) !== -1) {
+      failures.push({ kind: 'filter-summary-unexpected', tab: tab, step: step, unexpected_includes: needle, got: text });
+    }
+  }
+
   function inspectEndpoint(endpointId) {
     click('button.endpoint-inspect-action[data-focus-endpoint="' + endpointId + '"]');
   }
@@ -242,7 +250,6 @@ func filtersRegressionHarness() string {
 
         // 0) Expansion behavior should be single-open: expanding a new family collapses the previous family's expansions.
         setSelect('categoryFilter', 'all');
-        setSelect('burdenFilter', 'all');
         setSelect('familyPriorityFilter', 'all');
 
         window.setTimeout(function () {
@@ -274,10 +281,8 @@ func filtersRegressionHarness() string {
                 // Continue with the narrower filter assertions below.
                 if (tabId === 'workflow') {
                   setSelect('categoryFilter', 'all');
-                  setSelect('burdenFilter', 'workflow-burden');
                 } else {
                   setSelect('categoryFilter', 'spec-rule');
-                  setSelect('burdenFilter', 'all');
                 }
                 setSelect('familyPriorityFilter', 'high');
 
@@ -296,14 +301,13 @@ func filtersRegressionHarness() string {
                       assertNoHash(tabId, 'after-inspect-tax-1', failures);
                       assertScrollTargetsAllowed(tabId, 'after-inspect-tax-1', failures);
                       assertInspectorEndpointIncludes('/tax-provider', tabId, 'inspect-tax-1', failures);
-                      assertScopeIncludes(
-                        tabId === 'workflow'
-                          ? 'workflow burden'
-                          : (tabId === 'shape' ? 'contract shape' : 'spec rule'),
-                        tabId,
-                        'scope-spec-rule',
-                        failures
-                      );
+                      assertScopeExcludes('Burden', tabId, 'scope-no-burden', failures);
+                      assertScopeIncludes('Category', tabId, 'scope-has-category', failures);
+                      if (tabId === 'spec-rule') {
+                        assertScopeIncludes('spec rule', tabId, 'scope-category-spec-rule', failures);
+                      } else {
+                        assertScopeIncludes('all', tabId, 'scope-category-all', failures);
+                      }
 
                       // 2) Same lens, pressure = medium => only /order
                       setSelect('familyPriorityFilter', 'medium');
@@ -316,9 +320,8 @@ func filtersRegressionHarness() string {
                           assertNestedCount(1, '/order', tabId, 'expand-order', failures);
                           assertNestedHeaders(tabId, '/order', 'headers-order', failures);
 
-                          // 3) Burden = contract-shape, pressure = low => only /customer-wishlist
+                          // 3) Shape lens, pressure = low => only /customer-wishlist
                           setSelect('categoryFilter', 'all');
-                          setSelect('burdenFilter', 'contract-shape');
                           setSelect('familyPriorityFilter', 'low');
 
                           window.setTimeout(function () {
@@ -338,7 +341,9 @@ func filtersRegressionHarness() string {
                             window.setTimeout(function () {
                               assertNestedCount(2, '/customer-wishlist', tabId, 'expand-wishlist', failures);
                               assertNestedHeaders(tabId, '/customer-wishlist', 'headers-wishlist', failures);
-                              assertScopeIncludes('contract shape', tabId, 'scope-contract-shape', failures);
+                              assertScopeExcludes('Burden', tabId, 'scope-no-burden-2', failures);
+                              assertScopeIncludes('Family pressure', tabId, 'scope-pressure', failures);
+                              assertScopeIncludes('low', tabId, 'scope-low', failures);
                               resolve(failures);
                             }, 120);
                           }, 120);

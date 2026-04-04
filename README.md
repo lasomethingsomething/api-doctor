@@ -28,6 +28,10 @@ Open the primary interactive surface:
 go run . explore --spec ./adminapi.json
 ```
 
+Then open:
+
+- http://127.0.0.1:7777/
+
 ## Open the Explorer (primary interactive surface)
 
 Launch:
@@ -47,10 +51,8 @@ How to use it quickly:
 2. Each top-level lens uses its own accent styling intentionally (focus/CTA/scope cues), while severity/error styling remains reserved for actual errors and warnings.
 3. Use the **Current filters** bar under the filter row to confirm scope quickly; when filters match nothing, it shows concrete next actions.
 4. Use the **Family investigation clusters** section as the primary entry point — click an **Endpoints** count to expand/collapse, and use **Show insight** for the family summary.
-4. Use **Endpoint diagnostics** as the persistent selected-endpoint inspection surface across all three lenses.
-5. Read the single-line scope sentence above family tables and empty states, then use the visible recovery buttons to widen scope (only real actions are shown).
-6. In Workflow and Shape lenses, use inspector Summary for burden framing, Exact evidence for grouped messages, and supporting consistency/drift context where relevant.
-7. Use **Call chain diagnostics and continuity** in Workflow Guidance when you need step-by-step sequence context and trap guidance.
+5. In the expanded endpoints table, click **Inspect endpoint** to open the endpoint workspace inline under that row (Summary, Exact evidence, and supporting diagnostics).
+6. Use the top-right **View payload** button to inspect the raw analyzer output backing the UI.
 
 ## Explorer vs CLI (quick decision)
 
@@ -75,18 +77,12 @@ Command roles:
 - explore: primary browser-based triage and evidence drill-down
 - tui: secondary read-only terminal triage
 
-## Main surfaces
-
-- CLI engine (canonical): analyze, workflows, diff, and machine-readable output
-- Explorer (primary): interactive family triage plus Endpoint diagnostics for selected-endpoint inspection
-- TUI (secondary): compact terminal triage over the same deterministic data
-
 ## What api-doctor helps you find
 
 - Spec-rule risk: OpenAPI-normative rule findings (REQUIRED/RECOMMENDED evidence)
 - Workflow burden: where call chains hide next-step requirements
 - Contract shape burden: where responses are too generic or storage-shaped
-- Consistency drift: supporting inspector/evidence perspective showing where related endpoints diverge in naming/path/shape
+- Consistency drift: where related endpoints diverge in naming/path/shape
 - Change risk: where spec-to-spec changes can break clients
 - Fix-first priorities: deterministic starting points for remediation
 
@@ -99,10 +95,10 @@ Current workflow/shape heuristics include:
 
 Explorer currently emphasizes:
 - three top-level primary lenses only: Spec rule violations, Workflow burden, Shape burden
-- persistent Endpoint diagnostics inspector as the main selected-endpoint surface
+- endpoint inspection as an inline workspace beneath the selected endpoint row (no detached inspector panel)
 - workflow step narratives with explicit "What changed", "Authoritative now", and "Next valid action"
 - first-class trap guidance with concise "What happened", "Easy to miss", and "Do next" actions
-- compact current-contract vs workflow-first contract comparison in Workflow/Shape inspector summaries
+- compact current-contract vs workflow-first contract comparison in Workflow/Shape endpoint summaries
 
 Recent UI clarity improvements:
 - Lens accent styling is isolated per top-level tab (no cross-tab leakage).

@@ -131,11 +131,15 @@ Explorer is the primary interactive surface.
 
 The TUI is read-only and secondary, meant for fast terminal triage when browser use is not preferred.
 
+Explorer default URL (after `api-doctor explore --spec ...`):
+
+- http://127.0.0.1:7777/
+
 Current focus areas:
 
 - Overview: top-level counts plus deterministic `Fix first` lines for workflow burden, contract-shape burden, consistency outliers, and endpoint priorities
 - Hotspots: ranked priority areas across issue categories, endpoint areas, and workflow patterns
-- Endpoints: browsable endpoint rows with issue/quality/priority labels and drill-down detail
+- Endpoints: browsable endpoint rows with issue/quality/priority labels and inline endpoint workspaces for drill-down detail
 - Issue categories: grouped findings with summaries, representative examples, and why-it-matters text
 - Workflows: single-step and multi-step summaries with preview/detail flows
 - Diff: available only when the TUI is launched with `--old` and `--new`

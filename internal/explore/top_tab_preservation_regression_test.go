@@ -157,7 +157,6 @@ func topTabPreservationHarness() string {
         // Filter changes must not switch tabs.
         setInput('searchInput', '/tax-provider');
         setSelect('categoryFilter', 'spec-rule');
-        setSelect('burdenFilter', 'all');
         window.setTimeout(function () {
           assertTab(failures, tabId, 'after-filter-changes');
 
@@ -240,4 +239,3 @@ func topTabPreservationReport(dom string) topTabPreservationResult {
 	}
 	return topTabPreservationResult{ready: ready, failures: failures, detail: detail}
 }
-

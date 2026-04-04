@@ -14,18 +14,18 @@ Use `analyze` for deterministic baseline output, then use `explore` as the prima
 
 ## Explorer vs CLI
 
-- Explorer (`explore`): primary way to inspect burden lenses, family clusters, endpoint evidence, and workflow context.
-   - Clean information hierarchy: lens choice → family overview → Endpoint diagnostics → workflow context
+- Explorer (`explore`): primary way to inspect the three lenses, family clusters, endpoint evidence, and workflow context.
+  - Clean information hierarchy: lens choice → family overview → expand endpoints → inline endpoint workspace
   - No redundant explanations; each section builds on the previous without repetition
-   - Top-level navigation is fixed to 3 primary lenses: Spec rule violations, Workflow burden, Shape burden
-   - Endpoint diagnostics is the persistent selected-endpoint inspection surface with lens-specific compact modes (summary + exact evidence everywhere, plus lens-relevant supporting modes)
-   - Top shortcut/lens cards use subtle per-lens pastel tinting for fast visual distinction; reset remains a separate neutral utility control
+  - Top-level navigation is fixed to 3 primary lenses: Spec rule violations, Workflow burden, Shape burden
+  - Endpoint workspaces render inline under the selected endpoint row (summary + exact evidence everywhere, plus lens-relevant supporting diagnostics)
+  - Top shortcut/lens cards use subtle per-lens pastel tinting for fast visual distinction; reset remains a separate neutral utility control
 - CLI (`analyze`, `workflows`, `diff`): canonical deterministic engine for local scripts, CI, and machine-readable outputs.
 - TUI (`tui`): secondary terminal read-only view of the same deterministic data.
 
 ## Current analyzer signals (practical framing)
 
-api-doctor organizes findings around four complementary views, accessible via category and burden filters:
+api-doctor organizes findings around complementary views, accessible via top tabs and the Category filter:
 
 **Rules-based view** (spec-rule violations):
 - Findings backed by explicit OpenAPI rule language (REQUIRED/MUST vs SHOULD/RECOMMENDED)
@@ -47,9 +47,9 @@ api-doctor organizes findings around four complementary views, accessible via ca
 3. **Consistency/drift** (supporting perspective): related endpoints that diverge in naming, path patterns, or response shape
    - Key signals: parameter naming drift, path style drift, outcome wording drift, response shape drift
    - What: where similar operations stop feeling interchangeable
-   - Where it lives now: inspector mode, endpoint evidence mode, and optional supporting perspective inside Workflow burden and Shape burden
+   - Where it lives now: endpoint workspaces (Consistency / drift) and supporting context where relevant
 
-Each view is isolated and independent. Choosing Workflow burden or Shape burden keeps category/burden controls locked to that lens for lower navigation complexity. Endpoint-local consistency inspection remains available in Endpoint diagnostics and endpoint evidence rather than as a primary top-level destination.
+Each view is isolated and independent. Endpoint-local consistency inspection remains available in endpoint workspaces rather than as a competing top-level destination.
 
 Scope reminder:
 
@@ -132,7 +132,7 @@ api-doctor now surfaces:
 
 **Where to find these:**
 - Endpoint row detail (expand for explicit trap callouts)
-- Inspector detail (persistent, with workflow chain context)
+- Endpoint workspace (inline under the selected endpoint row, with workflow chain context where relevant)
 - Family insight panels (summarized per family)
 
 **All previous evidence, findings, and diagnostics are preserved.**
@@ -151,11 +151,11 @@ Still-missing capabilities:
 - No explicit runtime-vs-contract split for "runtime-taught rules". The tool can flag likely burden, but it cannot prove whether the rule is undocumented runtime behavior or merely weak schema design.
 - No end-to-end state machine for brittle flows. Inferred chains are useful, but they do not yet model required/optional branches, failure exits, retries, or async polling lifecycles as first-class workflow objects.
 - No dedicated token/context lifecycle view. Token/context handoff is surfaced in summaries and chain clues, but not as a single inspectable artifact showing where context is created, mutated, invalidated, and consumed.
-- No snapshot/DOM-level test suite for the explorer UI. There is regression coverage for key explorer behaviors (filters, inspector evidence CTAs, and tab-surface invariants), but not a full rendered-DOM snapshot test harness yet.
+- No full screenshot-based visual test suite for the explorer UI. There is regression coverage for key explorer behaviors (filters, inline endpoint workspace interactions, and tab-surface invariants), but it is DOM/assertion based.
 
 Preservation confirmation:
-- Existing displayed information appears preserved in the current consolidated explorer. Exact evidence, OpenAPI grounding, spec-rule details, cleaner-contract guidance, consistency/drift context, workflow-chain context, and shape interpretation still have rendered homes in the inspector and supporting sections.
-- Current preservation evidence is implementation-based, not just narrative: see the consolidation mapping comment in `internal/explore/web/app.js` and the active inspector tabs/drawers that render each prior surface.
+- Existing displayed information appears preserved in the current consolidated explorer. Exact evidence, OpenAPI grounding, spec-rule details, cleaner-contract guidance, consistency/drift context, workflow-chain context, and shape interpretation still have rendered homes in the inline endpoint workspace and supporting sections.
+- Current preservation evidence is implementation-based, not just narrative: see the consolidation mapping comment in `internal/explore/web/app.js` and the inline workspace tabs/drawers that render each prior surface.
 
 ---
 
@@ -283,10 +283,10 @@ It uses the same deterministic analysis/workflow/diff data already produced by t
 The Explorer UI is organized around burden lenses:
 
 - **Workflow Guidance lens**: family cards and workflow chains highlight hidden token/context handoff, weak outcome guidance, brittle sequencing, and auth/header spread. Workflow steps include explicit "What changed", "Authoritative now", "Next valid action", and trap guidance.
-- **Response Shape lens**: family cards and inspector summaries emphasize storage-shaped DX burden (snapshot-heavy responses, deep nesting, duplicated state, internal-field exposure, unclear source-of-truth, weak outcome/next-action framing).
+- **Response Shape lens**: family cards and endpoint workspaces emphasize storage-shaped DX burden (snapshot-heavy responses, deep nesting, duplicated state, internal-field exposure, unclear source-of-truth, weak outcome/next-action framing).
 - **Contract Issues lens**: rules-based normative findings with explicit REQUIRED/MUST vs SHOULD/RECOMMENDED framing, plus supporting consistency drift.
 
-Consistency/drift remains available as a supporting inspector/evidence perspective (including dedicated inspector mode), not as a competing top-level primary lens.
+Consistency/drift remains available as a supporting perspective (including a dedicated Consistency / drift endpoint workspace tab), not as a competing top-level primary lens.
 
 Explorer UI clarity goals:
 - Each top-level lens uses its own accent styling intentionally (focus/CTA/scope cues only).
@@ -309,6 +309,10 @@ Good moments to run it:
 ```sh
 go run . explore --spec ./adminapi.json
 ```
+
+Then open:
+
+- http://127.0.0.1:7777/
 
 Optional diff context in explore:
 

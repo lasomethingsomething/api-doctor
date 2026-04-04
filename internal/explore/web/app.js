@@ -1,24 +1,23 @@
 (function () {
-		  var state = {
-		    payload: null,
-		    selectedEndpointId: "",
-		    userSelectedEndpoint: false,
-		    activeTopTab: "spec-rule",
-		    endpointDiagnosticsSubTab: "summary",
-		    expandedFamily: "",
-		    expandedFamilyInsight: "",
-		    expandedFamilySignals: {},
-			    expandedEndpointInsightIds: {},
-			    expandedEndpointRowFindings: {},
-			    inspectingEndpointId: "",
-		    inspectPlacementHint: "",
-		    detachedInspectorVisible: false,
-		    shapeWorkspaceCollapsed: false,
-			    issueScopeIndex: null,
-			    issueScopeIndexKey: "",
-			    familyTableShowAll: false,
-			    workflowChainsOpen: true,
-			    inspectorWorkflowContextOpen: null,
+			  var state = {
+			    payload: null,
+			    selectedEndpointId: "",
+			    userSelectedEndpoint: false,
+			    activeTopTab: "spec-rule",
+			    endpointDiagnosticsSubTab: "summary",
+			    expandedFamily: "",
+			    expandedFamilyInsight: "",
+			    expandedFamilySignals: {},
+				    expandedEndpointInsightIds: {},
+				    expandedEndpointRowFindings: {},
+				    inspectingEndpointId: "",
+			    inspectPlacementHint: "",
+			    shapeWorkspaceCollapsed: false,
+				    issueScopeIndex: null,
+				    issueScopeIndexKey: "",
+				    familyTableShowAll: false,
+				    workflowChainsOpen: true,
+				    inspectorWorkflowContextOpen: null,
 	    familyTableBackState: null,
 	    familyTableSort: {
 	      key: 'default',
@@ -28,7 +27,6 @@
 	    filters: {
 	      search: "",
       category: "all",
-      burden: "all",
       familyPressure: "all",
       includeNoIssueRows: false
     }
@@ -40,19 +38,15 @@
     resetControl: document.getElementById("resetControl"),
     searchInput: document.getElementById("searchInput"),
     categoryFilter: document.getElementById("categoryFilter"),
-    burdenFilter: document.getElementById("burdenFilter"),
     familyPriorityFilter: document.getElementById("familyPriorityFilter"),
     includeNoIssueRows: document.getElementById("includeNoIssueRows"),
-    lensControlHint: document.getElementById("lensControlHint"),
-    filterEmptyState: document.getElementById("filterEmptyState"),
-    endpointDiagnosticsSection: document.getElementById("endpointDiagnosticsSection"),
-    endpointDiagnosticsHelp: document.getElementById("endpointDiagnosticsHelp"),
-    endpointDiagnosticsBody: document.getElementById("endpointDiagnosticsBody"),
-    familySurfaceHelp: document.getElementById("familySurfaceHelp"),
-    familySurfaceContext: document.getElementById("familySurfaceContext"),
-    familySurface: document.getElementById("familySurface"),
-    workflowSection: document.getElementById("workflowSection"),
-    workflowHelp: document.getElementById("workflowHelp"),
+	    lensControlHint: document.getElementById("lensControlHint"),
+	    filterEmptyState: document.getElementById("filterEmptyState"),
+	    familySurfaceHelp: document.getElementById("familySurfaceHelp"),
+	    familySurfaceContext: document.getElementById("familySurfaceContext"),
+	    familySurface: document.getElementById("familySurface"),
+	    workflowSection: document.getElementById("workflowSection"),
+	    workflowHelp: document.getElementById("workflowHelp"),
     workflowChains: document.getElementById("workflowChains"),
     listContext: document.getElementById("listContext"),
     endpointRows: document.getElementById("endpointRows"),
@@ -96,17 +90,6 @@
 			    });
 			    el.categoryFilter.addEventListener("change", function (e) {
 			      state.filters.category = e.target.value;
-		      normalizeLensFilters('category');
-		      state.selectedEndpointId = '';
-		      state.userSelectedEndpoint = false;
-		      state.detailEvidenceOpenForId = '';
-		      invalidateDerivedCaches();
-		      state.familyTableShowAll = false;
-		      render();
-		    });
-		    el.burdenFilter.addEventListener("change", function (e) {
-		      state.filters.burden = e.target.value;
-		      normalizeLensFilters('burden');
 		      state.selectedEndpointId = '';
 		      state.userSelectedEndpoint = false;
 		      state.detailEvidenceOpenForId = '';
@@ -150,34 +133,6 @@
 		    });
 		  }
 
-	  function normalizeLensFilters(changed) {
-	    var category = state.filters.category;
-	    var burden = state.filters.burden;
-	    var heuristicTracks = {
-      'workflow-burden': true,
-      'contract-shape': true
-    };
-
-    if (category === 'spec-rule' && burden !== 'all') {
-      if (changed === 'burden' && heuristicTracks[burden]) {
-        state.filters.category = burden;
-      } else {
-        state.filters.burden = 'all';
-      }
-      return;
-    }
-
-    if (burden === 'all' || category === 'all') return;
-    if (!heuristicTracks[category] || !heuristicTracks[burden] || category === burden) return;
-
-    if (changed === 'burden') {
-      state.filters.category = burden;
-      return;
-    }
-
-    state.filters.burden = category;
-  }
-
   function renderFilterOptions() {
     var categoryValues = uniq(flatMap(state.payload.endpoints, function (row) {
       return Object.keys(row.categoryCounts || {});
@@ -187,12 +142,6 @@
         return { value: c, label: c === 'spec-rule' ? 'spec rule violations (rules-based view)' : c.replaceAll("-", " ") };
       })
     ));
-
-    setOptions(el.burdenFilter, [
-      { value: "all", label: "all burdens" },
-      { value: "workflow-burden", label: "workflow guidance" },
-      { value: "contract-shape", label: "response shape" }
-    ]);
 
     var datalist = document.getElementById("searchSuggestions");
     if (datalist) {
@@ -266,8 +215,6 @@
     if (state.filters.category === 'spec-rule' || state.filters.category === 'contract-shape') {
       state.filters.category = 'all';
     }
-    // Keep the tab anchored on continuity burden signals.
-    state.filters.burden = 'workflow-burden';
 
     var workflowRows = selectionRowsForActiveView();
     if (!workflowRows.length) {
@@ -294,7 +241,6 @@
     if (state.filters.category === 'spec-rule' || state.filters.category === 'workflow-burden') {
       state.filters.category = 'all';
     }
-    state.filters.burden = 'contract-shape';
 
     var shapeRows = selectionRowsForActiveView();
     if (!shapeRows.length) {
@@ -320,16 +266,13 @@
 	    document.body.classList.toggle('lens-workflow', workflowActive);
 	    document.body.classList.toggle('lens-spec-rule', specActive);
 
-	    if (el.familySurfaceSection) {
-	      el.familySurfaceSection.classList.toggle('shape-primary-surface', shapeActive);
+		    if (el.familySurfaceSection) {
+		      el.familySurfaceSection.classList.toggle('shape-primary-surface', shapeActive);
+		    }
+	    if (el.endpointListSection) {
+	      el.endpointListSection.classList.toggle('shape-secondary-surface', shapeActive);
 	    }
-    if (el.endpointDiagnosticsSection) {
-      el.endpointDiagnosticsSection.classList.toggle('shape-secondary-surface', shapeActive);
-    }
-    if (el.endpointListSection) {
-      el.endpointListSection.classList.toggle('shape-secondary-surface', shapeActive);
-    }
-  }
+	  }
 
   function normalizeSelectedEndpointForCurrentView() {
     var rows = selectionRowsForActiveView();
@@ -415,17 +358,14 @@
     if (id === "spec-rule") {
       state.filters.search = "";
       state.filters.category = "spec-rule";
-      state.filters.burden = "all";
       state.endpointDiagnosticsSubTab = "exact";
     } else if (id === "workflow") {
       state.filters.search = "";
       state.filters.category = "all";
-      state.filters.burden = "workflow-burden";
       state.endpointDiagnosticsSubTab = "summary";
     } else if (id === "shape") {
       state.filters.search = "";
       state.filters.category = "all";
-      state.filters.burden = "contract-shape";
       state.endpointDiagnosticsSubTab = "summary";
     }
 
@@ -540,12 +480,6 @@
 		      out = out.filter(isResponseShapeFinding);
 		    }
 
-		    // When the burden filter is set to "contract-shape", apply the shape-scoped
-		    // heuristic filter so we do not pollute the view with unrelated findings.
-		    if (state.filters.burden === 'contract-shape') {
-		      out = out.filter(isShapeScopedFinding);
-		    }
-
 		    // Category filter narrows to a specific finding category (including spec-rule).
 		    if (state.filters.category && state.filters.category !== 'all') {
 		      if (state.filters.category === 'spec-rule') {
@@ -565,14 +499,6 @@
 	      }
 	    }
 
-	    // Burden filter narrows to findings attached to that burden focus. For
-	    // "contract-shape" we already applied the stronger code-based scoping.
-		    if (state.activeTopTab !== 'workflow' && state.filters.burden && state.filters.burden !== 'all' && state.filters.burden !== 'contract-shape') {
-		      out = out.filter(function (f) {
-		        return !!f && (f.burdenFocus || '') === state.filters.burden;
-		      });
-		    }
-
 		    return out;
 		  }
 
@@ -587,20 +513,10 @@
 	    // counts so rows remain visible and Inspect can still open the inspector.
 	    var categoryCounts = row.categoryCounts || {};
 	    var category = state.filters.category || 'all';
-	    var burden = state.filters.burden || 'all';
 
 	    var base = (row.findings || 0);
 	    if (category !== 'all') {
 	      base = categoryCounts[category] || 0;
-	    }
-
-	    if (burden !== 'all') {
-	      // If the endpoint doesn't even claim this burden focus, treat as out of lens.
-	      if ((row.burdenFocuses || []).indexOf(burden) === -1) return 0;
-	      // When category is "all", use burden category counts (when present) as a better approximation.
-	      if (category === 'all') {
-	        base = Math.max(base, categoryCounts[burden] || 0);
-	      }
 	    }
 
 	    return base;
@@ -626,7 +542,6 @@
 	      state.activeTopTab,
 	      f.search || '',
 	      f.category || '',
-	      f.burden || '',
 	      f.familyPressure || '',
 	      f.includeNoIssueRows ? '1' : '0'
 	    ].join('|');
@@ -1941,31 +1856,18 @@
   }
 
 	  function syncControls() {
-	    var specRuleTabActive = state.activeTopTab === 'spec-rule';
-	    var workflowTabActive = state.activeTopTab === 'workflow';
-	    var shapeTabActive = state.activeTopTab === 'shape';
-	    var lockGuidanceControls = specRuleTabActive || workflowTabActive || shapeTabActive;
-
     el.searchInput.value = state.filters.search;
     el.categoryFilter.value = state.filters.category;
-    el.burdenFilter.value = state.filters.burden;
     el.familyPriorityFilter.value = state.filters.familyPressure;
     el.includeNoIssueRows.checked = state.filters.includeNoIssueRows;
 
     el.categoryFilter.disabled = false;
-    el.burdenFilter.disabled = false;
     el.categoryFilter.removeAttribute('title');
-    el.burdenFilter.removeAttribute('title');
 
     var categoryField = el.categoryFilter ? el.categoryFilter.closest('.field') : null;
-    var burdenField = el.burdenFilter ? el.burdenFilter.closest('.field') : null;
     if (categoryField) {
       categoryField.classList.remove('field-hidden-by-lens');
       categoryField.setAttribute('aria-hidden', 'false');
-    }
-    if (burdenField) {
-      burdenField.classList.remove('field-hidden-by-lens');
-      burdenField.setAttribute('aria-hidden', 'false');
     }
 
 	    if (el.lensControlHint) {
@@ -1992,15 +1894,12 @@
 	    // Never change the active tab as a side effect of reset.
     if (tab === 'spec-rule') {
       state.filters.category = 'spec-rule';
-      state.filters.burden = 'all';
       state.endpointDiagnosticsSubTab = 'exact';
     } else if (tab === 'workflow') {
       state.filters.category = 'all';
-      state.filters.burden = 'workflow-burden';
       state.endpointDiagnosticsSubTab = 'summary';
     } else if (tab === 'shape') {
       state.filters.category = 'all';
-      state.filters.burden = 'contract-shape';
       state.endpointDiagnosticsSubTab = 'summary';
     }
 
@@ -2099,17 +1998,17 @@
     return rect.bottom <= 0 || rect.top >= (window.innerHeight || document.documentElement.clientHeight || 0);
   }
 
-		  function revealInspectorIfNeeded() {
-		    // Scroll only when the workspace is actually outside the viewport.
-		    // Prefer the inline inspector mount (keeps ownership connected to the row).
-		    var inlineMount = findInlineInspectorMount(state.selectedEndpointId);
-		    var header = inlineMount
-		      ? (inlineMount.querySelector('.inspector-workspace-head') || inlineMount)
-		      : (el.endpointDiagnosticsSection ? (el.endpointDiagnosticsSection.querySelector('.section-heading') || el.endpointDiagnosticsSection) : null);
-		    if (!header) return;
-		    if (!isElementOffscreen(header)) return;
-		    header.scrollIntoView({ behavior: 'smooth', block: 'start' });
-		  }
+			  function revealInspectorIfNeeded() {
+			    // Scroll only when the workspace is actually outside the viewport.
+			    // Prefer the inline inspector mount (keeps ownership connected to the row).
+			    var inlineMount = findInlineInspectorMount(state.selectedEndpointId);
+			    var header = inlineMount
+			      ? (inlineMount.querySelector('.inspector-workspace-head') || inlineMount)
+			      : null;
+			    if (!header) return;
+			    if (!isElementOffscreen(header)) return;
+			    header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			  }
 
 				  function selectEndpointForInspector(endpointId, subTab) {
 				    if (!endpointId) return;
@@ -2217,7 +2116,6 @@
       bindRecoveryButtons(el.familySurfaceContext);
       var hasWidenAction = !!(state.filters.search
         || state.filters.category !== 'all'
-        || state.filters.burden !== 'all'
         || state.filters.familyPressure !== 'all'
         || state.filters.includeNoIssueRows
         || state.familyTableBackState);
@@ -2448,30 +2346,9 @@
 		      });
 		    });
 
-	    // If the inspector is rendered as a detached workspace (fallback), provide explicit
-	    // navigation so users never feel lost.
-	    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-jump-to-workspace]"), function (btn) {
-	      btn.addEventListener("click", function (event) {
-	        event.preventDefault();
-	        event.stopPropagation();
-	        if (!el.endpointDiagnosticsSection) return;
-	        var header = el.endpointDiagnosticsSection.querySelector('.section-heading') || el.endpointDiagnosticsSection;
-	        header.scrollIntoView({ behavior: 'smooth', block: 'start' });
-	      });
-	    });
-	    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-return-to-row]"), function (btn) {
-	      btn.addEventListener("click", function (event) {
-	        event.preventDefault();
-	        event.stopPropagation();
-	        var endpointId = btn.getAttribute("data-return-to-row") || "";
-	        if (!endpointId) return;
-	        var row = el.familySurface.querySelector('.nested-endpoint-row[data-endpoint-id="' + endpointId + '"]') || el.familySurface.querySelector('tr[data-endpoint-id="' + endpointId + '"]');
-	        if (!row) return;
-	        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-	      });
-	    });
+		    // Endpoint workspace is rendered inline beneath the selected endpoint row.
 
-	  }
+		  }
 
 	  function activeFamilyScopeLabel() {
 	    var scope = [];
@@ -2481,7 +2358,6 @@
 	      ? 'workflow guidance'
 	      : 'response shape'));
 	    scope.push('category: ' + (state.filters.category === 'all' ? 'all categories' : state.filters.category.replaceAll('-', ' ')));
-	    scope.push('burden: ' + (state.filters.burden === 'all' ? 'all burdens' : state.filters.burden.replaceAll('-', ' ')));
 	    scope.push('family pressure: ' + (state.filters.familyPressure === 'all' ? 'all tiers' : state.filters.familyPressure));
 	    if (state.filters.search) {
 	      scope.push('search: "' + state.filters.search + '"');
@@ -2509,9 +2385,6 @@
     var categoryLabel = (state.filters.category === 'all')
       ? '<span class="filter-summary-muted">all</span>'
       : '<code>' + escapeHtml(state.filters.category.replaceAll('-', ' ')) + '</code>';
-    var burdenLabel = (state.filters.burden === 'all')
-      ? '<span class="filter-summary-muted">all</span>'
-      : '<code>' + escapeHtml(state.filters.burden.replaceAll('-', ' ')) + '</code>';
     var pressureLabel = (state.filters.familyPressure === 'all')
       ? '<span class="filter-summary-muted">all</span>'
       : '<code>' + escapeHtml(state.filters.familyPressure) + '</code>';
@@ -2520,7 +2393,6 @@
     return '<strong>Current filters:</strong> '
       + 'Search ' + searchLabel
       + ' <span class="filter-summary-dot">·</span> Category ' + categoryLabel
-      + ' <span class="filter-summary-dot">·</span> Burden ' + burdenLabel
       + ' <span class="filter-summary-dot">·</span> Family pressure ' + pressureLabel
       + ' <span class="filter-summary-dot">·</span> No-issue rows ' + noIssueLabel;
   }
@@ -2564,9 +2436,6 @@
 		    var category = state.filters.category === 'all'
 		      ? 'all'
 		      : (state.filters.category || '').replaceAll('-', ' ');
-		    var burden = state.filters.burden === 'all'
-		      ? 'all'
-		      : (state.filters.burden || '').replaceAll('-', ' ');
 		    var pressure = state.filters.familyPressure === 'all'
 		      ? 'all'
 		      : state.filters.familyPressure;
@@ -2574,7 +2443,6 @@
 		    var line = activeTopTabLabel() + ' scope: '
 		      + 'search ' + search + ', '
 		      + 'category ' + category + ', '
-		      + 'burden ' + burden + ', '
 		      + 'family pressure ' + pressure + ', '
 		      + 'no-issue rows ' + noIssue + '.';
 
@@ -2705,17 +2573,13 @@
 	  }
 
 	  function familySurfaceHelpCopy() {
-	    var burden = state.filters.burden;
 	    if (state.activeTopTab === 'shape') {
 	      // Keep scope/results consolidated in the context summary box for this tab.
 	      return '';
 	    }
-	    if (burden === 'workflow-burden') {
+	    if (state.activeTopTab === 'workflow') {
 	      return 'Families ranked by workflow burden in the current slice: hidden dependencies, brittle sequencing, missing handoff IDs, and weak next-step cues.';
 	    }
-    if (burden === 'contract-shape') {
-      return 'Families ranked by response-shape burden in the current slice: deep nesting, duplicated state, incidental/internal fields, and snapshot-heavy responses.';
-    }
     return state.activeTopTab === 'shape'
       ? 'Response Shape: families ranked by shape friction for the current slice.'
       : state.activeTopTab === 'workflow'
@@ -3868,7 +3732,11 @@
   }
 
   function familyBurdenWhyText(family) {
-    var burden = state.filters.burden;
+    var burden = state.activeTopTab === 'workflow'
+      ? 'workflow-burden'
+      : state.activeTopTab === 'shape'
+      ? 'contract-shape'
+      : 'all';
     var topSignals = topFamilyBurdenSignals(family, burden, 2);
     if (burden === 'workflow-burden') {
       var dominant = topSignals[0] || '';
@@ -4101,26 +3969,21 @@
 		  }
 
 			  function familySignalItemsForActiveLens(family, ranked) {
-			    var activeBurden = state.filters.burden;
 			    // Workflow Guidance must always read as continuity-first.
 			    if (state.activeTopTab === 'workflow') {
 			      return sortedSignalLabels(family.workflowSignalCounts || {}, 50);
 			    }
-			    if (activeBurden === 'workflow-burden') return sortedSignalLabels(family.workflowSignalCounts || {}, 50);
-			    if (activeBurden === 'contract-shape') return sortedSignalLabels(family.shapeSignalCounts || {}, 50);
-			    if (activeBurden === 'consistency') return sortedSignalLabels(family.consistencySignalCounts || {}, 50);
+			    if (state.activeTopTab === 'shape') return sortedSignalLabels(family.shapeSignalCounts || {}, 50);
 		    var dims = (family.topDimensions || []).slice();
 		    if (dims.length) return dims;
 		    return (ranked && ranked.dominantSignals) ? ranked.dominantSignals.slice() : [];
 		  }
 
 			  function renderFamilyDominantSignalsCell(family, ranked) {
-			    var activeBurden = state.filters.burden;
 			    var items = familySignalItemsForActiveLens(family, ranked).filter(Boolean);
 			    if (!items.length) {
-		      if (activeBurden === 'workflow-burden') items = ['missing next action'];
-		      else if (activeBurden === 'contract-shape') items = ['storage-shaped response'];
-		      else if (activeBurden === 'consistency') items = ['path/param drift'];
+		      if (state.activeTopTab === 'workflow') items = ['missing next action'];
+		      else if (state.activeTopTab === 'shape') items = ['storage-shaped response'];
 		      else items = ['mixed contract signals'];
 			    }
 
@@ -4161,18 +4024,17 @@
 		    }
 
 		    return '<div class="family-signal-cell">'
-		      + '<div class="chips family-signal-chips">' + visibleChips + (expanded ? hiddenChips : '') + '</div>'
+		      + '<div class="chips family-signal-chips">' + visibleChips + '</div>'
+		      + ((expanded && hiddenChips) ? ('<div class="chips family-signal-reveal" aria-label="More shape signals">' + hiddenChips + '</div>') : '')
 		      + more
 		      + '</div>';
 		  }
 
 			  function renderFamilyTopSignalCell(family, ranked) {
-			    var activeBurden = state.filters.burden;
 			    var items = familySignalItemsForActiveLens(family, ranked).filter(Boolean);
 			    if (!items.length) {
-		      if (activeBurden === 'workflow-burden') items = ['missing next action'];
-		      else if (activeBurden === 'contract-shape') items = ['storage-shaped response'];
-		      else if (activeBurden === 'consistency') items = ['path/param drift'];
+		      if (state.activeTopTab === 'workflow') items = ['missing next action'];
+		      else if (state.activeTopTab === 'shape') items = ['storage-shaped response'];
 		      else items = ['mixed contract signals'];
 			    }
 
@@ -4211,7 +4073,8 @@
 			    }
 
 		    return '<div class="family-signal-cell family-top-signal-cell">'
-		      + '<div class="chips family-signal-chips">' + visible + (expanded ? hiddenChips : '') + '</div>'
+		      + '<div class="chips family-signal-chips">' + visible + '</div>'
+		      + ((expanded && hiddenChips) ? ('<div class="chips family-signal-reveal" aria-label="More shape signals">' + hiddenChips + '</div>') : '')
 		      + more
 		      + '</div>';
 		  }
@@ -5136,7 +4999,6 @@
 
     var hasNarrowing = !!(state.filters.search
       || state.filters.category !== 'all'
-      || state.filters.burden !== 'all'
       || state.filters.familyPressure !== 'all'
       || state.filters.includeNoIssueRows
       || state.familyTableBackState);
@@ -5238,8 +5100,8 @@
     if (state.filters.search) {
       return 'The current search matches a specific family or endpoint pattern, so the family list is narrower.';
     }
-    if (state.filters.category !== 'all' || state.filters.burden !== 'all') {
-      return 'Category or burden filters removed families that do not carry matching issues.';
+    if (state.filters.category !== 'all') {
+      return 'The category filter removed families that do not carry matching issues.';
     }
     if (state.filters.familyPressure !== 'all') {
       return 'The family pressure filter is showing only families at the chosen urgency level.';
@@ -5256,7 +5118,7 @@
 	      return counts[row.id];
 	    }
 
-	    var lensLocked = state.filters.category !== 'all' || state.filters.burden !== 'all';
+	    var lensLocked = state.filters.category !== 'all' || state.activeTopTab === 'workflow' || state.activeTopTab === 'shape';
 	    var rows = scopedRows(state.payload.endpoints || []);
 	    if (lensLocked) {
 	      rows = rows.filter(function (row) { return lensCount(row) > 0; });
@@ -5666,25 +5528,11 @@
 			        + '</div>'
 		        + '</td>'
 		        + '</tr>';
-			      var inspectorInlineRowNested = (row.id === state.selectedEndpointId && state.inspectPlacementHint === 'nested')
-			        ? renderInlineInspectorMountRow(row.id, 6, 'nested')
-			        : '';
-			      var workspaceAnchorRow = '';
-			      if (row.id === state.selectedEndpointId && state.detachedInspectorVisible) {
-			        workspaceAnchorRow = '<tr class="workspace-anchor-row" data-endpoint-id="' + escapeHtml(row.id) + '">'
-			          + '<td colspan="6" class="workspace-anchor-cell">'
-			          + '<div class="workspace-nav-anchor" role="status" aria-label="Workspace navigation">'
-			          + '<div class="workspace-nav-label">Viewing workspace for: <code>' + escapeHtml(((row.method || '').toUpperCase() + ' ' + (row.path || '')).trim()) + '</code></div>'
-			          + '<div class="workspace-nav-actions">'
-			          + '<button type="button" class="secondary-action" data-jump-to-workspace="1">Jump to workspace</button>'
-			          + '<button type="button" class="tertiary-action" data-return-to-row="' + escapeHtml(row.id) + '">Return to row</button>'
-			          + '</div>'
-			          + '</div>'
-			          + '</td>'
-			          + '</tr>';
-			      }
-			      return rowHtml + additionalFindingsRowInline + workspaceAnchorRow + inspectorInlineRowNested;
-			    }
+				      var inspectorInlineRowNested = (row.id === state.selectedEndpointId && state.inspectPlacementHint === 'nested')
+				        ? renderInlineInspectorMountRow(row.id, 6, 'nested')
+				        : '';
+				      return rowHtml + additionalFindingsRowInline + inspectorInlineRowNested;
+				    }
 
 			    var baseRow = '<tr class="' + rowClasses.trim() + '" data-id="' + row.id + '" data-endpoint-id="' + row.id + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
 		      + '<td>'
@@ -5928,7 +5776,6 @@
 		        // Switch tabs without clearing the user's current search/family pressure context.
 		        state.activeTopTab = 'workflow';
 		        state.filters.category = 'all';
-		        state.filters.burden = 'workflow-burden';
 		        state.endpointDiagnosticsSubTab = 'summary';
 		        state.workflowChainsOpen = true;
 
@@ -6064,7 +5911,6 @@
 	    if (state.filters.search) lens.push('\u201c' + state.filters.search + '\u201d');
 	    if (state.filters.category === 'spec-rule' && state.activeTopTab !== 'spec-rule') lens.push('rules-based view: spec rule');
 	    else if (state.filters.category !== "all") lens.push('category: ' + state.filters.category.replaceAll("-", " "));
-	    if (state.filters.burden !== "all") lens.push('guidance view: ' + state.filters.burden.replaceAll("-", " "));
 	    if (state.filters.familyPressure !== "all") lens.push('pressure: ' + state.filters.familyPressure);
 
     var mode = state.filters.includeNoIssueRows ? 'all rows' : 'evidence-only';
@@ -6081,7 +5927,7 @@
         + renderSpecRuleAggregate(ruleGroups)
         + '</details>'
         + '</div>';
-    } else if (state.filters.burden === 'workflow-burden') {
+    } else if (state.activeTopTab === 'workflow') {
       burdenExplanation = '<div class="burden-explanation">'
         + '<span class="evidence-track-label evidence-track-heuristic">Guidance view</span>'
         + '<strong>Workflow Guidance</strong> — family cards highlight cross-step continuity pressure that makes real call paths harder to complete safely.'
@@ -6093,14 +5939,14 @@
         + '</ul>'
         + renderDynamicBurdenSignals(visibleRows, 'workflow-burden')
         + '</div>';
-    } else if (state.filters.burden === 'contract-shape') {
+    } else if (state.activeTopTab === 'shape') {
       burdenExplanation = '<div class="burden-explanation">'
         + '<span class="evidence-track-label evidence-track-heuristic">Guidance view</span>'
         + '<strong>Response Shape</strong> — diagnoses real DX cost from storage-shaped payloads, not backend graph completeness.'
         + '<ul>'
         + '<li>Diagnose deep nesting, duplicated state, snapshot-heavy payloads, internal-field exposure, and unclear source-of-truth fields.</li>'
         + '<li>Diagnose missing outcome framing and missing next-action cues in shape-heavy responses.</li>'
-        + '<li>Use row message + OpenAPI location pills and the endpoint inspector to inspect concrete schema locations for each burden.</li>'
+        + '<li>Use row message + OpenAPI location pills and the endpoint inspector to inspect concrete schema locations for each finding.</li>'
         + '</ul>'
         + renderDynamicBurdenSignals(visibleRows, 'contract-shape')
         + '</div>';
@@ -6613,73 +6459,28 @@
     //
     // ============================================================================
 
-		    if (!el.endpointDiagnosticsSection) return;
-
-		    var workflowTabActive = state.activeTopTab === 'workflow';
-		    var shapeTabActive = state.activeTopTab === 'shape';
-		    var inlineMount = findInlineInspectorMount(state.selectedEndpointId);
-		    // Never render a detached bottom inspector module. The inspector mounts inline beneath
-		    // the selected endpoint row inside the family surface.
-		    el.endpointDiagnosticsSection.style.display = 'none';
-		    el.endpointDiagnosticsBody.innerHTML = '';
-		    el.endpointDiagnosticsHelp.textContent = '';
-		    state.detachedInspectorVisible = false;
-
-		    // Fallback: if we cannot find an inline mount, render a detached workspace below the
-		    // family table (and provide a sticky in-flow anchor beneath the selected row).
-		    // Inline placement is preferred and should normally be used.
-		    var useDetached = !inlineMount;
-		    if (useDetached) {
-		      inlineMount = el.endpointDiagnosticsBody;
-		      el.endpointDiagnosticsSection.style.display = 'block';
-		      state.detachedInspectorVisible = true;
-		    }
-		    var diagnosticsTitle = el.endpointDiagnosticsSection.querySelector('h2');
-		    if (diagnosticsTitle) {
-		      diagnosticsTitle.textContent = workflowTabActive
-		        ? 'Workflow Guidance — endpoint continuity inspector'
-	        : shapeTabActive
-	        ? 'Response Shape — endpoint pain inspector'
-	        : 'Contract Issues — endpoint inspector';
-	    }
-	    var diagnosticsEyebrow = el.endpointDiagnosticsSection ? el.endpointDiagnosticsSection.querySelector('.section-heading .eyebrow') : null;
-	    if (diagnosticsEyebrow) {
-	      diagnosticsEyebrow.textContent = 'Endpoint inspector';
-	    }
-    if (workflowTabActive) {
-      el.endpointDiagnosticsSection.classList.add('endpoint-diagnostics-workflow-compact');
-    } else {
-      el.endpointDiagnosticsSection.classList.remove('endpoint-diagnostics-workflow-compact');
-    }
-    if (shapeTabActive) {
-      el.endpointDiagnosticsSection.classList.add('endpoint-diagnostics-shape-compact');
-    } else {
-      el.endpointDiagnosticsSection.classList.remove('endpoint-diagnostics-shape-compact');
-    }
-
-		    var detail = state.selectedEndpointId ? endpointDetailForId(state.selectedEndpointId) : null;
-		    var hasValidSelection = !!detail && hasValidSelectedEndpointInCurrentView();
-		    document.body.classList.toggle('has-endpoint-selection', hasValidSelection);
-
+			    var detail = state.selectedEndpointId ? endpointDetailForId(state.selectedEndpointId) : null;
+			    var hasValidSelection = !!detail && hasValidSelectedEndpointInCurrentView();
+			    document.body.classList.toggle('has-endpoint-selection', hasValidSelection);
+	
+			    var inlineMount = findInlineInspectorMount(state.selectedEndpointId);
+			    // The endpoint workspace renders inline beneath the selected endpoint row.
+			    // The detached bottom "Endpoint Inspector" panel has been removed.
+			    if (!inlineMount) return;
+	
 			    if (!hasValidSelection) {
 			      inlineMount.innerHTML = renderEndpointDiagnosticsEmptyState();
 			      bindEndpointDiagnosticsInteractions(inlineMount);
 			      syncSelectedEndpointHighlight();
 			      return;
 			    }
-
-	    syncSelectedEndpointHighlight();
-
-		    var endpoint = detail.endpoint || {};
-		    var findings = findingsForActiveLens((detail.findings || []));
-			    // Keep the inspector chrome stable: selected endpoint identity is shown in the
-			    // inspector header block itself (method/path + issue count). Avoid mixing in a
-			    // second "helper" line that can go stale across selection/filter changes.
-			    el.endpointDiagnosticsHelp.textContent = '';
-
-					    var body = buildEndpointDiagnosticsBody(detail, findings);
-					    inlineMount.innerHTML = body;
-					    bindEndpointDiagnosticsInteractions(inlineMount);
+	
+			    syncSelectedEndpointHighlight();
+	
+			    var findings = findingsForActiveLens((detail.findings || []));
+			    var body = buildEndpointDiagnosticsBody(detail, findings);
+			    inlineMount.innerHTML = body;
+			    bindEndpointDiagnosticsInteractions(inlineMount);
 			  }
 
   function summarizeWorkflowHeaderSignals(detail) {
@@ -7492,7 +7293,7 @@
 	  }
 
 	  function rowsInScopeAll() {
-	    // All endpoints that match the current "lens" filters (search/category/burden/family pressure),
+	    // All endpoints that match the current "lens" filters (search/category/family pressure),
 	    // regardless of evidence-only vs include-no-issue mode.
 	    var counts = {};
 	    function lensCount(row) {
@@ -7504,9 +7305,13 @@
 
 	    var rows = scopedRows(state.payload.endpoints || []);
 
-	    // Category/burden lenses define an "issue-carrying" slice. Endpoints with no in-lens
-	    // findings should not be treated as matching that lens.
-	    if (state.filters.category !== 'all' || state.filters.burden !== 'all') {
+	    // Tabs and category filters define an "issue-carrying" slice. Endpoints with no in-lens
+	    // findings should not be treated as matching that slice (even if "include no-issue rows"
+	    // is enabled), otherwise Workflow/Shape become dominated by empty rows.
+	    var requiresEvidenceSlice = (state.filters.category !== 'all')
+	      || state.activeTopTab === 'workflow'
+	      || state.activeTopTab === 'shape';
+	    if (requiresEvidenceSlice) {
 	      rows = rows.filter(function (row) { return lensCount(row) > 0; });
 	    }
 
@@ -7533,7 +7338,7 @@
 	    var rows = rowsInScopeAll();
 
 	    // Evidence-only mode must be based on *in-scope* findings, not total findings,
-	    // otherwise category/burden changes can leave stale "issue counts" visible.
+	    // otherwise category changes can leave stale "issue counts" visible.
 	    if (!state.filters.includeNoIssueRows) {
 	      rows = rows.filter(function (row) { return lensCount(row) > 0; });
 	    }
@@ -7721,7 +7526,6 @@
 		    } else if (action === 'show-all-matching-families') {
 		      state.filters.search = '';
 		      state.filters.category = 'all';
-		      state.filters.burden = 'all';
 		      state.filters.familyPressure = 'all';
 		      state.filters.includeNoIssueRows = false;
 		      state.familyTableShowAll = true;
@@ -7737,23 +7541,17 @@
 	      // Return to the family table surface without changing the active tab or clearing filters.
 	      // This collapses family/endpoint drill expansions and restores the prior pre-drill table state when available.
 	      restoreFamilyTableBackState();
-	    } else if (action === 'reset-burden') {
-	      state.filters.burden = 'all';
-	      state.filters.category = 'all';
-	      state.familyTableShowAll = false;
 	    } else if (action === 'show-all-families') {
       state.familyTableShowAll = true;
     } else if (action === 'show-all-workflows') {
       state.filters.search = '';
       state.filters.category = 'all';
-      state.filters.burden = 'all';
       state.filters.familyPressure = 'all';
     } else if (action === 'include-no-issue-rows') {
       state.filters.includeNoIssueRows = true;
 	    } else if (action === 'clear-table-filters') {
 	      state.filters.search = '';
 	      state.filters.category = 'all';
-	      state.filters.burden = 'all';
 	      state.filters.familyPressure = 'all';
 	      state.filters.includeNoIssueRows = false;
 	      state.familyTableShowAll = false;
@@ -7767,7 +7565,6 @@
 	      if (state.activeTopTab === 'spec-rule') {
 	        state.filters.search = '';
 	        state.filters.category = 'spec-rule';
-	        state.filters.burden = 'all';
 	        state.filters.familyPressure = 'all';
 	        state.filters.includeNoIssueRows = false;
 	        state.familyTableBackState = null;
@@ -7811,7 +7608,6 @@
     if (action === 'clear-search') return 'Clear search';
     if (action === 'reset-category') return 'Reset category';
     if (action === 'show-all-matching-families') return 'Show all matching families';
-    if (action === 'reset-burden') return 'Reset burden';
     if (action === 'show-all-families') return 'Show all families in current scope';
     if (action === 'clear-table-filters') return 'Clear table filters';
     if (action === 'show-all-workflows') return 'Show all workflow patterns';
