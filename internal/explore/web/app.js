@@ -4041,12 +4041,12 @@
 	    }
 
 	    if (driverKey === 'shape') {
-	      if (/deep nesting/.test(blob)) return 'Deep nesting hides the outcome and handoff fields';
-	      if (/duplicated state/.test(blob)) return 'Duplicated state creates ambiguity about what is authoritative';
-	      if (/internal fields|incidental/.test(blob)) return 'Incidental/internal fields encourage brittle client coupling';
-	      if (/snapshot-heavy|storage-shaped/.test(blob)) return 'Storage-shaped payload buries task outcome and next action';
-	      if (/enum|weak typing|typing/.test(blob)) return 'Weak typing (missing enums/constraints) increases client guesswork';
-	      return 'Hard-to-parse response shape (outcome and next action are easy to miss)';
+	      if (/deep nesting/.test(blob)) return 'Problem: Deep nesting hides the outcome. Effect: Clients hunt across layers.';
+	      if (/duplicated state/.test(blob)) return 'Problem: Duplicated state blurs authority. Effect: Clients reconcile conflicting fields.';
+	      if (/internal fields|incidental/.test(blob)) return 'Problem: Internal fields dominate payloads. Effect: Clients couple to storage details.';
+	      if (/snapshot-heavy|storage-shaped/.test(blob)) return 'Problem: Snapshot-heavy payloads bury results. Effect: Clients miss outcome and next step.';
+	      if (/enum|weak typing|typing/.test(blob)) return 'Problem: Weak typing leaves gaps. Effect: Clients guess valid states.';
+	      return 'Problem: Response shape is hard to scan. Effect: Outcomes and next steps are easy to miss.';
 	    }
 
 	    if (/parameter naming/.test(blob)) return 'Parameter naming drift breaks reuse across sibling routes';
@@ -4664,7 +4664,8 @@
 	          : ranked.driver === 'shape'
 	          ? 'response-shape risk'
 	          : 'contract drift risk');
-	        return renderFamilyTableClamp(primaryRisk, 'family-table-clamp family-table-clamp-3 family-table-clamp-risk');
+	        var clampClass = (shape ? 'family-table-clamp family-table-clamp-risk' : 'family-table-clamp family-table-clamp-3 family-table-clamp-risk');
+	        return renderFamilyTableClamp(primaryRisk, clampClass);
 	      }
 	    });
 
