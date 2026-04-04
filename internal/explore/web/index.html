@@ -13,7 +13,7 @@
       <h1>api-doctor explore</h1>
       <p id="runContext" class="subtle"></p>
     </div>
-    <a href="/api/payload" class="button" target="_blank" rel="noopener">View payload</a>
+    <a href="/api/payload" class="button" target="_blank" rel="noopener" title="Inspect the raw analyzer output backing this view.">View payload</a>
   </header>
 
 	  <main class="layout">
@@ -44,7 +44,8 @@
           <input id="includeNoIssueRows" type="checkbox">
         </label>
       </div>
-	      <p id="lensControlHint" class="subtle lens-control-hint" aria-live="polite"></p>
+	      <div id="lensControlHint" class="filter-summary-bar" aria-live="polite"></div>
+	      <div id="filterEmptyState" class="filter-empty-state" aria-live="polite"></div>
 	    </section>
 
 	    <section id="workflowSection" class="section workflow-section" style="display:none;">

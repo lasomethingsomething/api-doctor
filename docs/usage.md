@@ -291,6 +291,8 @@ Consistency/drift remains available as a supporting inspector/evidence perspecti
 Explorer UI clarity goals:
 - Each top-level lens uses its own accent styling intentionally (focus/CTA/scope cues only).
 - Family headers and empty/no-match cards are designed to be scannable: one scope sentence + only real recovery actions.
+- The filter row is followed by a compact **Current filters** bar; when the current combination matches nothing (especially in Contract Issues), the UI explains why and offers specific recovery actions.
+- The header utility action **View payload** opens the raw analyzer payload backing the Explorer UI.
 
 ### Why you would use it
 

@@ -147,8 +147,14 @@ func filtersRegressionHarness() string {
   function assertScrollTargetsAllowed(tab, step, failures) {
     var bad = scrollIntoViewCalls.filter(function (c) {
       var cls = (c.className || '');
-      // Allowed: scroll to the inspector header only.
-      return !(cls.indexOf('inspector-workspace-head') !== -1 || cls.indexOf('section-heading') !== -1);
+      // Allowed:
+      // - scroll to the inspector header only
+      // - scroll to the family insight panel when "Show insight" is clicked
+      return !(
+        cls.indexOf('inspector-workspace-head') !== -1 ||
+        cls.indexOf('section-heading') !== -1 ||
+        cls.indexOf('family-row-insight') !== -1
+      );
     });
     if (bad.length) {
       failures.push({ kind: 'unexpected-scroll-into-view', tab: tab, step: step, got: bad.slice(0, 3) });
@@ -208,10 +214,10 @@ func filtersRegressionHarness() string {
   }
 
   function assertScopeIncludes(needle, tab, step, failures) {
-    var strip = document.querySelector('.active-scope-strip');
-    var text = strip ? (strip.textContent || '') : '';
+    var bar = document.getElementById('lensControlHint');
+    var text = bar ? (bar.textContent || '') : '';
     if (text.toLowerCase().indexOf(String(needle || '').toLowerCase()) === -1) {
-      failures.push({ kind: 'scope-strip', tab: tab, step: step, expected_includes: needle, got: text });
+      failures.push({ kind: 'filter-summary', tab: tab, step: step, expected_includes: needle, got: text });
     }
   }
 
@@ -292,8 +298,8 @@ func filtersRegressionHarness() string {
                       assertInspectorEndpointIncludes('/tax-provider', tabId, 'inspect-tax-1', failures);
                       assertScopeIncludes(
                         tabId === 'workflow'
-                          ? 'workflow'
-                          : (tabId === 'shape' ? 'contract shape' : 'spec'),
+                          ? 'workflow burden'
+                          : (tabId === 'shape' ? 'contract shape' : 'spec rule'),
                         tabId,
                         'scope-spec-rule',
                         failures
@@ -332,7 +338,7 @@ func filtersRegressionHarness() string {
                             window.setTimeout(function () {
                               assertNestedCount(2, '/customer-wishlist', tabId, 'expand-wishlist', failures);
                               assertNestedHeaders(tabId, '/customer-wishlist', 'headers-wishlist', failures);
-                              assertScopeIncludes('contract', tabId, 'scope-contract-shape', failures);
+                              assertScopeIncludes('contract shape', tabId, 'scope-contract-shape', failures);
                               resolve(failures);
                             }, 120);
                           }, 120);

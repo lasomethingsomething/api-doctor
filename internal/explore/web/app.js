@@ -43,6 +43,7 @@
     familyPriorityFilter: document.getElementById("familyPriorityFilter"),
     includeNoIssueRows: document.getElementById("includeNoIssueRows"),
     lensControlHint: document.getElementById("lensControlHint"),
+    filterEmptyState: document.getElementById("filterEmptyState"),
     endpointDiagnosticsSection: document.getElementById("endpointDiagnosticsSection"),
     endpointDiagnosticsHelp: document.getElementById("endpointDiagnosticsHelp"),
     endpointDiagnosticsBody: document.getElementById("endpointDiagnosticsBody"),
@@ -219,6 +220,7 @@
 	    renderQuickActions();
 	    renderResetControl();
 	    syncControls();
+	    renderFilterEmptyState();
 	    syncLensVisualIdentity();
 	    renderWorkflowChains();
 	    renderFamilySurface();
@@ -689,11 +691,18 @@
 	    return 'Repeated across current view';
 	  }
 
-	  function renderEndpointDiagnosticsEmptyState() {
-	    return '<div class="empty">'
-	      + '<p class="subtle">Select an endpoint from the expanded family row above to inspect its summary, evidence, drift, and contract improvements.</p>'
-	      + '</div>';
-	  }
+  function renderEndpointDiagnosticsEmptyState() {
+    var families = familySummaries();
+    if (!families.length) {
+      return '<div class="empty">'
+        + '<strong>Nothing to inspect yet</strong>'
+        + '<p class="subtle">No families match the current filters, so no endpoint can be selected. Widen the filters above to continue.</p>'
+        + '</div>';
+    }
+    return '<div class="empty">'
+      + '<p class="subtle">Select an endpoint from an expanded family row above to inspect summary, evidence, drift, and contract improvements.</p>'
+      + '</div>';
+  }
 
 	  function evidenceSectionTitleForActiveLens() {
 	    if (state.activeTopTab === 'workflow') return 'Evidence of workflow continuity risk';
@@ -1951,51 +1960,7 @@
     }
 
 	    if (el.lensControlHint) {
-	      function burdenScopeLabel() {
-	        if (state.filters.burden === 'all') return 'all burdens';
-	        if (state.filters.burden === 'workflow-burden') return 'workflow guidance';
-	        if (state.filters.burden === 'contract-shape') return 'response shape';
-	        return state.filters.burden.replaceAll('-', ' ');
-	      }
-	      function familyScopeLabel() {
-	        if (state.filters.familyPressure === 'all') return 'all families';
-	        return state.filters.familyPressure + '-pressure families';
-	      }
-	      function searchScopeLabel() {
-	        if (!state.filters.search) return '';
-	        return 'current search "' + state.filters.search + '"';
-	      }
-
-	      var hint = '';
-	      el.lensControlHint.classList.remove('lens-hint-spec-rule', 'lens-hint-workflow', 'lens-hint-shape');
-		      if (specRuleTabActive) {
-		        var parts = ['OpenAPI rule violations + consistency drift'];
-		        var searchLabel = searchScopeLabel();
-		        if (searchLabel) parts.push(searchLabel);
-		        parts.push(burdenScopeLabel());
-		        parts.push(familyScopeLabel());
-		        hint = 'Contract Issues scope: ' + parts.join(', ') + '.';
-	        el.lensControlHint.classList.add('lens-hint-spec-rule');
-	      } else if (workflowTabActive) {
-	        var parts = [];
-	        var searchLabel = searchScopeLabel();
-	        if (searchLabel) parts.push(searchLabel);
-	        parts.push(burdenScopeLabel());
-	        parts.push(familyScopeLabel());
-	        hint = 'Workflow Guidance scope: ' + parts.join(', ') + '.';
-	        el.lensControlHint.classList.add('lens-hint-workflow');
-	      } else if (shapeTabActive) {
-	        var parts = [];
-	        var searchLabel = searchScopeLabel();
-	        if (searchLabel) parts.push(searchLabel);
-	        parts.push(burdenScopeLabel());
-	        parts.push(familyScopeLabel());
-	        hint = 'Response Shape scope: ' + parts.join(', ') + '.';
-	        el.lensControlHint.classList.add('lens-hint-shape');
-	      }
-	      el.lensControlHint.textContent = hint;
-	      el.lensControlHint.title = hint;
-	      el.lensControlHint.style.display = hint ? 'block' : 'none';
+	      el.lensControlHint.innerHTML = formatFilterSummaryHtml();
 	    }
 	  }
 
@@ -2247,10 +2212,12 @@
         || state.filters.familyPressure !== 'all'
         || state.filters.includeNoIssueRows
         || state.familyTableBackState);
-      var recovery = hasWidenAction ? renderRecoveryActions(['clear-table-filters']) : '';
+      // Contract Issues no-match recovery belongs in the single empty-state block under the filter bar.
+      // Keep the surface body minimal so we do not duplicate guidance in multiple panels.
+      var recovery = (state.activeTopTab === 'spec-rule') ? '' : (hasWidenAction ? renderRecoveryActions(['clear-table-filters']) : '');
       el.familySurface.innerHTML = '<div class="empty">'
         + '<strong>No matching families.</strong>'
-        + '<p class="subtle">No families match the current scope.' + (hasWidenAction ? ' Clear table filters to widen the view.' : '') + '</p>'
+        + '<p class="subtle">No families match the current scope.' + (state.activeTopTab === 'spec-rule' ? ' Use the suggestions above to widen filters.' : (hasWidenAction ? ' Clear table filters to widen the view.' : '')) + '</p>'
         + recovery
         + '</div>';
       bindRecoveryButtons(el.familySurface);
@@ -2303,6 +2270,19 @@
 			        renderEndpointDiagnostics();
 			        renderEndpointDetail();
 			        syncSelectedEndpointHighlight();
+
+			        // "Show insight" should take the user to the family insight workspace.
+			        if (nextFamilyInsight) {
+			          requestAnimationFrame(function () {
+			            var row = el.familySurface
+			              ? el.familySurface.querySelector('tr.family-inline-insight-row[data-family="' + family + '"]')
+			              : null;
+			            var target = row ? (row.querySelector('.family-row-insight') || row) : null;
+			            if (target && target.scrollIntoView) {
+			              target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+			            }
+			          });
+			        }
 			      });
 			      var isExpanded = state.expandedFamilyInsight === (btn.getAttribute("data-insight-toggle") || "");
 			      btn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
@@ -2481,12 +2461,66 @@
 	    return 'Contract Issues';
 	  }
 
-	  function formatScopeValue(value, fallback) {
-	    if (value === undefined || value === null) return fallback;
-	    var v = String(value);
-	    if (!v) return fallback;
-	    return v;
-	  }
+  function formatScopeValue(value, fallback) {
+    if (value === undefined || value === null) return fallback;
+    var v = String(value);
+    if (!v) return fallback;
+    return v;
+  }
+
+  function formatFilterSummaryHtml() {
+    var search = state.filters.search ? state.filters.search : '';
+    var searchLabel = search ? '<code>' + escapeHtml(search) + '</code>' : '<span class="filter-summary-muted">none</span>';
+    var categoryLabel = (state.filters.category === 'all')
+      ? '<span class="filter-summary-muted">all</span>'
+      : '<code>' + escapeHtml(state.filters.category.replaceAll('-', ' ')) + '</code>';
+    var burdenLabel = (state.filters.burden === 'all')
+      ? '<span class="filter-summary-muted">all</span>'
+      : '<code>' + escapeHtml(state.filters.burden.replaceAll('-', ' ')) + '</code>';
+    var pressureLabel = (state.filters.familyPressure === 'all')
+      ? '<span class="filter-summary-muted">all</span>'
+      : '<code>' + escapeHtml(state.filters.familyPressure) + '</code>';
+    var noIssueLabel = state.filters.includeNoIssueRows ? '<code>shown</code>' : '<code>hidden</code>';
+
+    return '<strong>Current filters:</strong> '
+      + 'Search ' + searchLabel
+      + ' <span class="filter-summary-dot">·</span> Category ' + categoryLabel
+      + ' <span class="filter-summary-dot">·</span> Burden ' + burdenLabel
+      + ' <span class="filter-summary-dot">·</span> Family pressure ' + pressureLabel
+      + ' <span class="filter-summary-dot">·</span> No-issue rows ' + noIssueLabel;
+  }
+
+  function renderFilterEmptyState() {
+    if (!el.filterEmptyState) return;
+    el.filterEmptyState.innerHTML = '';
+
+    // Only show this prescriptive empty state for the Contract Issues lens.
+    if (state.activeTopTab !== 'spec-rule') return;
+
+    var families = familySummaries();
+    var rows = filteredRows();
+    if (families.length || rows.length) return;
+
+    var actions = '<div class="filter-empty-actions">'
+      + '<button type="button" class="secondary-action" data-recovery-action="clear-search">Clear search</button>'
+      + '<button type="button" class="secondary-action" data-recovery-action="reset-category">Reset category</button>'
+      + '<button type="button" class="secondary-action" data-recovery-action="show-all-matching-families">Show all matching families</button>'
+      + (!state.filters.includeNoIssueRows ? '<button type="button" class="secondary-action" data-recovery-action="include-no-issue-rows">Include no-issue rows</button>' : '')
+      + '</div>';
+
+    el.filterEmptyState.innerHTML = '<section class="filter-empty-panel" aria-label="No matching families">'
+      + '<p class="filter-empty-title"><strong>No matching families</strong></p>'
+      + '<p class="filter-empty-lead">No contract-issue families match the current filter combination.</p>'
+      + '<p class="filter-empty-subtitle"><strong>Why this happened</strong></p>'
+      + '<ul class="filter-empty-bullets">'
+      + '<li>Your current search/category filter is narrower than the available evidence in this slice.</li>'
+      + '</ul>'
+      + '<p class="filter-empty-subtitle"><strong>Try one of these</strong></p>'
+      + actions
+      + '</section>';
+
+    bindRecoveryButtons(el.filterEmptyState);
+  }
 
 		  function renderActiveScopeStrip(options) {
 		    var opts = options || {};
@@ -2871,33 +2905,29 @@
     });
   }
 
-	  function renderWorkflowEmptyState(mode) {
-	    var scopeLine = renderActiveScopeStrip({ dense: true });
-	    if (mode === 'absent') {
-	      return '<div class="workflow-no-match workflow-no-match-final">'
-	        + scopeLine
-	        + '<p class="workflow-empty-title"><strong>No inferred workflow chains</strong></p>'
-	        + '<p class="workflow-empty-copy">This spec currently reads as isolated endpoints rather than a linked call sequence, so there is nothing to expand in this section.</p>'
-	        + '<p class="workflow-empty-note">That is a final state for this spec, not a filter mismatch.</p>'
-	        + '</div>';
+  function renderWorkflowEmptyState(mode) {
+    if (mode === 'absent') {
+      return '<div class="workflow-no-match workflow-no-match-final">'
+        + '<p class="workflow-empty-title"><strong>No inferred workflow chains</strong></p>'
+        + '<p class="workflow-empty-copy">This spec currently reads as isolated endpoints rather than a linked call sequence, so there is nothing to expand in this section.</p>'
+        + '<p class="workflow-empty-note">That is a final state for this spec, not a filter mismatch.</p>'
+        + '</div>';
+    }
+
+    if (!filteredRows().length) {
+      return '<div class="workflow-no-match">'
+        + '<p class="workflow-empty-title"><strong>No workflows match the current scope</strong></p>'
+        + '<p class="workflow-empty-copy">Clear filters or show all workflow patterns to widen the view.</p>'
+        + renderRecoveryActions(['show-all-workflows'])
+        + '</div>';
 	    }
 
-	    if (!filteredRows().length) {
-	      return '<div class="workflow-no-match">'
-	        + scopeLine
-	        + '<p class="workflow-empty-title"><strong>No workflows match the current scope</strong></p>'
-	        + '<p class="workflow-empty-copy">Clear filters or show all workflow patterns to widen the view.</p>'
-	        + renderRecoveryActions(['show-all-workflows'])
-	        + '</div>';
-	    }
-
-	    return '<div class="workflow-no-match">'
-	      + scopeLine
-	      + '<p class="workflow-empty-title"><strong>No workflows match the current scope</strong></p>'
-	      + '<p class="workflow-empty-copy">Show all workflow patterns to widen this section without changing tabs.</p>'
-	      + renderRecoveryActions(['show-all-workflows'])
-	      + '</div>';
-	  }
+    return '<div class="workflow-no-match">'
+      + '<p class="workflow-empty-title"><strong>No workflows match the current scope</strong></p>'
+      + '<p class="workflow-empty-copy">Show all workflow patterns to widen this section without changing tabs.</p>'
+      + renderRecoveryActions(['show-all-workflows'])
+      + '</div>';
+  }
 
   function groupChainsByKind(chains) {
     var byKind = {};
@@ -4155,28 +4185,16 @@
 		      return '<span class="subtle">No endpoints in view</span>';
 		    }
 
-			    if (!endpointsExpanded) {
-			      return '<div class="family-next-click-cell">'
-			        + '<p class="family-next-click-copy">Expand endpoints to see the concrete endpoint evidence for this family.</p>'
-			        + '<div class="family-next-click-actions">'
-			        + '<button type="button" class="tertiary-action family-next-click-btn" data-expand-endpoints="' + escapeHtml(familyName) + '" title="Expand inline endpoint rows for this family">Expand endpoints</button>'
-			        + '<button type="button" class="tertiary-action family-next-click-btn" data-insight-toggle="' + escapeHtml(familyName) + '" aria-expanded="' + (insightExpanded ? 'true' : 'false') + '" title="Open the family insight panel">' + (insightExpanded ? 'Hide insight' : 'Show insight') + '</button>'
-			        + '</div>'
-			        + '</div>';
-			    }
+    var copy = endpointsExpanded
+      ? 'Use Hide endpoints in the expanded section header to collapse the endpoint list; use Show insight for the family summary.'
+      : 'Click the endpoint count to review endpoint rows; use Show insight for the family summary.';
 
-		    var bestEndpointId = bestEndpointIdForFamily(familyName);
-		    var inspectDisabled = bestEndpointId ? '' : ' disabled';
-		    var inspectTitle = bestEndpointId ? 'Select the highest-impact endpoint for this family' : 'No endpoint is available to inspect in this view';
-
-			    return '<div class="family-next-click-cell">'
-			      + '<p class="family-next-click-copy">Inspect the top endpoint to view exact evidence and OpenAPI grounding.</p>'
-			      + '<div class="family-next-click-actions">'
-			      + '<button type="button" class="tertiary-action family-next-click-btn" data-inspect-top-endpoint="' + escapeHtml(bestEndpointId) + '"' + inspectDisabled + ' title="' + escapeHtml(inspectTitle) + '">Inspect top endpoint</button>'
-			      + '<button type="button" class="tertiary-action family-next-click-btn" data-expand-endpoints="' + escapeHtml(familyName) + '" title="Collapse inline endpoint rows">Hide endpoints</button>'
-			      + '<button type="button" class="tertiary-action family-next-click-btn" data-insight-toggle="' + escapeHtml(familyName) + '" aria-expanded="' + (insightExpanded ? 'true' : 'false') + '" title="Open the family insight panel">' + (insightExpanded ? 'Hide insight' : 'Show insight') + '</button>'
-			      + '</div>'
-			      + '</div>';
+    return '<div class="family-next-click-cell">'
+      + '<p class="family-next-click-copy">' + escapeHtml(copy) + '</p>'
+      + '<div class="family-next-click-actions">'
+      + '<button type="button" class="tertiary-action family-next-click-btn" data-insight-toggle="' + escapeHtml(familyName) + '" aria-expanded="' + (insightExpanded ? 'true' : 'false') + '" title="Open the family insight panel">' + (insightExpanded ? 'Hide insight' : 'Show insight') + '</button>'
+      + '</div>'
+      + '</div>';
 			  }
 
 			  function buildFamilyRankedSummary(family) {
@@ -4809,11 +4827,14 @@
 
 	    var familyLabel = humanFamilyLabel(familyName);
 	    var familyHeader = '<p class="family-endpoint-table-title">Endpoints in <code>' + escapeHtml(familyLabel) + '</code> family</p>';
-	    var backToTableControl = '<button type="button" class="secondary-action family-endpoint-back"'
-	      + ' data-recovery-action="back-to-family-table"'
-	      + ' aria-label="Back to family table" title="Back to family table">'
-	      + 'Back to family table'
-	      + '</button>';
+	    var backToTableControl = '';
+	    if (hasFamilyDrillActive()) {
+	      backToTableControl = '<button type="button" class="secondary-action family-endpoint-back"'
+	        + ' data-recovery-action="back-to-family-table"'
+	        + ' aria-label="Back to family table" title="Back to family table">'
+	        + 'Back to family table'
+	        + '</button>';
+	    }
 	    var collapseControl = '<button type="button" class="tertiary-action family-endpoint-toggle" data-expand-endpoints="' + escapeHtml(familyName) + '" aria-label="Hide endpoints" title="Hide endpoints">'
 	      + '<span class="family-endpoint-toggle-label">Hide endpoints</span>'
 	      + '<span class="family-endpoint-toggle-chevron" aria-hidden="true"></span>'
@@ -4918,6 +4939,14 @@
 	      + '<p class="subtle">Endpoint rows stay attached to this family so the ownership and investigation flow stay together.</p>'
 	      + '</div>'
       + '<table class="nested-endpoint-table">'
+      + '<colgroup>'
+      + '<col class="nested-col-path">'
+      + '<col class="nested-col-method">'
+      + '<col class="nested-col-issue">'
+      + '<col class="nested-col-severity">'
+      + '<col class="nested-col-instance">'
+      + '<col class="nested-col-actions">'
+      + '</colgroup>'
       + '<thead>'
       + '<tr>'
       + '<th>Path</th>'
@@ -4985,7 +5014,6 @@
       : '';
 
     var copy = '<div class="context-block family-context-block">';
-    copy += renderActiveScopeStrip({ dense: true });
     copy += '<p class="context-summary">' + escapeHtml(summaryLine) + '</p>';
     if (state.activeTopTab === 'shape' && summaries && summaries.length) {
       var shapeTotals = collectShapeSignalTotals(summaries);
@@ -5576,7 +5604,6 @@
 			      ? (' data-workspace-collapse-target="' + escapeHtml(collapseTarget) + '"')
 			      : '';
 			    body += '<div class="' + workspaceBodyClass + '"' + workspaceBodyAttr + '>';
-			    body += renderActiveScopeStrip({ dense: true });
 
 			    // Workflow Guidance must foreground step-specific continuity guidance first.
 			    // This keeps the workspace from reading like generic contract-rule output.
@@ -6470,7 +6497,7 @@
 		    document.body.classList.toggle('has-endpoint-selection', hasValidSelection);
 
 			    if (!hasValidSelection) {
-			      inlineMount.innerHTML = renderActiveScopeStrip({ dense: true }) + renderEndpointDiagnosticsEmptyState();
+			      inlineMount.innerHTML = renderEndpointDiagnosticsEmptyState();
 			      bindEndpointDiagnosticsInteractions(inlineMount);
 			      syncSelectedEndpointHighlight();
 			      return;
@@ -7523,6 +7550,22 @@
 			  function applyRecoveryAction(action) {
 		    if (action === 'clear-search') {
 		      state.filters.search = '';
+		    } else if (action === 'reset-category') {
+		      state.filters.category = 'all';
+		      state.familyTableShowAll = false;
+		    } else if (action === 'show-all-matching-families') {
+		      state.filters.search = '';
+		      state.filters.category = 'all';
+		      state.filters.burden = 'all';
+		      state.filters.familyPressure = 'all';
+		      state.filters.includeNoIssueRows = false;
+		      state.familyTableShowAll = true;
+		      state.familyTableBackState = null;
+		      state.expandedFamily = '';
+		      state.expandedFamilyInsight = '';
+		      state.expandedEndpointInsightIds = {};
+		      state.expandedEndpointRowFindings = {};
+		      state.detailEvidenceOpenForId = '';
 		    } else if (action === 'back-to-all-families') {
 	      restoreFamilyTableBackState();
 	    } else if (action === 'back-to-family-table') {
@@ -7601,6 +7644,8 @@
     if (action === 'back-to-all-families') return 'Back to all families';
     if (action === 'back-to-family-table') return 'Back to family table';
     if (action === 'clear-search') return 'Clear search';
+    if (action === 'reset-category') return 'Reset category';
+    if (action === 'show-all-matching-families') return 'Show all matching families';
     if (action === 'reset-burden') return 'Reset burden';
     if (action === 'show-all-families') return 'Show all families in current scope';
     if (action === 'clear-table-filters') return 'Clear table filters';

@@ -45,7 +45,8 @@ go run . explore --spec ./adminapi.json --base ./adminapi-v1.json --head ./admin
 How to use it quickly:
 1. Click one of the three top-level lenses/tabs: **Contract Issues**, **Workflow Guidance**, or **Response Shape**.
 2. Each top-level lens uses its own accent styling intentionally (focus/CTA/scope cues), while severity/error styling remains reserved for actual errors and warnings.
-3. Use the **Family investigation clusters** section as the primary entry point — each card explains why that family appears in the current view.
+3. Use the **Current filters** bar under the filter row to confirm scope quickly; when filters match nothing, it shows concrete next actions.
+4. Use the **Family investigation clusters** section as the primary entry point — click an **Endpoints** count to expand/collapse, and use **Show insight** for the family summary.
 4. Use **Endpoint diagnostics** as the persistent selected-endpoint inspection surface across all three lenses.
 5. Read the single-line scope sentence above family tables and empty states, then use the visible recovery buttons to widen scope (only real actions are shown).
 6. In Workflow and Shape lenses, use inspector Summary for burden framing, Exact evidence for grouped messages, and supporting consistency/drift context where relevant.
@@ -106,6 +107,8 @@ Explorer currently emphasizes:
 Recent UI clarity improvements:
 - Lens accent styling is isolated per top-level tab (no cross-tab leakage).
 - Family headers and empty/no-match states are intentionally concise: one scope sentence + only real actions.
+- Contract Issues filter no-match state includes a prescriptive "Why this happened" + "Try one of these" block.
+- Header utility action **View payload** opens the raw analyzer output backing the view.
 
 ## What this is (and is not)
 
