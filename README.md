@@ -166,3 +166,25 @@ go run . tui --spec ./adminapi.json --old ./adminapi-v1.json --new ./adminapi-v2
 ## More detailed command usage
 
 See docs/usage.md for expanded command examples and walkthroughs.
+
+---
+
+## What’s New (April 2026)
+
+- **Explicit Trap Callouts:**
+  - Hidden workflow and shape traps (e.g., context handoff, hidden dependencies, weak next-action modeling, runtime-taught rules, deep nesting, duplicated state, internal field exposure, brittle flows, and outcome-hiding responses) are now surfaced directly in both endpoint and family detail views.
+  - Each trap is visually distinct, developer-focused, and includes “why devs lose time here.”
+- **Product-Fit Checklist:**
+  - [x] Storage-shaped vs task-shaped responses
+  - [x] Hidden dependencies
+  - [x] Weak next-action modeling
+  - [x] Token/context handoff pain
+  - [x] Runtime-taught rules
+  - [x] Deep nesting and duplicated state
+  - [x] Internal/incidental field exposure
+  - [x] Brittle multi-step flows
+  - [x] Response shapes that hide the main outcome
+- **All previous evidence, findings, and diagnostics are preserved and visible.**
+- See [docs/usage.md](docs/usage.md) for practical workflow and shape pain mapping.
+
+---

@@ -16,10 +16,10 @@
     <a href="/api/payload" class="button" target="_blank" rel="noopener">View payload</a>
   </header>
 
-  <main class="layout">
-    <section class="action-bar" aria-label="Quick investigation actions">
-      <div class="quick-actions" id="quickActions"></div>
-      <div class="reset-control" id="resetControl"></div>
+	  <main class="layout">
+	    <section class="action-bar" aria-label="Quick investigation actions">
+	      <div class="quick-actions" id="quickActions"></div>
+	      <div class="reset-control" id="resetControl"></div>
       <div class="lens-controls">
         <label class="field">Search endpoint
           <input id="searchInput" type="search" placeholder="Search path, method, family" list="searchSuggestions" autocomplete="off">
@@ -44,67 +44,38 @@
           <input id="includeNoIssueRows" type="checkbox">
         </label>
       </div>
-      <p id="lensControlHint" class="subtle lens-control-hint" aria-live="polite"></p>
-    </section>
+	      <p id="lensControlHint" class="subtle lens-control-hint" aria-live="polite"></p>
+	    </section>
 
-    <section id="endpointDiagnosticsSection" class="section endpoint-diagnostics-section" style="display:none;">
-      <div class="section-heading">
-        <p class="eyebrow">Endpoint diagnostics</p>
-        <h2>Selected endpoint inspection</h2>
-      </div>
-      <p id="endpointDiagnosticsHelp" class="subtle"></p>
-      <div id="endpointDiagnosticsBody" class="detail-block" aria-live="polite"></div>
-    </section>
+	    <section id="workflowSection" class="section workflow-section" style="display:none;">
+	      <div class="section-heading">
+	        <p class="eyebrow">Workflow Guidance</p>
+	        <h2>Common workflow chains</h2>
+	      </div>
+	      <p id="workflowHelp" class="subtle"></p>
+	      <div id="workflowChains" class="workflow-chains" aria-live="polite"></div>
+	    </section>
 
-    <section class="section">
-      <div class="section-heading">
-        <p class="eyebrow">Primary surface</p>
-        <h2>Family investigation clusters</h2>
-      </div>
-      <p id="familySurfaceHelp" class="subtle"></p>
-      <div id="familySurfaceContext" class="family-surface-context" aria-live="polite"></div>
-      <div id="familySurface" class="family-surface"></div>
-    </section>
+	    <section class="section" id="familySurfaceSection">
+	      <div class="section-heading">
+	        <p class="eyebrow">Primary surface</p>
+	        <h2>Family investigation clusters</h2>
+	      </div>
+	      <p id="familySurfaceHelp" class="subtle"></p>
+	      <div id="familySurfaceContext" class="family-surface-context" aria-live="polite"></div>
+	      <div id="familySurface" class="family-surface"></div>
+	    </section>
 
-    <section id="workflowSection" class="section workflow-section" style="display:none;">
-      <div class="section-heading">
-        <p class="eyebrow">Workflow patterns</p>
-        <h2>Step-by-step call chain surface</h2>
-      </div>
-      <p id="workflowHelp" class="subtle"></p>
-      <div id="workflowChains" class="workflow-chains" aria-live="polite"></div>
-    </section>
+	    <section id="endpointDiagnosticsSection" class="section endpoint-diagnostics-section" style="display:none;">
+	      <div class="section-heading">
+	        <p class="eyebrow">Endpoint inspector</p>
+	        <h2>Contract Issues — endpoint inspector</h2>
+	      </div>
+	      <p id="endpointDiagnosticsHelp" class="subtle"></p>
+	      <div id="endpointDiagnosticsBody" class="detail-block" aria-live="polite"></div>
+	    </section>
 
-    <section class="evidence-layout">
-      <div class="section">
-        <div class="section-heading">
-          <p class="eyebrow">Evidence list</p>
-          <h2>Endpoints with concrete issues</h2>
-        </div>
-        <div id="listContext" class="list-context" aria-live="polite"></div>
-        <table>
-          <thead>
-            <tr>
-              <th>Endpoint</th>
-              <th>Primary cause</th>
-              <th>Evidence</th>
-            </tr>
-          </thead>
-          <tbody id="endpointRows"></tbody>
-        </table>
-      </div>
-
-      <div class="section detail-pane" style="display:none;" aria-hidden="true">
-        <div class="section-heading">
-          <p class="eyebrow">Detail</p>
-          <h2>Exact issue evidence</h2>
-        </div>
-        <p id="detailHelp" class="subtle"></p>
-        <div id="endpointDetail" class="detail-block"></div>
-      </div>
-    </section>
-
-  </main>
+	  </main>
 
   <script src="/static/app.js"></script>
 </body>

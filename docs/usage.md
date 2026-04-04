@@ -117,6 +117,48 @@ This is documentation for local development usage only. Packaging and external t
 4. Check Workflows totals for single-step and multi-step usability signal.
 5. If comparing releases, run `go run . diff --old ./adminapi-v1.json --new ./adminapi-v2.json`.
 
+## April 2026: DX Trap Guidance & Product-Fit
+
+api-doctor now surfaces:
+- Storage-shaped vs task-shaped responses
+- Hidden dependencies and implicit prerequisites
+- Weak or absent next-action modeling
+- Token/context handoff pain (context invalidation, cart loss, access key confusion)
+- Runtime-taught rules (schema gaps, behavioral rules only learned at runtime)
+- Deep nesting and duplicated state
+- Internal/incidental field exposure
+- Brittle multi-step flows
+- Responses that hide the main outcome
+
+**Where to find these:**
+- Endpoint row detail (expand for explicit trap callouts)
+- Inspector detail (persistent, with workflow chain context)
+- Family insight panels (summarized per family)
+
+**All previous evidence, findings, and diagnostics are preserved.**
+
+### Product-fit audit notes
+
+Implementation checklist:
+- Keep the Workflow lens centered on handoff burden: required IDs, tokens, auth/context spread, and what the next valid call is.
+- Keep the Shape lens centered on task outcome visibility: storage-shaped payloads, deep nesting, duplicated state, internal-field exposure, and outcome-first redesign hints.
+- Preserve the full evidence path for every surfaced trap: lead summary, exact grouped evidence, OpenAPI grounding, workflow-chain context, and consistency/drift context where relevant.
+- Avoid replacing workflow language with schema-only language. The primary question should stay: "can a caller safely continue the task from this response?"
+- Add regression coverage whenever detail surfaces are consolidated so preservation claims are verified by tests, not only by UI comments.
+
+Still-missing capabilities:
+- No first-class field-level handoff model yet. The explorer infers hidden dependencies from findings and wording, but it does not show a deterministic "this response field feeds that next request field" map.
+- No explicit runtime-vs-contract split for "runtime-taught rules". The tool can flag likely burden, but it cannot prove whether the rule is undocumented runtime behavior or merely weak schema design.
+- No end-to-end state machine for brittle flows. Inferred chains are useful, but they do not yet model required/optional branches, failure exits, retries, or async polling lifecycles as first-class workflow objects.
+- No dedicated token/context lifecycle view. Token/context handoff is surfaced in summaries and chain clues, but not as a single inspectable artifact showing where context is created, mutated, invalidated, and consumed.
+- No automated preservation test for the explorer consolidation. Current preservation is documented in code comments and reflected in the rendered tabs/drawers, but parity is not enforced by snapshot or DOM-level tests.
+
+Preservation confirmation:
+- Existing displayed information appears preserved in the current consolidated explorer. Exact evidence, OpenAPI grounding, spec-rule details, cleaner-contract guidance, consistency/drift context, workflow-chain context, and shape interpretation still have rendered homes in the inspector and supporting sections.
+- Current preservation evidence is implementation-based, not just narrative: see the consolidation mapping comment in `internal/explore/web/app.js` and the active inspector tabs/drawers that render each prior surface.
+
+---
+
 ## 1) Analyze
 
 ### What it does
