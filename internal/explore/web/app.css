@@ -3375,10 +3375,16 @@ body.lens-shape .family-row {
    Rows should look neutral unless selected. */
 body.lens-shape .family-table {
   background: #fff;
+  table-layout: fixed;
 }
 
 body.lens-shape .family-row td {
   background: #fff;
+}
+
+body.lens-shape .family-table-head th {
+  padding: 0.44rem 0.42rem;
+  vertical-align: top;
 }
 
 body.lens-shape .family-row:hover td {
@@ -3411,11 +3417,11 @@ body.lens-shape .family-burden-why {
 
 /* Response Shape: make family rows denser (avoid tall blank padding). */
 body.lens-shape .family-row td {
-  padding: 0.42rem 0.44rem;
+  padding: 0.38rem 0.42rem;
 }
 
 body.lens-shape .family-row > td:first-child {
-  padding-left: calc(0.44rem - 3px);
+  padding-left: calc(0.42rem - 3px);
 }
 
 body.lens-shape .family-col-name strong {
@@ -3441,6 +3447,27 @@ body.lens-shape .family-table col.family-col-endpoints {
   width: 96px;
 }
 
+body.lens-shape .family-table col.family-col-name {
+  width: clamp(220px, 18vw, 300px);
+}
+
+body.lens-shape .family-table col.family-col-primary-risk {
+  width: clamp(280px, 22vw, 360px);
+}
+
+body.lens-shape .family-table col.family-col-client-effect {
+  width: clamp(280px, 24vw, 380px);
+}
+
+body.lens-shape .family-table col.family-col-next-click {
+  width: clamp(300px, 24vw, 380px);
+}
+
+/* Ensure family-table chip rows don't add extra top spacing via the shared .chips class. */
+body.lens-shape .family-signal-chips {
+  margin-top: 0;
+}
+
 body.lens-shape .family-signal-chips {
   flex-wrap: wrap;
   overflow: visible;
@@ -3453,16 +3480,24 @@ body.lens-shape .family-signal-chip {
 }
 
 body.lens-shape .family-signal-chip-label {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  display: block;
   overflow: hidden;
-  white-space: normal;
+  white-space: nowrap;
   word-break: normal;
   overflow-wrap: break-word;
   text-overflow: ellipsis;
   line-height: 1.14;
+}
+
+/* Keep Pressure mix compact and top-aligned in collapsed rows. */
+body.lens-shape .pressure-mix-inline {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+body.lens-shape .pressure-mix-chip {
+  padding: 0.12rem 0.32rem;
+  font-size: 0.7rem;
 }
 
 body.lens-shape .chip-primary {
