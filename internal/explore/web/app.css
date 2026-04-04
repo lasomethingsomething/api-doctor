@@ -3492,21 +3492,19 @@ body.lens-shape .family-signal-chips {
 }
 
 body.lens-shape .family-signal-chip {
-  flex: 0 1 auto;
-  max-width: 16rem;
+  flex: 0 1 calc(50% - 0.26rem);
+  max-width: 100%;
   white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 body.lens-shape .family-signal-chip-label {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
+  display: inline;
+  overflow: visible;
   white-space: normal;
   word-break: normal;
   overflow-wrap: break-word;
-  text-overflow: ellipsis;
   line-height: 1.14;
 }
 

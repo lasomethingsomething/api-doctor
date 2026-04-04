@@ -4124,9 +4124,9 @@
 		    var inlineExpand = state.activeTopTab === 'shape';
 		    var expanded = inlineExpand && !!(state.expandedFamilySignals && state.expandedFamilySignals[familyName]);
 
-		    // If total signals are 3 or fewer, render all. If more, keep 3 visible by default
+		    // If total signals are 2 or fewer, render all. If more, keep 2 visible by default
 		    // and let users expand inline (Response Shape) rather than burying labels.
-		    var visibleCount = expanded ? items.length : (items.length <= 3 ? items.length : 3);
+		    var visibleCount = expanded ? items.length : (items.length <= 2 ? items.length : 2);
 		    var visible = items.slice(0, visibleCount);
 		    var hidden = items.slice(visibleCount);
 		    var visibleChips = visible.map(function (c, i) {
@@ -4168,9 +4168,9 @@
 			    var inlineExpand = state.activeTopTab === 'shape';
 			    var expanded = inlineExpand && !!(state.expandedFamilySignals && state.expandedFamilySignals[familyName]);
 
-			    // If total signals are 3 or fewer, render all. If more, keep 3 visible by default
+			    // If total signals are 2 or fewer, render all. If more, keep 2 visible by default
 			    // and let users expand inline (Response Shape) rather than burying labels.
-			    var visibleCount = expanded ? items.length : (items.length <= 3 ? items.length : 3);
+			    var visibleCount = expanded ? items.length : (items.length <= 2 ? items.length : 2);
 			    var visible = items.slice(0, visibleCount).map(function (raw, idx) {
 			      var label = raw ? humanizeSignalLabel(raw) : '—';
 			      var cls = idx === 0 ? 'chip chip-primary family-signal-chip' : 'chip chip-secondary family-signal-chip';
@@ -4184,7 +4184,7 @@
 		    }).join('');
 
 			    var more = '';
-			    if (inlineExpand && items.length > 3) {
+			    if (inlineExpand && items.length > 2) {
 			      var label = expanded ? 'Hide extra signals' : ('Show ' + hidden.length + ' more');
 			      more = '<button type="button" class="tertiary-action family-signal-expand" data-expand-signals="' + escapeHtml(familyName) + '" aria-expanded="' + (expanded ? 'true' : 'false') + '">'
 			        + escapeHtml(label)
