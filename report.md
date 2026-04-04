@@ -140,6 +140,11 @@ Current focus areas:
 - Workflows: single-step and multi-step summaries with preview/detail flows
 - Diff: available only when the TUI is launched with `--old` and `--new`
 
+Explorer UI clarity goals (recent):
+
+- each top-level tab has its own accent styling, used only for focus/CTA/scope cues
+- family headers and empty/no-match cards are intentionally concise: one scope sentence + only real recovery actions
+
 ---
 
 ## Current constraints

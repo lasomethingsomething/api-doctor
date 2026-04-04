@@ -151,7 +151,7 @@ Still-missing capabilities:
 - No explicit runtime-vs-contract split for "runtime-taught rules". The tool can flag likely burden, but it cannot prove whether the rule is undocumented runtime behavior or merely weak schema design.
 - No end-to-end state machine for brittle flows. Inferred chains are useful, but they do not yet model required/optional branches, failure exits, retries, or async polling lifecycles as first-class workflow objects.
 - No dedicated token/context lifecycle view. Token/context handoff is surfaced in summaries and chain clues, but not as a single inspectable artifact showing where context is created, mutated, invalidated, and consumed.
-- No automated preservation test for the explorer consolidation. Current preservation is documented in code comments and reflected in the rendered tabs/drawers, but parity is not enforced by snapshot or DOM-level tests.
+- No snapshot/DOM-level test suite for the explorer UI. There is regression coverage for key explorer behaviors (filters, inspector evidence CTAs, and tab-surface invariants), but not a full rendered-DOM snapshot test harness yet.
 
 Preservation confirmation:
 - Existing displayed information appears preserved in the current consolidated explorer. Exact evidence, OpenAPI grounding, spec-rule details, cleaner-contract guidance, consistency/drift context, workflow-chain context, and shape interpretation still have rendered homes in the inspector and supporting sections.
@@ -282,11 +282,15 @@ It uses the same deterministic analysis/workflow/diff data already produced by t
 
 The Explorer UI is organized around burden lenses:
 
-- **Workflow burden lens**: family cards and workflow chains highlight hidden token/context handoff, weak outcome guidance, brittle sequencing, and auth/header spread. Workflow steps now include explicit "What changed", "Authoritative now", "Next valid action", and trap guidance.
-- **Shape burden lens**: family cards and inspector summaries emphasize storage-shaped DX burden (snapshot-heavy responses, deep nesting, duplicated state, internal-field exposure, unclear source-of-truth, weak outcome/next-action framing).
-- **Spec-rule lens**: rules-based normative findings with explicit REQUIRED/MUST vs SHOULD/RECOMMENDED framing.
+- **Workflow Guidance lens**: family cards and workflow chains highlight hidden token/context handoff, weak outcome guidance, brittle sequencing, and auth/header spread. Workflow steps include explicit "What changed", "Authoritative now", "Next valid action", and trap guidance.
+- **Response Shape lens**: family cards and inspector summaries emphasize storage-shaped DX burden (snapshot-heavy responses, deep nesting, duplicated state, internal-field exposure, unclear source-of-truth, weak outcome/next-action framing).
+- **Contract Issues lens**: rules-based normative findings with explicit REQUIRED/MUST vs SHOULD/RECOMMENDED framing, plus supporting consistency drift.
 
 Consistency/drift remains available as a supporting inspector/evidence perspective (including dedicated inspector mode), not as a competing top-level primary lens.
+
+Explorer UI clarity goals:
+- Each top-level lens uses its own accent styling intentionally (focus/CTA/scope cues only).
+- Family headers and empty/no-match cards are designed to be scannable: one scope sentence + only real recovery actions.
 
 ### Why you would use it
 
