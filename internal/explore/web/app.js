@@ -4560,6 +4560,11 @@
 	    var workflow = state.activeTopTab === 'workflow';
 	    var shape = state.activeTopTab === 'shape';
 
+	    function severityMixHeaderHtml() {
+	      return '<span class="th-title">Severity mix</span>'
+	        + '<span class="th-helper" title="Counts are endpoints in this family with in-scope findings at each severity (High/Med/Low).">endpoint counts</span>';
+	    }
+
 	    function endpointsHeaderHtml() {
 	      return '<span class="th-title">Endpoints</span>'
 	        + '<span class="th-helper" title="Click the endpoint count in a row to expand inline endpoints. Use Inspect endpoint in the nested table to open diagnostics.">click count to expand</span>';
@@ -4581,7 +4586,8 @@
 	      {
 	        key: 'priority',
 	        thClass: 'family-col-priority',
-	        th: (workflow || shape) ? 'Pressure mix' : 'Priority',
+	        thHtml: (workflow || shape) ? severityMixHeaderHtml() : '',
+	        th: (workflow || shape) ? '' : 'Priority',
 	        tdClass: 'family-col-priority',
 	        render: function (family) {
 	          return renderFamilyPriorityCountStack(family.priorityCounts || {});
@@ -4848,9 +4854,9 @@
       var h = counts.high || 0;
       var m = counts.medium || 0;
       var l = counts.low || 0;
-      var title = 'Pressure mix: High ' + h + ', Medium ' + m + ', Low ' + l;
+      var title = 'Severity mix (endpoint counts): High ' + h + ', Medium ' + m + ', Low ' + l + '. Counts are endpoints in this family with in-scope findings at each severity.';
       function chip(key, shortLabel, value) {
-        return '<span class="pressure-mix-chip mix-' + escapeHtml(key) + '" title="' + escapeHtml(shortLabel + ': ' + value) + '">'
+        return '<span class="pressure-mix-chip mix-' + escapeHtml(key) + '" title="' + escapeHtml(shortLabel + ': ' + value + ' endpoints') + '">'
           + '<span class="pressure-mix-label">' + escapeHtml(shortLabel) + '</span>'
           + '<span class="pressure-mix-count">' + String(value) + '</span>'
           + '</span>';
