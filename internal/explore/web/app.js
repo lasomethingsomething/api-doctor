@@ -391,6 +391,14 @@
       return;
     }
 
+    // Switching tabs should never inherit horizontal scroll from a previous (wider) table.
+    // This prevents the FAMILY column from rendering partially off-screen (left-clipped).
+    if (el.familySurface) el.familySurface.scrollLeft = 0;
+    if (el.endpointRows) {
+      var endpointSurface = el.endpointRows.closest('.endpoint-list-surface');
+      if (endpointSurface) endpointSurface.scrollLeft = 0;
+    }
+
     state.activeTopTab = id;
     state.expandedFamily = "";
     state.expandedFamilyInsight = "";
