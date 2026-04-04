@@ -4157,8 +4157,11 @@
 
 			    if (!endpointsExpanded) {
 			      return '<div class="family-next-click-cell">'
+			        + '<p class="family-next-click-copy">Expand endpoints to see the concrete endpoint evidence for this family.</p>'
+			        + '<div class="family-next-click-actions">'
 			        + '<button type="button" class="tertiary-action family-next-click-btn" data-expand-endpoints="' + escapeHtml(familyName) + '" title="Expand inline endpoint rows for this family">Expand endpoints</button>'
 			        + '<button type="button" class="tertiary-action family-next-click-btn" data-insight-toggle="' + escapeHtml(familyName) + '" aria-expanded="' + (insightExpanded ? 'true' : 'false') + '" title="Open the family insight panel">' + (insightExpanded ? 'Hide insight' : 'Show insight') + '</button>'
+			        + '</div>'
 			        + '</div>';
 			    }
 
@@ -4167,9 +4170,12 @@
 		    var inspectTitle = bestEndpointId ? 'Select the highest-impact endpoint for this family' : 'No endpoint is available to inspect in this view';
 
 			    return '<div class="family-next-click-cell">'
+			      + '<p class="family-next-click-copy">Inspect the top endpoint to view exact evidence and OpenAPI grounding.</p>'
+			      + '<div class="family-next-click-actions">'
 			      + '<button type="button" class="tertiary-action family-next-click-btn" data-inspect-top-endpoint="' + escapeHtml(bestEndpointId) + '"' + inspectDisabled + ' title="' + escapeHtml(inspectTitle) + '">Inspect top endpoint</button>'
 			      + '<button type="button" class="tertiary-action family-next-click-btn" data-expand-endpoints="' + escapeHtml(familyName) + '" title="Collapse inline endpoint rows">Hide endpoints</button>'
 			      + '<button type="button" class="tertiary-action family-next-click-btn" data-insight-toggle="' + escapeHtml(familyName) + '" aria-expanded="' + (insightExpanded ? 'true' : 'false') + '" title="Open the family insight panel">' + (insightExpanded ? 'Hide insight' : 'Show insight') + '</button>'
+			      + '</div>'
 			      + '</div>';
 			  }
 
@@ -4607,6 +4613,14 @@
 	    return familyTableColumnsForActiveTab().length;
 	  }
 
+	  function renderFamilyTableColGroup(cols) {
+	    if (!cols || !cols.length) return '';
+	    return '<colgroup>' + cols.map(function (col) {
+	      var klass = col.tdClass || col.thClass || '';
+	      return '<col' + (klass ? (' class="' + escapeHtml(klass) + '"') : '') + '>';
+	    }).join('') + '</colgroup>';
+	  }
+
 	  function renderFamilyTableView(summaries) {
 	    if (!summaries.length) {
 	      return '';
@@ -4670,6 +4684,7 @@
 		      + focusLabel
 		      + backControl
 		      + '<table class="family-table">'
+	      + renderFamilyTableColGroup(cols)
 	      + '<thead class="family-table-head">'
 	      + '<tr>'
 		      + cols.map(function (col) {

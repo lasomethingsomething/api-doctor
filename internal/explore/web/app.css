@@ -832,6 +832,7 @@ select:focus {
 
 .family-table-shell {
   display: block;
+  overflow-x: auto;
 }
 
 .family-table-backbar {
@@ -851,10 +852,11 @@ select:focus {
 }
 
 .family-table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   border-spacing: 0;
-  table-layout: fixed;
+  table-layout: auto;
   margin: 0;
   font-size: 0.87rem;
 }
@@ -904,7 +906,7 @@ select:focus {
   color: #4a5f73;
   border-right: 1px solid #dce5ee;
   min-width: 0;
-  max-width: 0;
+  max-width: none;
   overflow: hidden;
   /* Do not let narrow columns render one letter per line. */
   overflow-wrap: break-word;
@@ -995,7 +997,7 @@ select:focus {
   vertical-align: middle;
   border-right: 1px solid #dfe6f0;
   min-width: 0;
-  max-width: 0;
+  max-width: none;
   overflow: hidden;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -1191,7 +1193,7 @@ select:focus {
 }
 
 .family-col-top-signal {
-  min-width: 180px;
+  min-width: 240px;
 }
 
 .family-signal-cell {
@@ -1299,11 +1301,79 @@ select:focus {
 }
 
 .family-col-next-click {
-  width: 170px;
-  min-width: 170px;
-  max-width: 170px;
-  text-align: center;
-  overflow: hidden;
+  min-width: 280px;
+  text-align: left;
+}
+
+.family-table col.family-col-priority {
+  width: 120px;
+}
+
+.family-table col.family-col-endpoints {
+  width: 110px;
+}
+
+.family-table col.family-col-issues {
+  width: 72px;
+}
+
+.family-table col.family-col-top-signal {
+  width: clamp(240px, 18vw, 300px);
+}
+
+.family-table col.family-col-driver {
+  width: 180px;
+}
+
+.family-table col.family-col-primary-risk,
+.family-table col.family-col-client-effect {
+  width: clamp(260px, 22vw, 320px);
+}
+
+.family-table col.family-col-next-click {
+  width: clamp(320px, 26vw, 420px);
+}
+
+/* Never allow the rightmost columns to collapse into letter-by-letter wrapping. */
+.family-table-head th.family-col-top-signal,
+.family-table-head th.family-col-primary-risk,
+.family-table-head th.family-col-client-effect,
+.family-table-head th.family-col-next-click,
+.family-row td.family-col-top-signal,
+.family-row td.family-col-primary-risk,
+.family-row td.family-col-client-effect,
+.family-row td.family-col-next-click {
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.family-table-head th.family-col-top-signal {
+  min-width: 240px;
+}
+
+.family-table-head th.family-col-primary-risk,
+.family-table-head th.family-col-client-effect {
+  min-width: 260px;
+}
+
+.family-table-head th.family-col-next-click {
+  min-width: 320px;
+}
+
+.family-row td.family-col-top-signal {
+  min-width: 240px;
+}
+
+.family-row td.family-col-primary-risk,
+.family-row td.family-col-client-effect {
+  min-width: 260px;
+}
+
+.family-row td.family-col-next-click {
+  min-width: 320px;
 }
 
 .family-table-clamp {
@@ -1342,8 +1412,24 @@ select:focus {
 
 .family-next-click-cell {
   display: grid;
-  gap: 0.28rem;
-  justify-items: center;
+  gap: 0.22rem;
+  justify-items: start;
+  text-align: left;
+}
+
+.family-next-click-copy {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.38;
+  color: #2a4254;
+  max-width: 100%;
+}
+
+.family-next-click-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.24rem;
+  align-items: center;
 }
 
 .family-next-click-btn {
@@ -1351,9 +1437,7 @@ select:focus {
   padding: 0.2rem 0.48rem;
   max-width: 100%;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .family-table-clamp-signals {
@@ -2304,7 +2388,7 @@ select:focus {
 
   .family-col-primary-risk,
   .family-col-client-effect {
-    min-width: 180px;
+    min-width: 220px;
   }
 }
 
@@ -2334,13 +2418,11 @@ select:focus {
 
   .family-col-primary-risk,
   .family-col-client-effect {
-    min-width: 150px;
+    min-width: 220px;
   }
 
   .family-col-next-click {
-    width: 150px;
-    min-width: 150px;
-    max-width: 150px;
+    min-width: 280px;
   }
 
   .endpoints-expand {
