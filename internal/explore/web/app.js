@@ -1,26 +1,31 @@
 (function () {
-  var state = {
-    payload: null,
-    selectedEndpointId: "",
-    activeTopTab: "spec-rule",
-    endpointDiagnosticsSubTab: "summary",
-    expandedFamily: "",
-    expandedFamilyInsight: "",
-	    expandedEndpointInsightIds: {},
-	    expandedEndpointRowFindings: {},
-	    inspectingEndpointId: "",
-	    issueScopeIndex: null,
-	    issueScopeIndexKey: "",
-	    familyTableShowAll: false,
-	    workflowChainsOpen: true,
-	    inspectorWorkflowContextOpen: null,
-    familyTableSort: {
-      key: 'default',
-      direction: 'asc'
-    },
-    detailEvidenceOpenForId: "",
-    filters: {
-      search: "",
+		  var state = {
+		    payload: null,
+		    selectedEndpointId: "",
+		    userSelectedEndpoint: false,
+		    activeTopTab: "spec-rule",
+		    endpointDiagnosticsSubTab: "summary",
+		    expandedFamily: "",
+		    expandedFamilyInsight: "",
+			    expandedEndpointInsightIds: {},
+			    expandedEndpointRowFindings: {},
+			    inspectingEndpointId: "",
+		    inspectPlacementHint: "",
+		    detachedInspectorVisible: false,
+		    shapeWorkspaceCollapsed: false,
+			    issueScopeIndex: null,
+			    issueScopeIndexKey: "",
+			    familyTableShowAll: false,
+			    workflowChainsOpen: true,
+			    inspectorWorkflowContextOpen: null,
+	    familyTableBackState: null,
+	    familyTableSort: {
+	      key: 'default',
+	      direction: 'asc'
+	    },
+	    detailEvidenceOpenForId: "",
+	    filters: {
+	      search: "",
       category: "all",
       burden: "all",
       familyPressure: "all",
@@ -58,46 +63,95 @@
 
   fetch("/api/payload")
     .then(function (res) { return res.json(); })
-    .then(function (payload) {
-      state.payload = payload;
-      state.selectedEndpointId = firstEvidenceEndpointId(payload.endpoints || []);
-      bindControls();
-      renderFilterOptions();
-      render();
-    });
+		    .then(function (payload) {
+		      state.payload = payload;
+		      // Default to no selected endpoint. Selection should be user-driven via "Inspect endpoint"
+		      // so row highlighting never sticks to an arbitrary auto-picked row.
+		      state.selectedEndpointId = "";
+		      state.userSelectedEndpoint = false;
+		      bindControls();
+		      renderFilterOptions();
+		      render();
+		    });
 
-  function bindControls() {
-    el.searchInput.addEventListener("input", function (e) {
-      state.filters.search = e.target.value.trim().toLowerCase();
-      state.familyTableShowAll = false;
-      render();
-    });
-    el.categoryFilter.addEventListener("change", function (e) {
-      state.filters.category = e.target.value;
-      state.familyTableShowAll = false;
-      render();
-    });
-    el.burdenFilter.addEventListener("change", function (e) {
-      state.filters.burden = e.target.value;
-      state.familyTableShowAll = false;
-      render();
-    });
-    el.familyPriorityFilter.addEventListener("change", function (e) {
-      state.filters.familyPressure = e.target.value;
-      state.familyTableShowAll = false;
-      render();
-    });
-    el.includeNoIssueRows.addEventListener("change", function (e) {
-      state.filters.includeNoIssueRows = e.target.checked;
-      state.familyTableShowAll = false;
-      render();
-    });
-  }
+			  function bindControls() {
+			    el.searchInput.addEventListener("input", function (e) {
+			      var prevSearch = state.filters.search || "";
+			      var nextSearch = e.target.value.trim().toLowerCase();
+		      // If the user manually narrows to an exact family name, treat it as a drill-in
+		      // and enable "Back to all families" to restore the prior search.
+		      if (!state.familyTableBackState && prevSearch !== nextSearch && isExactFamilyName(nextSearch)) {
+		        captureFamilyTableBackStateIfNeeded({ search: prevSearch });
+		      }
+			      state.filters.search = nextSearch;
+			      // Search/filter changes should clear the previous selection highlight immediately.
+			      state.selectedEndpointId = '';
+			      state.userSelectedEndpoint = false;
+			      state.detailEvidenceOpenForId = '';
+			      invalidateDerivedCaches();
+			      state.familyTableShowAll = false;
+			      render();
+			    });
+			    el.categoryFilter.addEventListener("change", function (e) {
+			      state.filters.category = e.target.value;
+		      normalizeLensFilters('category');
+		      state.selectedEndpointId = '';
+		      state.userSelectedEndpoint = false;
+		      state.detailEvidenceOpenForId = '';
+		      invalidateDerivedCaches();
+		      state.familyTableShowAll = false;
+		      render();
+		    });
+		    el.burdenFilter.addEventListener("change", function (e) {
+		      state.filters.burden = e.target.value;
+		      normalizeLensFilters('burden');
+		      state.selectedEndpointId = '';
+		      state.userSelectedEndpoint = false;
+		      state.detailEvidenceOpenForId = '';
+		      invalidateDerivedCaches();
+		      state.familyTableShowAll = false;
+		      render();
+		    });
+		    el.familyPriorityFilter.addEventListener("change", function (e) {
+		      state.filters.familyPressure = e.target.value;
+		      state.selectedEndpointId = '';
+		      state.userSelectedEndpoint = false;
+		      state.detailEvidenceOpenForId = '';
+		      invalidateDerivedCaches();
+		      state.familyTableShowAll = false;
+		      render();
+		    });
+		    el.includeNoIssueRows.addEventListener("change", function (e) {
+		      state.filters.includeNoIssueRows = e.target.checked;
+		      state.selectedEndpointId = '';
+		      state.userSelectedEndpoint = false;
+		      state.detailEvidenceOpenForId = '';
+		      invalidateDerivedCaches();
+		      state.familyTableShowAll = false;
+		      render();
+		    });
+		  }
 
-  function normalizeLensFilters(changed) {
-    var category = state.filters.category;
-    var burden = state.filters.burden;
-    var heuristicTracks = {
+		  function invalidateDerivedCaches() {
+		    // Filters change what "in-scope" findings mean. Clear cached derived state so
+		    // tables/inspector always re-derive from the current filter values.
+		    state.issueScopeIndex = null;
+		    state.issueScopeIndexKey = '';
+		  }
+
+		  function isExactFamilyName(value) {
+		    if (!value) return false;
+		    if (value.charAt(0) !== '/') return false;
+		    if (!state.payload || !state.payload.endpoints) return false;
+		    return (state.payload.endpoints || []).some(function (row) {
+		      return (row.family || '').trim().toLowerCase() === value;
+		    });
+		  }
+
+	  function normalizeLensFilters(changed) {
+	    var category = state.filters.category;
+	    var burden = state.filters.burden;
+	    var heuristicTracks = {
       'workflow-burden': true,
       'contract-shape': true
     };
@@ -190,8 +244,9 @@
       return;
     }
 
-    if (!state.selectedEndpointId || !specRows.some(function (row) { return row.id === state.selectedEndpointId; })) {
-      state.selectedEndpointId = firstVisibleEndpointId(specRows);
+    if (state.selectedEndpointId && !specRows.some(function (row) { return row.id === state.selectedEndpointId; })) {
+      // Do not auto-pick a new endpoint in this tab. Selection is user-driven via "Inspect endpoint".
+      state.selectedEndpointId = '';
       state.detailEvidenceOpenForId = '';
     }
   }
@@ -203,6 +258,14 @@
       state.endpointDiagnosticsSubTab = 'summary';
     }
 
+    // Workflow Guidance is continuity-focused. Keep filters aligned so we don't
+    // drift into rules-based or response-shape redesign surfaces.
+    if (state.filters.category === 'spec-rule' || state.filters.category === 'contract-shape') {
+      state.filters.category = 'all';
+    }
+    // Keep the tab anchored on continuity burden signals.
+    state.filters.burden = 'workflow-burden';
+
     var workflowRows = selectionRowsForActiveView();
     if (!workflowRows.length) {
       state.selectedEndpointId = '';
@@ -210,8 +273,8 @@
       return;
     }
 
-    if (!state.selectedEndpointId || !workflowRows.some(function (row) { return row.id === state.selectedEndpointId; })) {
-      state.selectedEndpointId = firstVisibleEndpointId(workflowRows);
+    if (state.selectedEndpointId && !workflowRows.some(function (row) { return row.id === state.selectedEndpointId; })) {
+      state.selectedEndpointId = '';
       state.detailEvidenceOpenForId = '';
     }
   }
@@ -223,6 +286,13 @@
       state.endpointDiagnosticsSubTab = 'summary';
     }
 
+    // Response Shape is contract-design focused. Keep filters aligned so we don't
+    // drift into rules-based or workflow continuity-only surfaces.
+    if (state.filters.category === 'spec-rule' || state.filters.category === 'workflow-burden') {
+      state.filters.category = 'all';
+    }
+    state.filters.burden = 'contract-shape';
+
     var shapeRows = selectionRowsForActiveView();
     if (!shapeRows.length) {
       state.selectedEndpointId = '';
@@ -231,21 +301,25 @@
       return;
     }
 
-    if (!state.selectedEndpointId || !shapeRows.some(function (row) { return row.id === state.selectedEndpointId; })) {
-      state.selectedEndpointId = firstVisibleEndpointId(shapeRows);
+    if (state.selectedEndpointId && !shapeRows.some(function (row) { return row.id === state.selectedEndpointId; })) {
+      state.selectedEndpointId = '';
       state.detailEvidenceOpenForId = '';
       state.endpointDiagnosticsSubTab = 'summary';
     }
   }
 
-  function syncLensVisualIdentity() {
-    if (!document || !document.body) return;
-    var shapeActive = state.activeTopTab === 'shape';
-    document.body.classList.toggle('lens-shape', shapeActive);
+	  function syncLensVisualIdentity() {
+	    if (!document || !document.body) return;
+	    var shapeActive = state.activeTopTab === 'shape';
+	    var workflowActive = state.activeTopTab === 'workflow';
+	    var specActive = state.activeTopTab === 'spec-rule';
+	    document.body.classList.toggle('lens-shape', shapeActive);
+	    document.body.classList.toggle('lens-workflow', workflowActive);
+	    document.body.classList.toggle('lens-spec-rule', specActive);
 
-    if (el.familySurfaceSection) {
-      el.familySurfaceSection.classList.toggle('shape-primary-surface', shapeActive);
-    }
+	    if (el.familySurfaceSection) {
+	      el.familySurfaceSection.classList.toggle('shape-primary-surface', shapeActive);
+	    }
     if (el.endpointDiagnosticsSection) {
       el.endpointDiagnosticsSection.classList.toggle('shape-secondary-surface', shapeActive);
     }
@@ -262,8 +336,9 @@
       return;
     }
 
-    if (!state.selectedEndpointId || !rows.some(function (row) { return row.id === state.selectedEndpointId; })) {
-      state.selectedEndpointId = firstVisibleEndpointId(rows);
+    if (state.selectedEndpointId && !rows.some(function (row) { return row.id === state.selectedEndpointId; })) {
+      // Do not auto-pick a different endpoint. If selection is no longer valid, clear it.
+      state.selectedEndpointId = '';
     }
   }
 
@@ -273,12 +348,12 @@
     el.runContext.textContent = 'spec: ' + run.specPath + ' | generated: ' + run.generatedAt + diffTag;
   }
 
-  function renderQuickActions() {
-    var actions = [
-      { id: "spec-rule", label: "Contract Issues", copy: "Spec-rule violations, consistency drift, and endpoint-level correctness", color: 'spec-rule' },
-      { id: "workflow", label: "Workflow Guidance", copy: "Inferred call chains, continuity burden, hidden dependencies, and sequencing traps", color: 'workflow' },
-      { id: "shape", label: "Response Shape", copy: "Storage-shaped responses, duplicated state, internal fields, and workflow-first redesign guidance", color: 'shape' }
-    ];
+	  function renderQuickActions() {
+	    var actions = [
+	      { id: "spec-rule", label: "Contract Issues", copy: "OpenAPI rule violations (REQUIRED vs SHOULD) and consistency drift", color: 'spec-rule' },
+	      { id: "workflow", label: "Workflow Guidance", copy: "Inferred call chains, continuity burden, hidden dependencies, and sequencing traps", color: 'workflow' },
+	      { id: "shape", label: "Response Shape", copy: "Storage-shaped responses, duplicated state, internal fields, and workflow-first redesign guidance", color: 'shape' }
+	    ];
 
     el.quickActions.innerHTML = actions.map(function (action) {
       var activeClass = state.activeTopTab === action.id ? ' active' : '';
@@ -317,6 +392,11 @@
     state.expandedFamily = "";
     state.expandedFamilyInsight = "";
     state.expandedEndpointInsightIds = {};
+    state.expandedEndpointRowFindings = {};
+    state.detailEvidenceOpenForId = '';
+    // Switching tabs should never keep a stale selected-row highlight from the prior tab.
+    state.selectedEndpointId = '';
+    state.userSelectedEndpoint = false;
 
     state.filters.includeNoIssueRows = false;
     state.filters.familyPressure = "all";
@@ -338,10 +418,6 @@
       state.endpointDiagnosticsSubTab = "summary";
     }
 
-    var visible = filteredRows();
-    if (!state.selectedEndpointId || !visible.some(function (row) { return row.id === state.selectedEndpointId; })) {
-      state.selectedEndpointId = firstVisibleEndpointId(visible);
-    }
     render();
 
   }
@@ -359,6 +435,55 @@
     return (findings || []).filter(function (f) {
       return !!consistencyCodes[f.code || ''];
     });
+  }
+
+  function isConsistencyDriftFinding(finding) {
+    if (!finding) return false;
+    var code = finding.code || '';
+    return code === 'detail-path-parameter-name-drift'
+      || code === 'endpoint-path-style-drift'
+      || code === 'sibling-path-shape-drift'
+      || code === 'inconsistent-response-shape'
+      || code === 'inconsistent-response-shape-family'
+      || code === 'inconsistent-response-shapes'
+      || code === 'inconsistent-response-shapes-family'
+      || (finding.burdenFocus || '') === 'consistency';
+  }
+
+  function isWorkflowContinuityFinding(finding) {
+    if (!finding) return false;
+    if (isSpecRuleFinding(finding)) return false;
+    if ((finding.burdenFocus || '') === 'workflow-burden') return true;
+    var code = finding.code || '';
+    if (code === 'prerequisite-task-burden') return true;
+    if (code === 'weak-list-detail-linkage') return true;
+    if (code === 'weak-follow-up-linkage') return true;
+    if (code === 'weak-action-follow-up-linkage') return true;
+    if (code === 'weak-accepted-tracking-linkage') return true;
+    if (code === 'weak-outcome-next-action-guidance') return true;
+    // Token/context risks: allow explicit auth/context burden notes to remain visible in this tab.
+    var msg = (finding.message || '').toLowerCase();
+    if (/token|bearer|authorization|api[-\s]?key|auth|header|context transfer|handoff/.test(msg)) return true;
+    return false;
+  }
+
+  function isResponseShapeFinding(finding) {
+    if (!finding) return false;
+    if (isSpecRuleFinding(finding)) return false;
+    // Keep Response Shape focused on storage-shaped vs task-shaped contract design.
+    // Do not admit generic workflow chaining/traps (those belong in Workflow Guidance).
+    var code = finding.code || '';
+    return code === 'deeply-nested-response-structure'
+      || code === 'duplicated-state-response'
+      || code === 'incidental-internal-field-exposure'
+      || code === 'snapshot-heavy-response'
+      || code === 'contract-shape-workflow-guidance-burden'
+      || code === 'weak-outcome-next-action-guidance';
+  }
+
+  function isSpecRuleFinding(finding) {
+    if (!finding) return false;
+    return finding.evidenceType === 'spec-rule' || (finding.category || '') === 'spec-rule';
   }
 
   function isShapeScopedFinding(finding) {
@@ -381,25 +506,108 @@
       || code === 'weak-array-items-schema';
   }
 
-  function findingsForActiveLens(findings) {
-    var all = findings || [];
-    if (state.activeTopTab !== 'shape') return all;
-    return all.filter(isShapeScopedFinding);
-  }
+		  function findingsForActiveLens(findings) {
+		    var all = findings || [];
+		    var out = all;
 
-  function hasValidSelectedEndpointInCurrentView() {
-    if (!state.selectedEndpointId) return false;
-    return selectionRowsForActiveView().some(function (row) {
-      return row.id === state.selectedEndpointId;
-    });
-  }
+		    // Contract Issues: strictly rules + required-vs-should guidance + consistency drift.
+		    // Do not allow workflow-chain or response-shape redesign guidance to leak into this tab.
+		    if (state.activeTopTab === 'spec-rule') {
+		      out = out.filter(function (f) {
+		        return isSpecRuleFinding(f) || isConsistencyDriftFinding(f);
+		      });
+		    }
 
-	  function selectionRowsForActiveView() {
-	    if (state.activeTopTab === 'workflow') {
-	      return workflowScopedRows();
+		    // Workflow Guidance: only inferred chain/continuity burden signals.
+		    // Do not admit generic contract-rule clustering or response-shape redesign guidance here.
+		    if (state.activeTopTab === 'workflow') {
+		      out = out.filter(isWorkflowContinuityFinding);
+		    }
+
+		    // Response Shape: only shape-focused design burdens (storage-shaped vs task-shaped).
+		    if (state.activeTopTab === 'shape') {
+		      out = out.filter(isResponseShapeFinding);
+		    }
+
+		    // When the burden filter is set to "contract-shape", apply the shape-scoped
+		    // heuristic filter so we do not pollute the view with unrelated findings.
+		    if (state.filters.burden === 'contract-shape') {
+		      out = out.filter(isShapeScopedFinding);
+		    }
+
+		    // Category filter narrows to a specific finding category (including spec-rule).
+		    if (state.filters.category && state.filters.category !== 'all') {
+		      if (state.filters.category === 'spec-rule') {
+		        out = out.filter(function (f) {
+		          // In the Contract Issues tab, "spec-rule" means "spec-rule + drift" as the
+		          // tab's explicit scope includes consistency drift by default.
+		          if (state.activeTopTab === 'spec-rule') {
+		            return isSpecRuleFinding(f) || isConsistencyDriftFinding(f);
+		          }
+		          return isSpecRuleFinding(f);
+		        });
+		      } else {
+		        out = out.filter(function (f) {
+		          if (!f) return false;
+		          return (f.category || '') === state.filters.category;
+	        });
+	      }
 	    }
-	    return filteredRows();
+
+	    // Burden filter narrows to findings attached to that burden focus. For
+	    // "contract-shape" we already applied the stronger code-based scoping.
+		    if (state.activeTopTab !== 'workflow' && state.filters.burden && state.filters.burden !== 'all' && state.filters.burden !== 'contract-shape') {
+		      out = out.filter(function (f) {
+		        return !!f && (f.burdenFocus || '') === state.filters.burden;
+		      });
+		    }
+
+		    return out;
+		  }
+
+	  function lensFindingCountForRow(row) {
+	    if (!row || !row.id || !state.payload || !state.payload.endpointDetails) return 0;
+	    var detail = state.payload.endpointDetails[row.id];
+	    if (detail && detail.findings) {
+	      return findingsForActiveLens(detail.findings || []).length;
+	    }
+
+	    // Fallback when endpointDetails is missing. Prefer the table row's precomputed
+	    // counts so rows remain visible and Inspect can still open the inspector.
+	    var categoryCounts = row.categoryCounts || {};
+	    var category = state.filters.category || 'all';
+	    var burden = state.filters.burden || 'all';
+
+	    var base = (row.findings || 0);
+	    if (category !== 'all') {
+	      base = categoryCounts[category] || 0;
+	    }
+
+	    if (burden !== 'all') {
+	      // If the endpoint doesn't even claim this burden focus, treat as out of lens.
+	      if ((row.burdenFocuses || []).indexOf(burden) === -1) return 0;
+	      // When category is "all", use burden category counts (when present) as a better approximation.
+	      if (category === 'all') {
+	        base = Math.max(base, categoryCounts[burden] || 0);
+	      }
+	    }
+
+	    return base;
 	  }
+
+	  function hasValidSelectedEndpointInCurrentView() {
+	    if (!state.selectedEndpointId) return false;
+	    // Validate against the current scope (not just evidence-only rows) so Inspect
+	    // does not silently fail when endpointDetails is missing or when the endpoint
+	    // is selected via an expansion/chain.
+	    return rowsInScopeAll().some(function (row) {
+	      return row.id === state.selectedEndpointId;
+	    });
+	  }
+
+		  function selectionRowsForActiveView() {
+		    return filteredRows();
+		  }
 
 	  function issueScopeIndexCacheKey() {
 	    var f = state.filters || {};
@@ -508,26 +716,75 @@
     return 'Exact contract evidence';
   }
 
-  function exactEvidenceTabLabelWithCount() {
-    var label = exactEvidenceTargetLabel();
-    var detail = (state.payload && state.payload.endpointDetails && state.selectedEndpointId)
-      ? state.payload.endpointDetails[state.selectedEndpointId]
-      : null;
-    if (!detail || !detail.findings) return label;
-    var groups = groupFindings(findingsForActiveLens(detail.findings || []));
-    var count = groups.length || 0;
-    return label + ' (' + count + ' group' + (count === 1 ? '' : 's') + ')';
-  }
+	  function exactEvidenceTabLabelWithCount() {
+	    var label = exactEvidenceTargetLabel();
+	    var detail = state.selectedEndpointId ? endpointDetailForId(state.selectedEndpointId) : null;
+	    if (!detail || !detail.findings) return label;
+	    var groups = groupFindings(findingsForActiveLens(detail.findings || []));
+	    var count = groups.length || 0;
+	    return label + ' (' + count + ' group' + (count === 1 ? '' : 's') + ')';
+	  }
 
-  function exactEvidenceGroupsSummaryLabel(groupCount) {
-    var count = (typeof groupCount === 'number' && isFinite(groupCount)) ? groupCount : 0;
-    return exactEvidenceTargetLabel() + ' (' + count + ' by schema field and issue type)';
-  }
+	  function exactEvidenceGroupsSummaryLabel(groupCount) {
+	    var count = (typeof groupCount === 'number' && isFinite(groupCount)) ? groupCount : 0;
+	    return exactEvidenceTargetLabel() + ' (' + count + ' by schema field and issue type)';
+	  }
 
-  function renderEndpointDiagnosticsTabs() {
-    var tabs = [
-      { id: 'summary', label: 'Endpoint summary', description: 'what is wrong and why it matters' },
-      { id: 'exact', label: exactEvidenceTabLabelWithCount(), description: 'grouped instances with explicit evidence target and schema grounding' },
+	  function fullExactEvidenceClosedLabel(groupCount) {
+	    var count = (typeof groupCount === 'number' && isFinite(groupCount)) ? groupCount : 0;
+	    var unit = count === 1 ? 'group' : 'groups';
+	    return 'Open full exact evidence (' + count + ' ' + unit + ')';
+	  }
+
+	  function fullExactEvidenceOpenLabel() {
+	    return 'Hide full exact evidence';
+	  }
+
+		  function renderFullExactEvidenceDrawer(groups, options) {
+		    var opts = options || {};
+		    var endpoint = opts.endpoint || {};
+		    var familyName = opts.familyName || '';
+		    var openAttr = opts.open ? ' open' : '';
+		    var groupCount = (groups || []).length || 0;
+		    var titleLabel = exactEvidenceGroupsSummaryLabel(groupCount);
+		    var closeControl = '<div class="details-close-row">'
+		      + '<button type="button" class="tertiary-action details-close-btn" data-close-details="1" aria-label="Hide evidence" title="Hide evidence">Hide evidence</button>'
+		      + '</div>';
+
+		    var commonScope = '';
+		    if (groups && groups.length > 1) {
+		      var scopeLabels = groups.map(function (g) {
+		        return issueScopeLabelForKey((g && g.groupKey) ? g.groupKey : '', familyName);
+		      });
+		      commonScope = scopeLabels[0] || '';
+		      for (var i = 1; i < scopeLabels.length; i++) {
+		        if (scopeLabels[i] !== commonScope) {
+		          commonScope = '';
+		          break;
+		        }
+		      }
+		    }
+		    var scopeLine = commonScope
+		      ? '<p class="subtle detail-section-copy detail-section-copy-scope"><strong>Scope:</strong> ' + escapeHtml(commonScope) + '</p>'
+		      : '';
+
+		    return '<details class="detail-evidence-drawer" data-full-exact-evidence="1"' + openAttr + '>'
+		      + '<summary><span class="evidence-drawer-title">' + escapeHtml(titleLabel) + '</span></summary>'
+		      + '<section class="detail-section detail-section-tight">'
+		      + closeControl
+		      + '  <p class="subtle detail-section-copy">' + escapeHtml(evidenceGroupsGroupingBasisCopy()) + '</p>'
+		      + scopeLine
+		      + (groups || []).map(function (group, index) {
+		          return renderIssueGroup(group, index, { familyName: familyName, endpoint: endpoint, commonScopeLabel: commonScope });
+		        }).join('')
+		      + '</section>'
+		      + '</details>';
+		  }
+
+	  function renderEndpointDiagnosticsTabs() {
+	    var tabs = [
+	      { id: 'summary', label: 'Endpoint summary', description: 'what is wrong and why it matters' },
+	      { id: 'exact', label: exactEvidenceTabLabelWithCount(), description: 'grouped instances with explicit evidence target and schema grounding' },
       { id: 'consistency', label: 'Consistency / drift', description: 'sibling-route comparison' },
       { id: 'cleaner', label: 'Contract improvements', description: 'concrete response and schema changes' }
     ];
@@ -588,7 +845,7 @@
       + '</div>';
   }
 
-  function renderWorkflowChainContextForEndpoint(detail) {
+	  function renderWorkflowChainContextForEndpoint(detail) {
     // Renders the step-by-step inferred endpoint chain in which this endpoint appears.
     // Highlights the current endpoint's position and shows purpose, state/context, traps, and next action for each step.
     var endpoint = detail.endpoint || {};
@@ -655,19 +912,19 @@
       return f.code === 'prerequisite-task-burden';
     });
 
-    // Build state/context and trap guidance
-    var dependencyClues = buildWorkflowDependencyClues(endpoint, findings, stepIndex, totalSteps, roleLabel, nextEndpoint, nextRoleLabel, linkageFindings, prerequisiteFindings);
-    var trapGuidance = collectTrapGuidance(endpoint, findings, dependencyClues, linkageFindings, prerequisiteFindings, nextEndpoint, roleLabel, isLast);
-    var narrative = summarizeWorkflowStepNarrative(endpoint, roleLabel, nextEndpoint, dependencyClues, findings, linkageFindings, prerequisiteFindings, isLast);
+	    // Build state/context and trap guidance
+	    var dependencyClues = buildWorkflowDependencyClues(endpoint, findings, stepIndex, totalSteps, roleLabel, nextEndpoint, nextRoleLabel, linkageFindings, prerequisiteFindings);
+	    var trapGuidance = collectTrapGuidance(endpoint, findings, dependencyClues, linkageFindings, prerequisiteFindings, nextEndpoint, roleLabel, isLast);
+	    var narrative = summarizeWorkflowStepNarrative(endpoint, roleLabel, nextEndpoint, dependencyClues, findings, linkageFindings, prerequisiteFindings, isLast);
 
-    // Build reduced trap guidance (show only top 1 for brevity)
-    var trapHtml = '';
-    if (trapGuidance.length) {
-      trapHtml = '<div class="inspector-chain-step-trap">'
-        + '<span class="trap-icon">Warning</span>'
-        + '<span class="trap-text">' + escapeHtml(trapGuidance[0].title || trapGuidance[0].happened || trapGuidance[0].id) + '</span>'
-        + '</div>';
-    }
+	    // Build reduced trap guidance (show only top 1 for brevity)
+	    var trapHtml = '';
+	    if (trapGuidance.length) {
+	      trapHtml = '<div class="inspector-chain-step-trap">'
+	        + '<span class="trap-icon">Trap</span>'
+	        + '<span class="trap-text"><strong>Common hidden traps:</strong> ' + escapeHtml(trapGuidance[0].title || trapGuidance[0].happened || trapGuidance[0].id) + '</span>'
+	        + '</div>';
+	    }
 
     // Build warnings badges
     var warnings = [];
@@ -684,70 +941,137 @@
     
     var currentClass = isCurrent ? ' inspector-chain-step-current' : (isAfterCurrent ? ' inspector-chain-step-future' : '');
     
-    var html = '<div class="inspector-chain-step' + currentClass + '" data-chain-step-id="' + escapeHtml(endpointId) + '">'
-      + '<div class="inspector-chain-step-number">' + (stepIndex + 1) + '</div>'
-      + '<div class="inspector-chain-step-content">'
-      + '<div class="inspector-chain-step-role">' + escapeHtml(humanRole) + '</div>'
-      + '<div class="inspector-chain-step-endpoint"><strong>' + escapeHtml(method + ' ' + path) + '</strong></div>'
-      + '<div class="inspector-chain-step-purpose"><span class="label">Purpose:</span> ' + escapeHtml(narrative.callDoes) + '</div>'
-      + '<div class="inspector-chain-step-state"><span class="label">State/Context:</span> ' + escapeHtml(narrative.requiredState || 'none explicitly defined') + '</div>'
-      + (narrative.nextAction ? '<div class="inspector-chain-step-next"><span class="label">Next:</span> ' + escapeHtml(narrative.nextAction) + '</div>' : '')
-      + (warningHtml ? warningHtml : '')
-      + (trapHtml ? trapHtml : '')
-      + '</div>'
-      + '</div>';
+	    var html = '<div class="inspector-chain-step' + currentClass + '" data-chain-step-id="' + escapeHtml(endpointId) + '">'
+	      + '<div class="inspector-chain-step-number">' + (stepIndex + 1) + '</div>'
+	      + '<div class="inspector-chain-step-content">'
+	      + '<div class="inspector-chain-step-role">' + escapeHtml(humanRole) + '</div>'
+	      + '<div class="inspector-chain-step-endpoint"><strong>' + escapeHtml(method + ' ' + path) + '</strong></div>'
+	      + '<div class="inspector-chain-step-purpose"><span class="label">What this call does:</span> ' + escapeHtml(narrative.callDoes) + '</div>'
+	      + '<div class="inspector-chain-step-state"><span class="label">What you need before calling it:</span> ' + escapeHtml(narrative.requiredState || 'none explicitly defined') + '</div>'
+	      + '<div class="inspector-chain-step-change"><span class="label">What changes after it succeeds:</span> ' + escapeHtml(narrative.changesAfter || '') + '</div>'
+	      + (narrative.nextAction ? '<div class="inspector-chain-step-next"><span class="label">What to call next:</span> ' + escapeHtml(narrative.nextAction) + '</div>' : '')
+	      + (warningHtml ? warningHtml : '')
+	      + (trapHtml ? trapHtml : '')
+	      + '</div>'
+	      + '</div>';
 
     return html;
-  }
+	  }
 
-  function renderEndpointDiagnosticsWorkflowSummary(detail) {
-    var endpoint = detail.endpoint || {};
-    var findings = detail.findings || [];
-    var groups = groupFindings(findings);
-    var topGroup = groups[0] || null;
-    var chainCount = (detail.relatedChains || []).length;
-    var signalSummary = summarizeWorkflowHeaderSignals(detail);
-    var comparisonHtml = renderInspectorContractShapeComparison(detail, findings, {
-      title: 'Current contract shape vs workflow-first contract shape',
-      context: 'workflow'
-    });
-    var guidance = collectTrapGuidance(endpoint, findings, { prereq: [], establish: [], nextNeeds: [], hidden: [] }, [], [], null, '', false);
-    var guidanceHtml = renderTrapGuidanceList(guidance, {
-      title: 'Workflow trap guidance',
-      className: 'inspector-trap-guidance',
-      limit: 3
-    });
-    var consistencySupportHtml = renderConsistencySupportCard(detail, {
-      title: 'Consistency / drift (supporting view)',
-      emptyText: 'No clear drift signal is attached to this endpoint in the current evidence.'
-    });
+	  function pickPrimaryWorkflowChainForEndpoint(detail) {
+	    var endpoint = (detail && detail.endpoint) ? detail.endpoint : {};
+	    var endpointId = endpoint.id || state.selectedEndpointId || '';
+	    var chains = (detail && detail.relatedChains) ? detail.relatedChains : [];
+	    if (!endpointId || !chains.length) return null;
 
-    // Render inferred workflow chain context as first-class section
-    var chainContextHtml = renderWorkflowChainContextForEndpoint(detail);
+	    // Prefer the chain with the highest burden score that actually contains this endpoint.
+	    var candidates = chains.filter(function (c) {
+	      var ids = (c && c.endpointIds) ? c.endpointIds : [];
+	      return ids.indexOf(endpointId) >= 0;
+	    });
+	    if (!candidates.length) return null;
 
-	    return '<div class="endpoint-diag-pane">'
-	      + chainContextHtml
-	      + '<div class="family-insight-card">'
-	      + '<p class="insight-kicker">Workflow burden priority</p>'
-	      + '<p class="subtle"><strong>' + escapeHtml(endpoint.method + ' ' + endpoint.path) + '</strong> '
-      + (chainCount ? ('appears in ' + chainCount + ' workflow chain' + (chainCount === 1 ? '' : 's')) : 'is not currently linked to an inferred chain')
-      + ' and is prioritized here for continuity risk signals.</p>'
-      + '<ul class="family-top-evidence">'
-      + '<li><strong>Primary continuity signals:</strong> ' + escapeHtml(signalSummary.replace(/^primary continuity signals:\s*/i, '')) + '.</li>'
-      + '<li><strong>Why this endpoint matters in flow:</strong> It can force extra client tracking when next-step requirements or context handoffs are implicit.</li>'
+	    candidates.sort(function (a, b) {
+	      var as = chainBurdenScore(a || {});
+	      var bs = chainBurdenScore(b || {});
+	      if (as !== bs) return bs - as;
+	      var al = (a && a.endpointIds) ? a.endpointIds.length : 0;
+	      var bl = (b && b.endpointIds) ? b.endpointIds.length : 0;
+	      if (al !== bl) return bl - al;
+	      return String((a && a.kind) || '').localeCompare(String((b && b.kind) || ''));
+	    });
+	    return candidates[0] || null;
+	  }
+
+	  function renderWorkflowStepWorkspace(detail) {
+	    var endpoint = (detail && detail.endpoint) ? detail.endpoint : {};
+	    var endpointId = endpoint.id || state.selectedEndpointId || '';
+	    var chain = pickPrimaryWorkflowChainForEndpoint(detail);
+	    if (!endpointId) return '';
+
+	    var steps = chain ? (chain.endpointIds || []) : [];
+	    var roles = chain ? parseChainRoles(chain.summary, steps.length) : [];
+	    var idx = chain ? steps.indexOf(endpointId) : -1;
+
+	    var findings = findingsForActiveLens((detail && detail.findings) ? detail.findings : []);
+	    var nextEndpointId = idx < (steps.length - 1) ? steps[idx + 1] : '';
+	    var nextDetail = nextEndpointId ? endpointDetailForId(nextEndpointId) : null;
+	    var nextEndpoint = nextDetail ? nextDetail.endpoint : null;
+
+	    var linkageFindings = (detail.findings || []).filter(function (f) {
+	      return f && (f.code === 'weak-follow-up-linkage' || f.code === 'weak-action-follow-up-linkage' || f.code === 'weak-accepted-tracking-linkage' || f.code === 'weak-outcome-next-action-guidance');
+	    });
+	    var prerequisiteFindings = (detail.findings || []).filter(function (f) {
+	      return f && f.code === 'prerequisite-task-burden';
+	    });
+
+	    var clues = buildWorkflowDependencyClues(endpoint, detail.findings || [], Math.max(0, idx), Math.max(1, steps.length || 1), roles[idx] || '', nextEndpoint, roles[idx + 1] || '', linkageFindings, prerequisiteFindings);
+	    var narrative = summarizeWorkflowStepNarrative(endpoint, roles[idx] || '', nextEndpoint, clues, detail.findings || [], linkageFindings, prerequisiteFindings, idx >= 0 ? (idx === (steps.length - 1)) : false);
+
+	    var hiddenHandoff = (clues.hidden && clues.hidden.length)
+	      ? clues.hidden.slice(0, 2).join(' | ')
+	      : (linkageFindings.length
+	          ? 'This response does not clearly surface the identifier/context the next step needs.'
+	          : 'No obvious hidden handoff signal was detected for this step in the current lens.');
+
+	    var contractFailed = linkageFindings.length
+	      ? ('The contract does not make the next-step dependency explicit. It should return the next-step ID/context in an obvious field and document what the next call needs.')
+	      : (prerequisiteFindings.length
+	          ? 'The contract implies prerequisites without modeling them explicitly (clients must learn ordering at runtime).'
+	          : 'The contract burden here is primarily about sequence clarity and context transfer, not a single missing field.');
+
+	    var stepLabel = (idx >= 0 && steps.length) ? ('Step ' + (idx + 1) + ' of ' + steps.length) : 'Current step';
+	    var kind = chain && chain.kind ? String(chain.kind).replace(/-/g, ' to ') : 'workflow';
+	    var stepPrefix = (chain && steps.length) ? (stepLabel + ' — ' + kind + ' — ') : '';
+	    var nextActionFallback = nextEndpoint
+	      ? (nextEndpoint.method + ' ' + nextEndpoint.path)
+	      : (chain && steps.length ? 'No next step was inferred for this chain.' : 'Expand endpoints in this family and inspect the next likely call.');
+
+	    return '<div class="family-insight-card workflow-step-workspace">'
+	      + '<p class="insight-kicker">Workflow step workspace</p>'
+	      + '<ul class="family-top-evidence">'
+	      + '<li><strong>Current step:</strong> ' + escapeHtml(stepPrefix + endpoint.method + ' ' + endpoint.path) + '</li>'
+	      + '<li><strong>What this step needs:</strong> ' + escapeHtml(narrative.requiredState || 'No explicit prerequisites are visible in the contract; treat prior context as required.') + '</li>'
+	      + '<li><strong>Hidden handoff/context dependency:</strong> ' + escapeHtml(hiddenHandoff) + '</li>'
+	      + '<li><strong>What to call next:</strong> ' + escapeHtml(narrative.nextAction || nextActionFallback) + '</li>'
+	      + '<li><strong>Where the contract failed to communicate it:</strong> ' + escapeHtml(contractFailed) + '</li>'
 	      + '</ul>'
-	      + consistencySupportHtml
-	      + comparisonHtml
-		      + guidanceHtml
-		      + '</div>'
-		      + '<details class="detail-evidence-drawer">'
-		      + '<summary>Lead issue context</summary>'
-		      + '<div class="family-insight-card">'
-		      + '<p class="family-insight-lead-message">' + escapeHtml(topGroup && topGroup.messages[0] ? topGroup.messages[0] : 'No issue message extracted.') + '</p>'
-		      + '</div>'
-		      + '</details>'
 	      + '</div>';
 	  }
+
+		  function renderEndpointDiagnosticsWorkflowSummary(detail) {
+		    var endpoint = detail.endpoint || {};
+		    var findings = findingsForActiveLens(detail.findings || []);
+		    var groups = groupFindings(findings);
+		    var topGroup = groups[0] || null;
+	    var chainCount = (detail.relatedChains || []).length;
+	    var signalSummary = summarizeWorkflowHeaderSignals(detail);
+	    var guidance = collectTrapGuidance(endpoint, findings, { prereq: [], establish: [], nextNeeds: [], hidden: [] }, [], [], null, '', false);
+	    var guidanceHtml = renderTrapGuidanceList(guidance, {
+	      title: 'Workflow trap guidance',
+	      className: 'inspector-trap-guidance',
+	      limit: 3
+	    });
+
+	    // Render inferred workflow chain context as first-class section
+	    var chainContextHtml = renderWorkflowChainContextForEndpoint(detail);
+
+			    return '<div class="endpoint-diag-pane">'
+			      + chainContextHtml
+			      + '<div class="family-insight-card">'
+		      + '<p class="insight-kicker">Workflow continuity evidence</p>'
+		      + '<p class="subtle"><strong>' + escapeHtml(endpoint.method + ' ' + endpoint.path) + '</strong> '
+	      + (chainCount ? ('appears in ' + chainCount + ' workflow chain' + (chainCount === 1 ? '' : 's')) : 'is not currently linked to an inferred chain')
+	      + ' and is prioritized here for continuity burden signals.</p>'
+	      + '<ul class="family-top-evidence">'
+	      + '<li><strong>Primary continuity signals:</strong> ' + escapeHtml(signalSummary.replace(/^primary continuity signals:\s*/i, '')) + '.</li>'
+	      + '<li><strong>Why this matters to a client:</strong> When the contract does not expose next-step IDs/context, clients must guess, store hidden state, or add extra reads between calls.</li>'
+		      + '</ul>'
+				      + guidanceHtml
+				      + '</div>'
+				      + renderFullExactEvidenceDrawer(groups, { endpoint: endpoint, familyName: endpoint.family || '', open: false })
+			      + '</div>';
+			  }
 
   function renderCommonWorkflowJourneys(chains) {
     // Render guidance for common workflow journey patterns found in the API.
@@ -982,12 +1306,12 @@
       + '</div>';
   }
 
-  function renderEndpointDiagnosticsShapeSummary(detail) {
-    var endpoint = detail.endpoint || {};
-    var findings = findingsForActiveLens(detail.findings || []);
-    var groups = groupFindings(findings);
-    var topGroup = groups[0] || null;
-    var topContext = topGroup ? topGroup.context : {};
+	  function renderEndpointDiagnosticsShapeSummary(detail) {
+	    var endpoint = detail.endpoint || {};
+	    var findings = findingsForActiveLens(detail.findings || []);
+	    var groups = groupFindings(findings);
+	    var topGroup = groups[0] || null;
+	    var topContext = topGroup ? topGroup.context : {};
     var shapeTotals = collectShapeSignalTotalsForDetail(detail);
 
     // Pain signals — organized around developer pain, not schema categories
@@ -1050,7 +1374,7 @@
           + '</div>'
       : '';
 
-    return '<div class="endpoint-diag-pane">'
+	    return '<div class="endpoint-diag-pane">'
       + '<div class="shape-summary-intro">'
       + '<p class="shape-summary-kicker">Why this response is hard to use</p>'
       + '<p class="shape-summary-head"><strong>' + escapeHtml(endpoint.method + ' ' + endpoint.path) + '</strong> — '
@@ -1061,92 +1385,106 @@
       + profileHtml
       + locationHtml
       + '</div>'
-      + noSignalsHtml
-      + painHtml
-      + comparisonHtml
-      + guidanceHtml
-	      + '<details class="detail-evidence-drawer">'
-	      + '<summary>' + escapeHtml(evidenceGroupsSummaryLabel(groups.length)) + '</summary>'
-	      + '<div class="family-insight-card">'
-	      + '<p class="insight-kicker">Lead shape cluster</p>'
-	      + '<p class="family-insight-lead-message">' + escapeHtml(topGroup && topGroup.messages[0] ? topGroup.messages[0] : 'No shape-specific issue message extracted.') + '</p>'
-	      + (renderOpenAPIContextPills(topContext, true) ? ('<div class="family-insight-grounding">' + renderOpenAPIContextPills(topContext, true) + '</div>') : '')
-      + (groups.slice(0, 3).map(function (g) { return g.title; }).filter(Boolean).length
-          ? '<p class="subtle"><strong>Top dimensions:</strong> ' + escapeHtml(groups.slice(0, 3).map(function (g) { return g.title; }).join(', ')) + '.</p>'
-          : '')
-      + '</div>'
-      + '</details>'
-      + '</div>';
-  }
-
-		  function renderEndpointDiagnosticsExact(detail) {
-		    var findings = findingsForActiveLens(detail.findings || []);
-		    var endpoint = detail.endpoint || {};
-		    var familyName = endpoint.family || '';
-		    var groups = groupFindings(findings);
-		    var moreCount = groups.length - 1;
-		    var openDrawer = state.detailEvidenceOpenForId === state.selectedEndpointId;
-		    if (openDrawer) state.detailEvidenceOpenForId = '';
-
-			    return '<div class="endpoint-diag-pane">'
-			      + '<details class="detail-evidence-drawer"' + (openDrawer ? ' open' : '') + '>'
-			      + '<summary>' + escapeHtml(exactEvidenceGroupsSummaryLabel(groups.length)) + '</summary>'
-			      + '<section class="detail-section detail-section-tight">'
-			        + '  <p class="subtle detail-section-copy">' + escapeHtml(evidenceGroupsGroupingBasisCopy()) + '</p>'
-			      + groups.map(function (group, index) {
-			            return renderIssueGroup(group, index, { familyName: familyName, endpoint: endpoint });
-			          }).join('')
-		      + '</section>'
-		      + '</details>'
-	      + renderInspectorGroundingAndFlowContext(detail)
+	      + noSignalsHtml
+	      + painHtml
+	      + comparisonHtml
+	      + guidanceHtml
+	      + renderFullExactEvidenceDrawer(groups, { endpoint: endpoint, familyName: endpoint.family || '', open: false })
 	      + '</div>';
 	  }
 
-	  function renderInspectorGroundingAndFlowContext(detail) {
-	    var endpoint = detail.endpoint || {};
-	    var findings = findingsForActiveLens(detail.findings || []);
-	    var groups = groupFindings(findings);
-	    var topGroup = groups[0] || null;
-	    var topContext = topGroup ? topGroup.context : {};
-	    var chainContext = buildChainContext(detail.relatedChains || [], endpoint.id || state.selectedEndpointId, state.payload.endpointDetails);
+				  function renderEndpointDiagnosticsExact(detail) {
+				    var findings = findingsForActiveLens(detail.findings || []);
+				    var endpoint = detail.endpoint || {};
+				    var familyName = endpoint.family || '';
+				    var groups = groupFindings(findings);
+				    var moreCount = groups.length - 1;
+				    var openDrawer = state.detailEvidenceOpenForId === state.selectedEndpointId;
+
+					    return '<div class="endpoint-diag-pane">'
+					      + renderFullExactEvidenceDrawer(groups, { endpoint: endpoint, familyName: familyName, open: openDrawer })
+			      + renderInspectorGroundingAndFlowContext(detail)
+			      + '</div>';
+			  }
+
+		  function renderInspectorGroundingAndFlowContext(detail) {
+		    var specRuleTabActive = state.activeTopTab === 'spec-rule';
+		    var workflowTabActive = state.activeTopTab === 'workflow';
+		    var endpoint = detail.endpoint || {};
+		    var findings = findingsForActiveLens(detail.findings || []);
+		    var groups = groupFindings(findings);
+		    var topGroup = groups[0] || null;
+		    var topContext = topGroup ? topGroup.context : {};
+		    var chainContext = (workflowTabActive && !specRuleTabActive)
+		      ? buildChainContext(detail.relatedChains || [], endpoint.id || state.selectedEndpointId, state.payload.endpointDetails)
+		      : '';
+		    var scopeFamilyName = endpoint.family || '';
+		    var scopeLabel = topGroup ? issueScopeLabelForKey(topGroup.groupKey || '', scopeFamilyName) : '';
+		    var inspectTarget = topGroup ? (inspectTargetForGroup(topGroup, endpoint) || topGroup.inspectHint || '') : '';
+		    var schemaClues = topOpenAPIHighlights(groups).slice(0, 4);
 	    var openApiPills = renderOpenAPIContextPills(topContext, true);
 	    var specGrounding = topGroup && topGroup.isSpecRule ? renderSpecRuleGroundingForGroup(topGroup) : '';
 	    var groundingHtml = (openApiPills || specGrounding)
 	      ? ('<div class="family-insight-grounding">' + openApiPills + specGrounding + '</div>')
 	      : '';
 
-	    var schemaSection = '<section class="detail-section detail-section-tight">'
-	      + '<h3>Schema grounding</h3>'
-	      + '<div class="family-insight-card">'
-	      + '<p class="family-insight-lead-message">' + escapeHtml(topGroup && topGroup.messages[0] ? topGroup.messages[0] : 'No issue message extracted.') + '</p>'
+	    var leadMessage = topGroup && topGroup.messages && topGroup.messages[0]
+	      ? topGroup.messages[0]
+	      : (findings[0] && findings[0].message ? findings[0].message : 'No issue message extracted.');
+	    var whyMatters = topGroup && topGroup.impact
+	      ? topGroup.impact
+	      : (topGroup ? dimensionImpact(topGroup.dimension) : 'Why-it-matters context was not available for this endpoint.');
+	    var schemaClueHtml = schemaClues.length
+	      ? ('<p class="subtle grounding-clues"><strong>Schema clues:</strong> '
+	          + schemaClues.map(function (l) { return '<code>' + escapeHtml(l) + '</code>'; }).join(' · ')
+	          + '</p>')
+	      : '<p class="subtle grounding-clues"><strong>Schema clues:</strong> No stable OpenAPI location hint was extracted from the grouped messages.</p>';
+	    var summaryGrid = '<div class="grounding-summary-grid">'
+	      + '<div class="grounding-summary-item"><span class="grounding-summary-label">Evidence target</span><span class="grounding-summary-value">' + escapeHtml(exactEvidenceTargetLabel()) + '</span></div>'
+	      + (scopeLabel ? ('<div class="grounding-summary-item"><span class="grounding-summary-label">Scope</span><span class="grounding-summary-value">' + escapeHtml(scopeLabel) + '</span></div>') : '')
+	      + (inspectTarget ? ('<div class="grounding-summary-item grounding-summary-item-wide"><span class="grounding-summary-label">Inspect in schema</span><span class="grounding-summary-value"><code>' + escapeHtml(inspectTarget) + '</code></span></div>') : '')
+	      + '</div>';
+
+		    var schemaSection = '<section class="detail-section detail-section-tight">'
+		      + '<h3>Schema grounding</h3>'
+		      + '<div class="family-insight-card">'
+		      + summaryGrid
+		      + '<p class="family-insight-lead-message">' + escapeHtml(leadMessage) + '</p>'
+	      + schemaClueHtml
+	      + '<p class="subtle grounding-why"><strong>Why it matters:</strong> ' + escapeHtml(whyMatters) + '</p>'
 	      + (groundingHtml ? groundingHtml : '<p class="subtle">No OpenAPI location cues or spec-rule grounding were available for the lead message.</p>')
-	      + '</div>'
-	      + '</section>';
+		      + '</div>'
+		      + '</section>';
 
-	    var workflowSection = chainContext
-	      ? '<section class="detail-section detail-section-tight"><h3>Workflow context</h3>' + chainContext + '</section>'
-	      : '';
+		    var workflowSection = '';
+		    if (workflowTabActive && !specRuleTabActive) {
+		      workflowSection = chainContext
+		        ? '<section class="detail-section detail-section-tight"><h3>Workflow context</h3>' + chainContext + '</section>'
+		        : '<section class="detail-section detail-section-tight"><h3>Workflow context</h3>'
+		            + '<p class="subtle">No inferred workflow chain includes this endpoint in the current view. If this endpoint participates in a multi-step client flow, that linkage is not being exposed clearly by the contract signals we extracted.</p>'
+		            + '</section>';
+		    }
 
-		    return '<details class="detail-evidence-drawer">'
-		      + '<summary>Schema grounding and workflow context</summary>'
-		      + schemaSection
-		      + workflowSection
-		      + '</details>';
-		  }
+			    return '<details class="detail-evidence-drawer">'
+			      + '<summary>' + ((specRuleTabActive || !workflowTabActive) ? 'Schema grounding' : 'Schema grounding and workflow context') + '</summary>'
+			      + '<div class="details-close-row"><button type="button" class="tertiary-action details-close-btn" data-close-details="1" aria-label="Hide grounding" title="Hide grounding">Hide grounding</button></div>'
+			      + schemaSection
+			      + workflowSection
+			      + '</details>';
+			  }
 
-  function renderInspectorContentMap() {
-    var workflowTabActive = state.activeTopTab === 'workflow';
-    var shapeTabActive = state.activeTopTab === 'shape';
-    var mapping = workflowTabActive
-      ? 'Workflow Guidance inspector: Continuity summary = step-position context, hidden deps, traps. Workflow-context evidence = grouped messages + flow context.'
-    : shapeTabActive
-      ? 'Response Shape inspector: Shape pain = per-signal DX analysis + caller-needed. Contract improvements = exact response/schema edits. Shape burden evidence = raw grouped messages.'
-      : 'Contract Issues inspector: Contract violation evidence = grouped spec-rule messages. Consistency/drift = path/shape drift analysis. Contract improvements = exact response/schema edits.';
-    return '<details class="inspector-content-map-drawer">'
-      + '<summary>Inspector scope</summary>'
-      + '<p class="subtle inspector-content-map">' + escapeHtml(mapping) + '</p>'
-      + '</details>';
-  }
+	  function renderInspectorContentMap() {
+	    var workflowTabActive = state.activeTopTab === 'workflow';
+	    var shapeTabActive = state.activeTopTab === 'shape';
+	    var mapping = workflowTabActive
+	      ? 'Workflow Guidance inspector: Continuity summary = step-position context, hidden deps, traps. Workflow-context evidence = grouped messages + flow context.'
+	    : shapeTabActive
+	      ? 'Response Shape inspector: Shape pain = per-signal DX analysis + caller-needed. Contract improvements = exact response/schema edits. Shape burden evidence = raw grouped messages.'
+	      : 'Contract Issues inspector: OpenAPI rule violations (REQUIRED vs SHOULD) + consistency drift. Exact contract evidence = grouped rule instances with schema grounding.';
+	    // If the content is only a single sentence/line of helper text, do not use an accordion.
+	    // Accordions are reserved for materially more content (payload fragments, before/after examples, multi-part guidance).
+	    return '<p class="subtle inspector-content-map-inline"><strong>Inspector scope:</strong> ' + escapeHtml(mapping) + '</p>';
+	  }
 
   function renderEndpointDiagnosticsCleaner(detail) {
     var findings = findingsForActiveLens(detail.findings || []);
@@ -1630,13 +1968,13 @@
 
 	      var hint = '';
 	      el.lensControlHint.classList.remove('lens-hint-spec-rule', 'lens-hint-workflow', 'lens-hint-shape');
-	      if (specRuleTabActive) {
-	        var parts = ['rules-based violations'];
-	        var searchLabel = searchScopeLabel();
-	        if (searchLabel) parts.push(searchLabel);
-	        parts.push(burdenScopeLabel());
-	        parts.push(familyScopeLabel());
-	        hint = 'Contract Issues scope: ' + parts.join(', ') + '.';
+		      if (specRuleTabActive) {
+		        var parts = ['OpenAPI rule violations + consistency drift'];
+		        var searchLabel = searchScopeLabel();
+		        if (searchLabel) parts.push(searchLabel);
+		        parts.push(burdenScopeLabel());
+		        parts.push(familyScopeLabel());
+		        hint = 'Contract Issues scope: ' + parts.join(', ') + '.';
 	        el.lensControlHint.classList.add('lens-hint-spec-rule');
 	      } else if (workflowTabActive) {
 	        var parts = [];
@@ -1676,8 +2014,8 @@
     state.filters.familyPressure = "all";
     state.filters.includeNoIssueRows = false;
 
-    // Reset filters within the currently active top-level tab only.
-    // Never change the active tab as a side effect of reset.
+	    // Reset filters within the currently active top-level tab only.
+	    // Never change the active tab as a side effect of reset.
     if (tab === 'spec-rule') {
       state.filters.category = 'spec-rule';
       state.filters.burden = 'all';
@@ -1692,58 +2030,94 @@
       state.endpointDiagnosticsSubTab = 'summary';
     }
 
-    // Keep selected endpoint coherent with the current view after reset.
-    var rows = selectionRowsForActiveView();
-    state.selectedEndpointId = rows.length ? firstVisibleEndpointId(rows) : '';
+		    // Reset should not silently pick a selected endpoint. Let users choose via "Inspect endpoint".
+		    state.selectedEndpointId = '';
+		    state.userSelectedEndpoint = false;
 
-    render();
-    pulseLensUpdate();
-  }
+		    render();
+		    pulseLensUpdate();
+		  }
 
-  function focusFamilySurface(family) {
-    if (!family) return;
-    state.filters.search = family.trim().toLowerCase();
-    state.familyTableShowAll = false;
-    state.filters.includeNoIssueRows = false;
-    state.detailEvidenceOpenForId = '';
+		  function focusFamilySurface(family) {
+		    if (!family) return;
 
-    if (state.activeTopTab === 'spec-rule') {
-      state.filters.category = 'spec-rule';
-      state.filters.burden = 'all';
-      state.filters.familyPressure = 'all';
-      state.endpointDiagnosticsSubTab = 'exact';
-    } else if (state.activeTopTab === 'workflow') {
-      state.filters.category = 'all';
-      state.filters.burden = 'workflow-burden';
-      state.filters.familyPressure = 'all';
-      state.endpointDiagnosticsSubTab = 'summary';
-    } else if (state.activeTopTab === 'shape') {
-      state.filters.category = 'all';
-      state.filters.burden = 'contract-shape';
-      state.filters.familyPressure = 'all';
-      state.endpointDiagnosticsSubTab = 'summary';
-    }
+	    captureFamilyTableBackStateIfNeeded();
+	    state.filters.search = family.trim().toLowerCase();
+		    state.familyTableShowAll = false;
+		    state.detailEvidenceOpenForId = '';
+		    // Keep endpoint selection separate from family expansion/focus. If the current
+		    // selection falls out of view, clear it rather than jumping to a new endpoint.
+		    var rows = filteredRows();
+		    if (state.selectedEndpointId && !rows.some(function (r) { return (r && r.id) === state.selectedEndpointId; })) {
+		      state.selectedEndpointId = '';
+		    }
+		    render();
+		  }
 
-    state.selectedEndpointId = firstVisibleEndpointId(filteredRows());
-    render();
-  }
+	  function hasFamilyScopeActive() {
+	    return !!state.filters.search
+	      || state.filters.familyPressure !== 'all'
+	      || !!state.expandedFamily
+	      || !!state.expandedFamilyInsight
+	      || Object.keys(state.expandedEndpointInsightIds || {}).length > 0;
+	  }
 
-  function hasFamilyScopeActive() {
-    return !!state.filters.search
-      || state.filters.familyPressure !== 'all'
-      || !!state.expandedFamily
-      || !!state.expandedFamilyInsight
-      || Object.keys(state.expandedEndpointInsightIds || {}).length > 0;
-  }
+	  function hasFamilyDrillActive() {
+	    // Back affordance should appear when the user has drilled into a specific family
+	    // surface (focus search / expanded endpoints / insight).
+	    if (state.familyTableBackState) return true;
+	    if (state.expandedFamily) return true;
+	    if (state.expandedFamilyInsight) return true;
+	    if (Object.keys(state.expandedEndpointInsightIds || {}).length > 0) return true;
+	    // Heuristic: exact-family search looks like a drill even if we missed capture.
+	    return isExactFamilyName((state.filters.search || '').trim().toLowerCase());
+	  }
 
-  function resetFamilySurfaceScope() {
-    state.filters.search = '';
-    state.filters.familyPressure = 'all';
-    state.expandedFamily = '';
-    state.expandedFamilyInsight = '';
-    state.expandedEndpointInsightIds = {};
-    state.detailEvidenceOpenForId = '';
-  }
+	  function cloneJSON(obj) {
+	    try { return JSON.parse(JSON.stringify(obj || {})); } catch (e) { return {}; }
+	  }
+
+	  function captureFamilyTableBackStateIfNeeded(overrides) {
+	    if (state.familyTableBackState) return;
+	    var o = overrides || {};
+	    state.familyTableBackState = {
+	      search: (typeof o.search === 'string') ? o.search : (state.filters.search || ''),
+	      familyTableShowAll: !!state.familyTableShowAll,
+	      expandedFamily: state.expandedFamily || '',
+	      expandedFamilyInsight: state.expandedFamilyInsight || '',
+	      expandedEndpointInsightIds: cloneJSON(state.expandedEndpointInsightIds || {}),
+	      expandedEndpointRowFindings: cloneJSON(state.expandedEndpointRowFindings || {}),
+	      detailEvidenceOpenForId: state.detailEvidenceOpenForId || ''
+	    };
+	  }
+
+		  function restoreFamilyTableBackState() {
+		    if (!state.familyTableBackState) {
+		      // Best-effort: clear drill-only expansions without touching the filter controls.
+		      state.expandedFamily = '';
+		      state.expandedFamilyInsight = '';
+		      state.expandedEndpointInsightIds = {};
+		      state.expandedEndpointRowFindings = {};
+		      state.detailEvidenceOpenForId = '';
+		      return;
+		    }
+		    var s = state.familyTableBackState;
+		    state.filters.search = s.search || '';
+		    state.familyTableShowAll = !!s.familyTableShowAll;
+		    state.expandedFamily = s.expandedFamily || '';
+		    state.expandedFamilyInsight = s.expandedFamilyInsight || '';
+		    state.expandedEndpointInsightIds = s.expandedEndpointInsightIds || {};
+		    state.expandedEndpointRowFindings = s.expandedEndpointRowFindings || {};
+		    state.detailEvidenceOpenForId = s.detailEvidenceOpenForId || '';
+
+		    // Single-expand policy: never restore a state that expands multiple different
+		    // families at once (endpoints vs insight). If a stale snapshot contains both,
+		    // keep the endpoints expansion (primary drill path) and drop the mismatched insight.
+		    if (state.expandedFamily && state.expandedFamilyInsight && state.expandedFamily !== state.expandedFamilyInsight) {
+		      state.expandedFamilyInsight = '';
+		    }
+		    state.familyTableBackState = null;
+		  }
 
   function isElementOffscreen(node) {
     if (!node) return false;
@@ -1751,45 +2125,114 @@
     return rect.bottom <= 0 || rect.top >= (window.innerHeight || document.documentElement.clientHeight || 0);
   }
 
-  function revealInspectorIfNeeded() {
-    if (!el.endpointDiagnosticsSection) return;
-    if (!isElementOffscreen(el.endpointDiagnosticsSection)) return;
-    el.endpointDiagnosticsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+		  function revealInspectorIfNeeded() {
+		    // Scroll only when the workspace is actually outside the viewport.
+		    // Prefer the inline inspector mount (keeps ownership connected to the row).
+		    var inlineMount = findInlineInspectorMount(state.selectedEndpointId);
+		    var header = inlineMount
+		      ? (inlineMount.querySelector('.inspector-workspace-head') || inlineMount)
+		      : (el.endpointDiagnosticsSection ? (el.endpointDiagnosticsSection.querySelector('.section-heading') || el.endpointDiagnosticsSection) : null);
+		    if (!header) return;
+		    if (!isElementOffscreen(header)) return;
+		    header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		  }
 
-	  function selectEndpointForInspector(endpointId, subTab) {
-	    if (!endpointId) return;
-	    state.inspectingEndpointId = endpointId;
-	    state.selectedEndpointId = endpointId;
-	    // Preserve the currently active inspector tab unless a caller explicitly sets one.
-	    state.endpointDiagnosticsSubTab = (typeof subTab === 'string' && subTab)
-	      ? subTab
-	      : (state.endpointDiagnosticsSubTab || 'summary');
-	    renderFamilySurface();
-	    renderEndpointRows();
-	    renderEndpointDiagnostics();
-	    renderEndpointDetail();
-	    syncSelectedEndpointHighlight();
-    syncWorkflowStepSelectionHighlight();
-    revealInspectorIfNeeded();
-    requestAnimationFrame(function () {
-      state.inspectingEndpointId = '';
-      renderFamilySurface();
-    });
-  }
+				  function selectEndpointForInspector(endpointId, subTab) {
+				    if (!endpointId) return;
+				    state.inspectingEndpointId = endpointId;
+				    state.selectedEndpointId = endpointId;
+				    state.userSelectedEndpoint = true;
+			    // Always keep the workspace attached to the family surface:
+			    // expand the owning family and render the inspector inline beneath that family's
+			    // nested endpoint table (never as a detached lower-page module).
+			    state.inspectPlacementHint = 'nested';
+			    var detailForFocus = endpointDetailForId(endpointId);
+			    var endpointForFocus = detailForFocus && detailForFocus.endpoint ? detailForFocus.endpoint : endpointRowForId(endpointId);
+			    var familyForFocus = endpointForFocus ? (endpointForFocus.family || '') : '';
+			    if (familyForFocus) {
+			      captureFamilyTableBackStateIfNeeded();
+			      state.expandedFamily = familyForFocus;
+			      if (state.expandedFamilyInsight && state.expandedFamilyInsight !== familyForFocus) {
+			        state.expandedFamilyInsight = '';
+			      }
+			    }
+			    // Preserve the currently active inspector tab unless a caller explicitly sets one.
+			    state.endpointDiagnosticsSubTab = (typeof subTab === 'string' && subTab)
+			      ? subTab
+			      : (state.endpointDiagnosticsSubTab || 'summary');
+		    renderFamilySurface();
+		    renderEndpointDiagnostics();
+		    renderEndpointDetail();
+		    syncSelectedEndpointHighlight();
+	    syncWorkflowStepSelectionHighlight();
+		    revealInspectorIfNeeded();
+					    requestAnimationFrame(function () {
+					      state.inspectingEndpointId = '';
+					      renderFamilySurface();
+					      renderEndpointDiagnostics();
+					    });
+					  }
 
-  function renderFamilySurface() {
-    var summaries = familySummaries();
-    var lensContext = buildFamilySurfaceContext(summaries);
-    var visibleFamilies = {};
-    summaries.forEach(function (family) {
-      visibleFamilies[family.family || 'unlabeled family'] = true;
-    });
-    if (state.expandedFamily && !visibleFamilies[state.expandedFamily]) {
-      state.expandedFamily = "";
-    }
-    if (state.expandedFamilyInsight && !visibleFamilies[state.expandedFamilyInsight]) {
-      state.expandedFamilyInsight = "";
+	  function endpointRowForId(endpointId) {
+	    if (!endpointId || !state.payload || !state.payload.endpoints) return null;
+	    return (state.payload.endpoints || []).find(function (row) {
+	      return row && row.id === endpointId;
+	    }) || null;
+	  }
+
+	  function endpointDetailForId(endpointId) {
+	    if (!endpointId || !state.payload) return null;
+	    var details = state.payload.endpointDetails || {};
+	    if (details && details[endpointId]) return details[endpointId];
+	    var row = endpointRowForId(endpointId);
+	    if (!row) return null;
+	    // Fallback so Inspect never "does nothing" when endpointDetails is missing.
+	    return {
+	      endpoint: row,
+	      findings: [],
+	      relatedWorkflows: [],
+	      relatedChains: [],
+	      relatedDiff: []
+	    };
+	  }
+
+		  function renderFamilySurface() {
+		    // Keep the family surface framing aligned with the active lens so the Workflow
+		    // tab does not read like a generic contract-clustering table.
+		    var familySection = el.familySurface ? el.familySurface.closest('.section') : null;
+		    if (familySection) {
+		      var heading = familySection.querySelector('.section-heading h2');
+		      var eyebrow = familySection.querySelector('.section-heading .eyebrow');
+		      if (state.activeTopTab === 'workflow') {
+		        if (eyebrow) eyebrow.textContent = 'Workflow surface';
+		        if (heading) heading.textContent = 'Workflow continuity clusters';
+		      } else if (state.activeTopTab === 'shape') {
+		        if (eyebrow) eyebrow.textContent = 'Response Shape surface';
+		        if (heading) heading.textContent = 'Response-shape investigation clusters';
+		      } else {
+		        if (eyebrow) eyebrow.textContent = 'Contract surface';
+		        if (heading) heading.textContent = 'Family investigation clusters';
+		      }
+		    }
+
+		    var summaries = familySummaries();
+		    var lensContext = buildFamilySurfaceContext(summaries);
+		    var visibleFamilies = {};
+	    summaries.forEach(function (family) {
+	      visibleFamilies[family.family || 'unlabeled family'] = true;
+	    });
+
+	    // Single-expand policy: expanding a new family collapses any previously expanded family.
+	    // `expandedFamily` drives the nested endpoints table, while `expandedFamilyInsight` drives
+	    // the inline insight panel. We do not support multi-expand across different families.
+	    if (state.expandedFamily && state.expandedFamilyInsight && state.expandedFamily !== state.expandedFamilyInsight) {
+	      state.expandedFamilyInsight = '';
+	    }
+	    if (state.expandedFamily && !visibleFamilies[state.expandedFamily]) {
+	      state.expandedFamily = "";
+	    }
+	    if (state.expandedFamilyInsight && !visibleFamilies[state.expandedFamilyInsight]) {
+	      state.expandedFamilyInsight = "";
     }
 
     if (!summaries.length) {
@@ -1798,19 +2241,19 @@
         : '';
       el.familySurfaceContext.innerHTML = lensContext;
       bindRecoveryButtons(el.familySurfaceContext);
-      var shapeTabActive = state.activeTopTab === 'shape';
+      var hasWidenAction = !!(state.filters.search
+        || state.filters.category !== 'all'
+        || state.filters.burden !== 'all'
+        || state.filters.familyPressure !== 'all'
+        || state.filters.includeNoIssueRows
+        || state.familyTableBackState);
+      var recovery = hasWidenAction ? renderRecoveryActions(['clear-table-filters']) : '';
       el.familySurface.innerHTML = '<div class="empty">'
         + '<strong>No matching families.</strong>'
-        + '<p class="subtle">'
-        + escapeHtml(shapeTabActive
-            ? 'The current filters removed every family. Use the recovery controls in the family context block above to widen this view.'
-            : 'The current filters removed every family. Use the buttons below to widen the view.')
-        + '</p>'
-        + (shapeTabActive ? '' : renderRecoveryActions(["clear-search", "reset-burden", "clear-table-filters", "clear-current-lens"]))
+        + '<p class="subtle">No families match the current scope.' + (hasWidenAction ? ' Clear table filters to widen the view.' : '') + '</p>'
+        + recovery
         + '</div>';
-      if (!shapeTabActive) {
-        bindRecoveryButtons(el.familySurface);
-      }
+      bindRecoveryButtons(el.familySurface);
       return;
     }
 
@@ -1836,39 +2279,73 @@
       });
     });
 
-    // Insight toggle button handling
-    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-insight-toggle]"), function (btn) {
-      btn.addEventListener("click", function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        var family = btn.getAttribute("data-insight-toggle") || "";
-        var nextFamilyInsight = (state.expandedFamilyInsight === family) ? "" : family;
-        state.expandedFamilyInsight = nextFamilyInsight;
-        if (nextFamilyInsight) {
-          state.expandedFamily = family;
-        }
-        state.expandedEndpointInsightIds = {};
-        renderFamilySurface();
-      });
-      var isExpanded = state.expandedFamilyInsight === (btn.getAttribute("data-insight-toggle") || "");
-      btn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
-    });
+			    // Insight toggle button handling
+			    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-insight-toggle]"), function (btn) {
+			      btn.addEventListener("click", function (event) {
+			        event.preventDefault();
+			        event.stopPropagation();
+			        var family = btn.getAttribute("data-insight-toggle") || "";
+			        if (!family) return;
+			        captureFamilyTableBackStateIfNeeded();
+			        var nextFamilyInsight = (state.expandedFamilyInsight === family) ? "" : family;
+			        state.expandedFamilyInsight = nextFamilyInsight;
+			        if (nextFamilyInsight) {
+			          state.expandedFamily = family;
+			        }
+			        // Expanding/collapsing a family is a new "active row" intent. Clear any prior
+			        // selected endpoint so blue selection does not stick to an unrelated row.
+			        state.selectedEndpointId = '';
+			        state.userSelectedEndpoint = false;
+			        state.detailEvidenceOpenForId = '';
+			        state.expandedEndpointInsightIds = {};
+			        state.expandedEndpointRowFindings = {};
+			        renderFamilySurface();
+			        renderEndpointDiagnostics();
+			        renderEndpointDetail();
+			        syncSelectedEndpointHighlight();
+			      });
+			      var isExpanded = state.expandedFamilyInsight === (btn.getAttribute("data-insight-toggle") || "");
+			      btn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+			    });
 
-    // Endpoints expand button handling
-    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-expand-endpoints]"), function (btn) {
-      btn.addEventListener("click", function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        var family = btn.getAttribute("data-expand-endpoints") || "";
-        if (!family) return;
-        var nextExpandedFamily = (state.expandedFamily === family) ? "" : family;
-        state.expandedFamily = nextExpandedFamily;
-        state.expandedEndpointInsightIds = {};
-        renderFamilySurface();
-      });
-      var expanded = state.expandedFamily === (btn.getAttribute("data-expand-endpoints") || "");
-      btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    });
+			    // Endpoints expand button handling
+			    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-expand-endpoints]"), function (btn) {
+			      btn.addEventListener("click", function (event) {
+			        event.preventDefault();
+			        event.stopPropagation();
+			        var family = btn.getAttribute("data-expand-endpoints") || "";
+			        if (!family) return;
+			        captureFamilyTableBackStateIfNeeded();
+			        var nextExpandedFamily = (state.expandedFamily === family) ? "" : family;
+			        state.expandedFamily = nextExpandedFamily;
+			        if (nextExpandedFamily && state.expandedFamilyInsight && state.expandedFamilyInsight !== nextExpandedFamily) {
+			          state.expandedFamilyInsight = '';
+			        }
+			        // Treat endpoint expansion/collapse as a family-level selection change.
+			        // Clear endpoint selection so the highlight follows the user's active family intent.
+			        state.selectedEndpointId = '';
+			        state.userSelectedEndpoint = false;
+			        state.detailEvidenceOpenForId = '';
+			        state.expandedEndpointInsightIds = {};
+			        state.expandedEndpointRowFindings = {};
+			        renderFamilySurface();
+			        renderEndpointDiagnostics();
+			        renderEndpointDetail();
+			        syncSelectedEndpointHighlight();
+			      });
+			      var expanded = state.expandedFamily === (btn.getAttribute("data-expand-endpoints") || "");
+			      btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+			    });
+
+	    Array.prototype.forEach.call(el.familySurface.querySelectorAll('button[data-inspect-top-endpoint]'), function (btn) {
+	      btn.addEventListener('click', function (event) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	        var endpointId = btn.getAttribute('data-inspect-top-endpoint') || '';
+	        if (!endpointId) return;
+	        selectEndpointForInspector(endpointId);
+	      });
+	    });
 
     Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-endpoint-insight-toggle]"), function (btn) {
       btn.addEventListener("click", function (event) {
@@ -1911,16 +2388,17 @@
 	      });
 	    });
 
-    // Focus endpoint buttons in expansion
-    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-focus-endpoint]"), function (btn) {
-      btn.addEventListener("click", function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        var endpointId = btn.getAttribute("data-focus-endpoint") || "";
-        if (!endpointId) return;
-        selectEndpointForInspector(endpointId, 'summary');
-      });
-    });
+	    // Focus endpoint buttons in expansion
+			    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-focus-endpoint]"), function (btn) {
+			      btn.addEventListener("click", function (event) {
+			        event.preventDefault();
+			        event.stopPropagation();
+			        var endpointId = btn.getAttribute("data-focus-endpoint") || "";
+			        if (!endpointId) return;
+		        state.inspectPlacementHint = 'nested';
+		        selectEndpointForInspector(endpointId);
+			      });
+			    });
 
     Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-focus-family]"), function (btn) {
       btn.addEventListener("click", function (event) {
@@ -1931,30 +2409,50 @@
       });
     });
 
-	    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-open-evidence-id]"), function (btn) {
-	      btn.addEventListener("click", function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        var endpointId = btn.getAttribute("data-open-evidence-id") || "";
-        if (!endpointId) return;
-        state.selectedEndpointId = endpointId;
-        state.detailEvidenceOpenForId = endpointId;
-        if (state.activeTopTab === 'workflow' || state.activeTopTab === 'shape') {
-          state.endpointDiagnosticsSubTab = 'exact';
-        }
-        renderEndpointRows();
-        renderEndpointDiagnostics();
-        renderEndpointDetail();
-        syncWorkflowStepSelectionHighlight();
-      });
-	    });
+			    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-open-evidence-id]"), function (btn) {
+			      btn.addEventListener("click", function (event) {
+		        event.preventDefault();
+		        event.stopPropagation();
+		        var endpointId = btn.getAttribute("data-open-evidence-id") || "";
+		        if (!endpointId) return;
+		        state.inspectPlacementHint = 'nested';
+		        state.detailEvidenceOpenForId = endpointId;
+		        // Clicking a finding-count / evidence CTA must always open the matching evidence groups.
+		        selectEndpointForInspector(endpointId, 'exact');
+		        syncWorkflowStepSelectionHighlight();
+		      });
+			    });
 
-	    // Make nested endpoint rows clickable for quick triage into the inspector.
-	    Array.prototype.forEach.call(el.familySurface.querySelectorAll(".nested-endpoint-row[data-endpoint-id]"), function (tr) {
-	      tr.addEventListener("click", function () {
-	        var endpointId = tr.getAttribute("data-endpoint-id") || "";
+		    // Make nested endpoint rows clickable for quick triage into the inspector.
+		    Array.prototype.forEach.call(el.familySurface.querySelectorAll(".nested-endpoint-row[data-endpoint-id]"), function (tr) {
+		      tr.addEventListener("click", function () {
+		        var endpointId = tr.getAttribute("data-endpoint-id") || "";
+		        if (!endpointId) return;
+		        state.inspectPlacementHint = 'nested';
+		        selectEndpointForInspector(endpointId);
+		      });
+		    });
+
+	    // If the inspector is rendered as a detached workspace (fallback), provide explicit
+	    // navigation so users never feel lost.
+	    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-jump-to-workspace]"), function (btn) {
+	      btn.addEventListener("click", function (event) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	        if (!el.endpointDiagnosticsSection) return;
+	        var header = el.endpointDiagnosticsSection.querySelector('.section-heading') || el.endpointDiagnosticsSection;
+	        header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	      });
+	    });
+	    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-return-to-row]"), function (btn) {
+	      btn.addEventListener("click", function (event) {
+	        event.preventDefault();
+	        event.stopPropagation();
+	        var endpointId = btn.getAttribute("data-return-to-row") || "";
 	        if (!endpointId) return;
-	        selectEndpointForInspector(endpointId, 'summary');
+	        var row = el.familySurface.querySelector('.nested-endpoint-row[data-endpoint-id="' + endpointId + '"]') || el.familySurface.querySelector('tr[data-endpoint-id="' + endpointId + '"]');
+	        if (!row) return;
+	        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
 	      });
 	    });
 
@@ -1990,37 +2488,31 @@
 	    return v;
 	  }
 
-	  function renderActiveScopeStrip(options) {
-	    var opts = options || {};
-	    var dense = opts.dense !== false;
-	    var search = state.filters.search ? ('"' + state.filters.search + '"') : 'none';
-	    var category = state.filters.category === 'all'
-	      ? 'all'
-	      : (state.filters.category || '').replaceAll('-', ' ');
-	    var burden = state.filters.burden === 'all'
-	      ? 'all'
-	      : (state.filters.burden || '').replaceAll('-', ' ');
-	    var pressure = state.filters.familyPressure === 'all'
-	      ? 'all'
-	      : state.filters.familyPressure;
-	    var noIssue = state.filters.includeNoIssueRows ? 'included' : 'excluded';
+		  function renderActiveScopeStrip(options) {
+		    var opts = options || {};
+		    var dense = opts.dense !== false;
+		    var search = state.filters.search ? ('"' + state.filters.search + '"') : 'none';
+		    var category = state.filters.category === 'all'
+		      ? 'all'
+		      : (state.filters.category || '').replaceAll('-', ' ');
+		    var burden = state.filters.burden === 'all'
+		      ? 'all'
+		      : (state.filters.burden || '').replaceAll('-', ' ');
+		    var pressure = state.filters.familyPressure === 'all'
+		      ? 'all'
+		      : state.filters.familyPressure;
+		    var noIssue = state.filters.includeNoIssueRows ? 'included' : 'excluded';
+		    var line = activeTopTabLabel() + ' scope: '
+		      + 'search ' + search + ', '
+		      + 'category ' + category + ', '
+		      + 'burden ' + burden + ', '
+		      + 'family pressure ' + pressure + ', '
+		      + 'no-issue rows ' + noIssue + '.';
 
-	    function chip(label, value) {
-	      return '<span class="active-scope-chip">'
-	        + '<span class="active-scope-chip-label">' + escapeHtml(label) + '</span>'
-	        + '<span class="active-scope-chip-value">' + escapeHtml(formatScopeValue(value, '—')) + '</span>'
-	        + '</span>';
-	    }
-
-	    return '<div class="active-scope-strip' + (dense ? ' is-dense' : '') + '" role="status" aria-label="Active scope">'
-	      + chip('Tab', activeTopTabLabel())
-	      + chip('Search', search)
-	      + chip('Category', category)
-	      + chip('Burden', burden)
-	      + chip('Family pressure', pressure)
-	      + chip('No-issue rows', noIssue)
-	      + '</div>';
-	  }
+		    return '<div class="active-scope-strip' + (dense ? ' is-dense' : '') + '" role="status" aria-label="Active scope">'
+		      + '<p class="active-scope-text" title="' + escapeHtml(line) + '">' + escapeHtml(line) + '</p>'
+		      + '</div>';
+		  }
 
 	  function renderWhatToDoNextBlock(endpoint, findings, options) {
 	    var opts = options || {};
@@ -2044,37 +2536,36 @@
 	      + '</section>';
 	  }
 
-	  function renderInspectorWorkspaceHeader(detail, findings) {
-	    var endpoint = (detail && detail.endpoint) ? detail.endpoint : {};
-	    var lensFindings = findingsForActiveLens(findings || []);
-	    var groups = groupFindings(lensFindings);
-	    var topGroup = groups[0] || null;
-	    var topMsg = topGroup && topGroup.messages && topGroup.messages[0]
-	      ? topGroup.messages[0]
-	      : (lensFindings[0] && lensFindings[0].message ? lensFindings[0].message : 'No issue message extracted.');
-	    var severity = dominantSeverity(lensFindings);
-	    var familyName = endpoint.family || 'unlabeled family';
-	    var scope = topGroup ? issueScopeLabelForKey(topGroup.groupKey || '', familyName) : 'Endpoint only';
-	    var scopePill = '<span class="row-issue-scope-pill" title="' + escapeHtml('Scope: ' + scope) + '"><strong>Scope:</strong> ' + escapeHtml(scope) + '</span>';
-	    var intent = endpointIntentCue(endpoint.method || '', endpoint.path || '');
-	    var contextHtml = topGroup ? renderOpenAPIContextPills(topGroup.context || {}, true) : '';
-	    var countLabel = lensFindings.length ? (lensFindings.length + ' issue' + (lensFindings.length === 1 ? '' : 's')) : 'no issues';
+			  function renderInspectorWorkspaceHeader(detail, findings, options) {
+			    var opts = options || {};
+			    var endpoint = (detail && detail.endpoint) ? detail.endpoint : {};
+			    // Keep the inspector header to a single clean line: method/path + issue count.
+			    // Deeper interpretation belongs inside the tabs below, not in the header chrome.
+			    var lensFindings = Array.isArray(findings) ? findings : findingsForActiveLens(findings || []);
+			    var countLabel = lensFindings.length + ' issue' + (lensFindings.length === 1 ? '' : 's');
+			    var endpointLabel = (((endpoint.method || '').toUpperCase() + ' ' + (endpoint.path || '')).trim());
+			    var collapseTarget = String(opts.collapseTarget || '');
+			    var collapsed = !!opts.collapsed;
+			    var collapseBtn = collapseTarget
+			      ? ('<button type="button" class="tertiary-action workspace-collapse-toggle"'
+			          + ' data-workspace-collapse-toggle="' + escapeHtml(collapseTarget) + '"'
+			          + ' aria-expanded="' + (collapsed ? 'false' : 'true') + '"'
+			          + ' data-open-label="Collapse" data-closed-label="Expand"'
+			          + ' title="' + escapeHtml(collapsed ? 'Expand workspace' : 'Collapse workspace') + '">'
+			          + escapeHtml(collapsed ? 'Expand' : 'Collapse')
+			          + '</button>')
+			      : '';
 
-	    return '<div class="inspector-workspace-head">'
-	      + '<div class="inspector-identity-row">'
-	      + '<code class="inspector-endpoint-code">' + escapeHtml(((endpoint.method || '').toUpperCase() + ' ' + (endpoint.path || '')).trim()) + '</code>'
-	      + '<span class="inspector-endpoint-intent" title="' + escapeHtml(intent) + '">' + escapeHtml(intent) + '</span>'
-	      + '<span class="inspector-endpoint-meta">' + escapeHtml(humanFamilyLabel(familyName)) + '</span>'
-	      + '</div>'
-	      + '<div class="inspector-key-issue-row">'
-	      + (lensFindings.length ? severityBadge(severity) : '')
-	      + (lensFindings.length ? scopePill : '')
-	      + '<span class="inspector-issue-count">' + escapeHtml(countLabel) + '</span>'
-	      + '</div>'
-	      + '<div class="inspector-key-message" title="' + escapeHtml(topMsg) + '">' + escapeHtml(topMsg) + '</div>'
-	      + (contextHtml ? ('<div class="inspector-key-context">' + contextHtml + '</div>') : '')
-	      + '</div>';
-	  }
+			    return '<div class="inspector-workspace-head">'
+			      + '<div class="inspector-identity-row">'
+			      + '<div class="inspector-selected-line">'
+			      + '<code class="inspector-endpoint-code">' + escapeHtml(endpointLabel) + '</code>'
+			      + '<span class="inspector-issue-count" aria-label="' + escapeHtml(countLabel) + '">' + escapeHtml(countLabel) + '</span>'
+			      + '</div>'
+			      + collapseBtn
+			      + '</div>'
+			      + '</div>';
+			  }
 
 	  function collectConcreteNextActions(endpoint, findings) {
 	    var actions = [];
@@ -2176,7 +2667,7 @@
 	      return;
 	    }
 
-    var visibleRows = workflowScopedRows();
+    var visibleRows = filteredRows();
     var visibleByID = {};
     visibleRows.forEach(function (row) {
       visibleByID[row.id] = true;
@@ -2188,7 +2679,7 @@
     });
 
     var scopedByID = {};
-    scopedRows(state.payload.endpoints || []).forEach(function (row) {
+    rowsInScopeAll().forEach(function (row) {
       scopedByID[row.id] = true;
     });
     var scopedChains = allChains.filter(function (chain) {
@@ -2235,29 +2726,43 @@
 	    bindWorkflowChainsDrawerToggle();
 	  }
 
-	  function renderWorkflowChainsDrawer(innerHtml, chainCount) {
-	    var count = (typeof chainCount === 'number' && isFinite(chainCount)) ? chainCount : 0;
-	    var countLabel = count
-	      ? (count + ' chain' + (count === 1 ? '' : 's') + ' in view')
-	      : 'no chains in view';
-	    var openAttr = state.workflowChainsOpen ? ' open' : '';
+		  function renderWorkflowChainsDrawer(innerHtml, chainCount) {
+		    var count = (typeof chainCount === 'number' && isFinite(chainCount)) ? chainCount : 0;
+		    var countLabel = count
+		      ? (count + ' chain' + (count === 1 ? '' : 's') + ' in view')
+		      : 'no chains in view';
+		    var openAttr = state.workflowChainsOpen ? ' open' : '';
 
-	    return '<details class="workflow-chains-drawer"' + openAttr + ' data-workflow-chains-drawer="1">'
-	      + '<summary class="workflow-chains-drawer-summary">'
-	      + '<strong>Workflow chain view</strong>'
-	      + '<span class="workflow-chains-drawer-meta">' + escapeHtml(countLabel) + '</span>'
-	      + '</summary>'
-	      + '<div class="workflow-chains-drawer-body">' + innerHtml + '</div>'
-	      + '</details>';
-	  }
+		    return '<details class="workflow-chains-drawer"' + openAttr + ' data-workflow-chains-drawer="1">'
+		      + '<summary class="workflow-chains-drawer-summary">'
+		      + '<strong>Workflow chain view</strong>'
+		      + '<span class="workflow-chains-drawer-meta">' + escapeHtml(countLabel) + '</span>'
+		      + '</summary>'
+		      + '<div class="workflow-chains-drawer-body">'
+		      + '<div class="details-close-row details-close-row-tight"><button type="button" class="tertiary-action details-close-btn" data-close-details="1" aria-label="Hide workflow chain view" title="Hide workflow chain view">Hide workflow chain view</button></div>'
+		      + innerHtml
+		      + '</div>'
+		      + '</details>';
+		  }
 
-	  function bindWorkflowChainsDrawerToggle() {
-	    var drawer = el.workflowChains ? el.workflowChains.querySelector('[data-workflow-chains-drawer]') : null;
-	    if (!drawer) return;
-	    drawer.addEventListener('toggle', function () {
-	      state.workflowChainsOpen = !!drawer.open;
-	    });
-	  }
+		  function bindWorkflowChainsDrawerToggle() {
+		    var drawer = el.workflowChains ? el.workflowChains.querySelector('[data-workflow-chains-drawer]') : null;
+		    if (!drawer) return;
+		    drawer.addEventListener('toggle', function () {
+		      state.workflowChainsOpen = !!drawer.open;
+		    });
+
+		    // Ensure the in-panel close action works (Hide workflow chain view).
+		    Array.prototype.forEach.call(drawer.querySelectorAll('button[data-close-details]'), function (btn) {
+		      if (btn.__closeDetailsBound) return;
+		      btn.__closeDetailsBound = true;
+		      btn.addEventListener('click', function (event) {
+		        event.preventDefault();
+		        event.stopPropagation();
+		        drawer.open = false;
+		      });
+		    });
+		  }
 
 	  function renderWorkflowGuideSection(chains) {
 	    var sourceChains = (chains || []).slice();
@@ -2367,8 +2872,10 @@
   }
 
 	  function renderWorkflowEmptyState(mode) {
+	    var scopeLine = renderActiveScopeStrip({ dense: true });
 	    if (mode === 'absent') {
 	      return '<div class="workflow-no-match workflow-no-match-final">'
+	        + scopeLine
 	        + '<p class="workflow-empty-title"><strong>No inferred workflow chains</strong></p>'
 	        + '<p class="workflow-empty-copy">This spec currently reads as isolated endpoints rather than a linked call sequence, so there is nothing to expand in this section.</p>'
 	        + '<p class="workflow-empty-note">That is a final state for this spec, not a filter mismatch.</p>'
@@ -2377,14 +2884,17 @@
 
 	    if (!filteredRows().length) {
 	      return '<div class="workflow-no-match">'
-	        + '<p class="workflow-empty-title"><strong>No workflows in the current view</strong></p>'
-	        + '<p class="workflow-empty-copy">This follows the current no-match filter state. Use the family section recovery above to widen the view.</p>'
+	        + scopeLine
+	        + '<p class="workflow-empty-title"><strong>No workflows match the current scope</strong></p>'
+	        + '<p class="workflow-empty-copy">Clear filters or show all workflow patterns to widen the view.</p>'
+	        + renderRecoveryActions(['show-all-workflows'])
 	        + '</div>';
 	    }
 
 	    return '<div class="workflow-no-match">'
-	      + '<p class="workflow-empty-title"><strong>No workflows in the current view</strong></p>'
-	      + '<p class="workflow-empty-copy">The active filters removed visible call chains. Use show-all workflows if you only want to widen workflow scope.</p>'
+	      + scopeLine
+	      + '<p class="workflow-empty-title"><strong>No workflows match the current scope</strong></p>'
+	      + '<p class="workflow-empty-copy">Show all workflow patterns to widen this section without changing tabs.</p>'
 	      + renderRecoveryActions(['show-all-workflows'])
 	      + '</div>';
 	  }
@@ -2532,7 +3042,7 @@
         if (burdens.hidden.steps.indexOf(idx) === -1) burdens.hidden.steps.push(idx);
       }
       if (findings.some(function (f) {
-        return f.code === 'contract-shape-workflow-guidance-burden' || f.code === 'weak-follow-up-linkage' || f.code === 'weak-action-follow-up-linkage' || f.code === 'weak-accepted-tracking-linkage' || f.code === 'weak-outcome-next-action-guidance';
+        return f.code === 'weak-follow-up-linkage' || f.code === 'weak-action-follow-up-linkage' || f.code === 'weak-accepted-tracking-linkage' || f.code === 'weak-outcome-next-action-guidance';
       })) {
         if (burdens.outcome.steps.indexOf(idx) === -1) burdens.outcome.steps.push(idx);
       }
@@ -2851,13 +3361,7 @@
     var hasAccessKeySignals = /(sw-access-key|access\s*key|api[-\s]?key)/.test(messages + ' | ' + cluesText);
     var hasLinkageSignals = (linkageFindings || []).length > 0 || /(next[-\s]?step|follow[-\s]?up|tracking|identifier|handoff)/.test(messages + ' | ' + cluesText);
     var hasPrereqSignals = (prerequisiteFindings || []).length > 0 || ((clues && clues.prereq) || []).length > 0;
-    var hasShapeOutcomeSignals = (findings || []).some(function (f) {
-      var code = f.code || '';
-      return code === 'contract-shape-workflow-guidance-burden'
-        || code === 'snapshot-heavy-response'
-        || code === 'incidental-internal-field-exposure'
-        || code === 'duplicated-state-response';
-    });
+    var hasShapeOutcomeSignals = false;
 
     if (loginOrRegister && hasTokenContextSignals) {
       addTrap(
@@ -2963,7 +3467,7 @@
       + '</section>';
   }
 
-  function summarizeWorkflowStepNarrative(endpoint, roleLabel, nextEndpoint, clues, findings, linkageFindings, prerequisiteFindings, isLast) {
+	  function summarizeWorkflowStepNarrative(endpoint, roleLabel, nextEndpoint, clues, findings, linkageFindings, prerequisiteFindings, isLast) {
     var path = (endpoint.path || '').toLowerCase();
     var method = (endpoint.method || '').toUpperCase();
     var role = (roleLabel || '').toLowerCase();
@@ -2975,16 +3479,16 @@
       callDoes = humanizeStepRole(role) + ' (' + callDoes + ')';
     }
 
-    var changed = '';
-    if ((clues.establish || []).length) {
-      changed = clues.establish[0];
-    } else if (method === 'POST') {
-      changed = 'likely creates new workflow state';
-    } else if (method === 'PATCH' || method === 'PUT' || method === 'DELETE') {
-      changed = 'likely mutates existing workflow state';
-    } else {
-      changed = 'returns current state for downstream steps';
-    }
+	    var changed = '';
+	    if ((clues.establish || []).length) {
+	      changed = clues.establish[0];
+	    } else if (method === 'POST') {
+	      changed = 'creates new server-side state (response should expose the new identifier/status)';
+	    } else if (method === 'PATCH' || method === 'PUT' || method === 'DELETE') {
+	      changed = 'mutates server-side state (response should expose the outcome and updated authoritative fields)';
+	    } else {
+	      changed = 'returns current state for downstream steps (response should expose the fields needed for the next call)';
+	    }
 
     var requiredState = '';
     if ((clues.prereq || []).length) {
@@ -3029,20 +3533,17 @@
     if (linkageFindings.length || /(identifier|tracking|handoff)/i.test(messages)) {
       traps.push('weak handoff identifiers');
     }
-    if ((findings || []).some(function (f) {
-      return f.code === 'contract-shape-workflow-guidance-burden' || f.code === 'snapshot-heavy-response';
-    })) {
-      traps.push('snapshot-heavy responses instead of task-shaped outcomes');
-    }
+    // Response-shape critiques live in the Response Shape tab. Workflow Guidance stays
+    // focused on chaining/continuity burden (handoffs, next steps, context transfer).
 
-    return {
-      callDoes: callDoes,
-      changed: changed,
-      requiredState: requiredState,
-      nextAction: nextAction,
-      traps: uniq(traps)
-    };
-  }
+	    return {
+	      callDoes: callDoes,
+	      changesAfter: changed,
+	      requiredState: requiredState,
+	      nextAction: nextAction,
+	      traps: uniq(traps)
+	    };
+	  }
 
   function renderWorkflowStep(endpointId, stepIndex, totalSteps, roleLabel, nextEndpointId, nextRoleLabel) {
     var detail = state.payload.endpointDetails[endpointId];
@@ -3052,10 +3553,6 @@
     var findings = detail.findings || [];
     var nextDetail = nextEndpointId ? state.payload.endpointDetails[nextEndpointId] : null;
     var nextEndpoint = nextDetail ? nextDetail.endpoint : null;
-
-    var shapeFindings = findings.filter(function (f) {
-      return f.code === 'contract-shape-workflow-guidance-burden';
-    });
 
     var linkageFindings = findings.filter(function (f) {
       return f.code === 'weak-follow-up-linkage' || f.code === 'weak-action-follow-up-linkage' || f.code === 'weak-accepted-tracking-linkage' || f.code === 'weak-outcome-next-action-guidance';
@@ -3068,7 +3565,6 @@
     var isLast = stepIndex === (totalSteps - 1);
 
     var warnings = [];
-    if (shapeFindings.length) warnings.push({ type: 'shape', count: shapeFindings.length, label: 'storage-shaped response' });
     if (linkageFindings.length) warnings.push({ type: 'linkage', count: linkageFindings.length, label: 'missing follow-up ID' });
     if (prerequisiteFindings.length) warnings.push({ type: 'prerequisite', count: prerequisiteFindings.length, label: 'hidden dependency' });
 
@@ -3095,18 +3591,19 @@
       : '<span class="step-number">Step ' + (stepIndex + 1) + ' of ' + totalSteps + '</span>';
 
     var transitionCue = inferWorkflowTransitionCue(dependencyClues, roleLabel);
-    var narrative = summarizeWorkflowStepNarrative(endpoint, roleLabel, nextEndpoint, dependencyClues, findings, linkageFindings, prerequisiteFindings, isLast);
-    var trapGuidance = collectTrapGuidance(endpoint, findings, dependencyClues, linkageFindings, prerequisiteFindings, nextEndpoint, roleLabel, isLast);
-    var narrativeHtml = '<div class="step-narrative">'
-      + '<div class="step-narrative-row"><span class="step-narrative-label">Purpose</span><span class="step-narrative-value">' + escapeHtml(narrative.callDoes) + '</span></div>'
-      + '<div class="step-narrative-row"><span class="step-narrative-label">Required state/context</span><span class="step-narrative-value">' + escapeHtml(narrative.requiredState) + '</span></div>'
-      + '<div class="step-narrative-row"><span class="step-narrative-label">Likely next action</span><span class="step-narrative-value">' + escapeHtml(narrative.nextAction) + '</span></div>'
-      + '</div>';
-    var trapHtml = renderTrapGuidanceList(trapGuidance, {
-      title: 'Trap guidance',
-      className: 'step-trap-guidance',
-      limit: 2
-    });
+	    var narrative = summarizeWorkflowStepNarrative(endpoint, roleLabel, nextEndpoint, dependencyClues, findings, linkageFindings, prerequisiteFindings, isLast);
+	    var trapGuidance = collectTrapGuidance(endpoint, findings, dependencyClues, linkageFindings, prerequisiteFindings, nextEndpoint, roleLabel, isLast);
+	    var narrativeHtml = '<div class="step-narrative">'
+	      + '<div class="step-narrative-row"><span class="step-narrative-label">What this call does</span><span class="step-narrative-value">' + escapeHtml(narrative.callDoes) + '</span></div>'
+	      + '<div class="step-narrative-row"><span class="step-narrative-label">What you need before calling it</span><span class="step-narrative-value">' + escapeHtml(narrative.requiredState) + '</span></div>'
+	      + '<div class="step-narrative-row"><span class="step-narrative-label">What changes after it succeeds</span><span class="step-narrative-value">' + escapeHtml(narrative.changesAfter || '') + '</span></div>'
+	      + '<div class="step-narrative-row"><span class="step-narrative-label">What to call next</span><span class="step-narrative-value">' + escapeHtml(narrative.nextAction) + '</span></div>'
+	      + '</div>';
+	    var trapHtml = renderTrapGuidanceList(trapGuidance, {
+	      title: 'Common hidden traps',
+	      className: 'step-trap-guidance',
+	      limit: 2
+	    });
     var arrow = '';
     if (!isLast) {
       var connectorClass = transitionCue ? (' workflow-connector-' + transitionCue.kind) : '';
@@ -3377,14 +3874,14 @@
     // Use signalKey to decide which signal family to pull dominant signals/focus from.
     var contractSignalKey = (shapeScore >= contractScore && shapeScore > 0) ? 'shape' : 'contract';
 
-    if (mixed) {
-      return { key: 'mixed', label: 'Mixed', signalKey: (workflowScore >= contractishScore ? 'workflow' : contractSignalKey), score: top };
-    }
-    if (workflowScore >= contractishScore) {
-      return { key: 'workflow', label: 'Workflow-driven', signalKey: 'workflow', score: workflowScore };
-    }
-    return { key: 'contract', label: 'Contract-driven', signalKey: contractSignalKey, score: contractishScore };
-  }
+	    if (mixed) {
+	      return { key: 'mixed', label: 'Mixed driver', signalKey: (workflowScore >= contractishScore ? 'workflow' : contractSignalKey), score: top };
+	    }
+	    if (workflowScore >= contractishScore) {
+	      return { key: 'workflow', label: 'Mostly workflow driven', signalKey: 'workflow', score: workflowScore };
+	    }
+	    return { key: 'contract', label: 'Mostly contract driven', signalKey: contractSignalKey, score: contractishScore };
+	  }
 
   function familyDominantSignalsForDriver(family, driverKey) {
     if (driverKey === 'workflow') {
@@ -3534,55 +4031,160 @@
 		    return 'Expand endpoints, then Inspect endpoint';
 		  }
 
-		  function familySignalItemsForActiveLens(family, ranked) {
-		    var activeBurden = state.filters.burden;
-		    if (activeBurden === 'workflow-burden') return sortedSignalLabels(family.workflowSignalCounts || {}, 50);
-		    if (activeBurden === 'contract-shape') return sortedSignalLabels(family.shapeSignalCounts || {}, 50);
-		    if (activeBurden === 'consistency') return sortedSignalLabels(family.consistencySignalCounts || {}, 50);
-	    var dims = (family.topDimensions || []).slice();
-	    if (dims.length) return dims;
-	    return (ranked && ranked.dominantSignals) ? ranked.dominantSignals.slice() : [];
-	  }
+			  function familySignalItemsForActiveLens(family, ranked) {
+			    var activeBurden = state.filters.burden;
+			    // Workflow Guidance must always read as continuity-first.
+			    if (state.activeTopTab === 'workflow') {
+			      return sortedSignalLabels(family.workflowSignalCounts || {}, 50);
+			    }
+			    if (activeBurden === 'workflow-burden') return sortedSignalLabels(family.workflowSignalCounts || {}, 50);
+			    if (activeBurden === 'contract-shape') return sortedSignalLabels(family.shapeSignalCounts || {}, 50);
+			    if (activeBurden === 'consistency') return sortedSignalLabels(family.consistencySignalCounts || {}, 50);
+		    var dims = (family.topDimensions || []).slice();
+		    if (dims.length) return dims;
+		    return (ranked && ranked.dominantSignals) ? ranked.dominantSignals.slice() : [];
+		  }
 
-	  function renderFamilyDominantSignalsCell(family, ranked) {
-	    var activeBurden = state.filters.burden;
-	    var items = familySignalItemsForActiveLens(family, ranked).filter(Boolean);
-	    if (!items.length) {
-	      if (activeBurden === 'workflow-burden') items = ['missing next action'];
-	      else if (activeBurden === 'contract-shape') items = ['storage-shaped response'];
-	      else if (activeBurden === 'consistency') items = ['path/param drift'];
-	      else items = ['mixed contract signals'];
-	    }
+			  function renderFamilyDominantSignalsCell(family, ranked) {
+			    var activeBurden = state.filters.burden;
+			    var items = familySignalItemsForActiveLens(family, ranked).filter(Boolean);
+			    if (!items.length) {
+		      if (activeBurden === 'workflow-burden') items = ['missing next action'];
+		      else if (activeBurden === 'contract-shape') items = ['storage-shaped response'];
+		      else if (activeBurden === 'consistency') items = ['path/param drift'];
+		      else items = ['mixed contract signals'];
+			    }
 
-	    var visible = items.slice(0, 2);
-	    var hidden = items.slice(2);
-	    var visibleChips = visible.map(function (c, i) {
-	      var cls = i === 0 ? 'chip chip-primary family-signal-chip' : 'chip chip-secondary family-signal-chip';
-	      var label = humanizeSignalLabel(c);
-	      return '<span class="' + cls + '" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</span>';
-	    }).join('');
+		    // If total signals are 2 or 3, render all of them directly.
+		    // Only collapse behind "+N more signals" when there are 4+ total.
+		    var visibleCount = items.length <= 3 ? items.length : 2;
+		    var visible = items.slice(0, visibleCount);
+		    var hidden = items.slice(visibleCount);
+		    var visibleChips = visible.map(function (c, i) {
+		      var cls = i === 0 ? 'chip chip-primary family-signal-chip' : 'chip chip-secondary family-signal-chip';
+		      var label = humanizeSignalLabel(c);
+		      return '<span class="' + cls + '" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</span>';
+		    }).join('');
 
 	    var hiddenChips = hidden.map(function (c) {
 	      var label = humanizeSignalLabel(c);
 	      return '<span class="chip family-signal-chip" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</span>';
-	    }).join('');
+		    }).join('');
 
-	    var more = hidden.length
-	      ? '<details class="family-signal-more">'
-	          + '<summary>+' + hidden.length + ' more signals</summary>'
-	          + '<div class="chips family-signal-more-chips">' + hiddenChips + '</div>'
-	        + '</details>'
-	      : '';
+		    var more = hidden.length
+		      ? '<details class="family-signal-more">'
+		          + '<summary>+' + hidden.length + ' more signals</summary>'
+		          + '<div class="chips family-signal-more-chips">' + hiddenChips + '</div>'
+		        + '</details>'
+		      : '';
 
-	    return '<div class="family-signal-cell">'
-	      + '<div class="chips family-signal-chips">' + visibleChips + '</div>'
-	      + more
-	      + '</div>';
-	  }
+		    return '<div class="family-signal-cell">'
+		      + '<div class="chips family-signal-chips">' + visibleChips + '</div>'
+		      + more
+		      + '</div>';
+		  }
 
-		  function buildFamilyRankedSummary(family) {
-		    var driver = pickFamilyDominantDriver(family);
-		    var dominantSignals = familyDominantSignalsForDriver(family, driver.signalKey || driver.key);
+			  function renderFamilyTopSignalCell(family, ranked) {
+			    var activeBurden = state.filters.burden;
+			    var items = familySignalItemsForActiveLens(family, ranked).filter(Boolean);
+			    if (!items.length) {
+		      if (activeBurden === 'workflow-burden') items = ['missing next action'];
+		      else if (activeBurden === 'contract-shape') items = ['storage-shaped response'];
+		      else if (activeBurden === 'consistency') items = ['path/param drift'];
+		      else items = ['mixed contract signals'];
+			    }
+
+			    // If total signals are 2 or 3, render them all directly.
+			    // Only collapse behind "+N more signals" when there are 4+ total.
+			    var visibleCount = items.length <= 3 ? items.length : 2;
+			    var visible = items.slice(0, visibleCount).map(function (raw, idx) {
+			      var label = raw ? humanizeSignalLabel(raw) : '—';
+			      var cls = idx === 0 ? 'chip chip-primary family-signal-chip' : 'chip chip-secondary family-signal-chip';
+			      return '<span class="' + cls + '" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</span>';
+			    }).join('');
+			    var hidden = items.slice(visibleCount);
+
+		    var hiddenChips = hidden.map(function (c) {
+		      var label = humanizeSignalLabel(c);
+		      return '<span class="chip family-signal-chip" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</span>';
+			    }).join('');
+
+			    // Only collapse into "+N more signals" when there are 4+ total.
+			    var more = hidden.length
+			      ? '<details class="family-signal-more">'
+			          + '<summary>+' + hidden.length + ' more signals</summary>'
+			          + '<div class="chips family-signal-more-chips">' + hiddenChips + '</div>'
+			        + '</details>'
+			      : '';
+
+		    return '<div class="family-signal-cell family-top-signal-cell">'
+		      + '<div class="chips family-signal-chips">' + visible + '</div>'
+		      + more
+		      + '</div>';
+		  }
+
+		  function bestEndpointIdForFamily(familyName) {
+		    if (!familyName) return '';
+		    var rows = filteredRows().filter(function (row) {
+		      return (row.family || 'unlabeled family') === familyName;
+		    });
+		    if (!rows.length) return '';
+
+		    var best = null;
+		    rows.forEach(function (row) {
+		      var detail = state.payload && state.payload.endpointDetails ? state.payload.endpointDetails[row.id] : null;
+		      var lens = detail ? findingsForActiveLens(detail.findings || []) : [];
+		      var count = lens.length;
+		      var severity = dominantSeverity(lens);
+		      var score = (count * 10) + Math.max(0, 3 - severityPriority(severity));
+		      if (!best || score > best.score) {
+		        best = { id: row.id, score: score };
+		      }
+		    });
+		    return best ? best.id : rows[0].id;
+		  }
+
+			  function renderFamilyRecommendedNextClickCell(family, ranked, options) {
+			    var opts = options || {};
+			    var familyName = family.family || 'unlabeled family';
+			    var endpointsExpanded = !!opts.endpointsExpanded;
+			    var insightExpanded = !!opts.insightExpanded;
+
+		    // Keep this compact and action-first. Avoid repeating counts already in columns.
+		    if (!family || typeof family.endpoints !== 'number' || family.endpoints <= 0) {
+		      return '<span class="subtle">No endpoints in view</span>';
+		    }
+
+			    if (!endpointsExpanded) {
+			      return '<div class="family-next-click-cell">'
+			        + '<button type="button" class="tertiary-action family-next-click-btn" data-expand-endpoints="' + escapeHtml(familyName) + '" title="Expand inline endpoint rows for this family">Expand endpoints</button>'
+			        + '<button type="button" class="tertiary-action family-next-click-btn" data-insight-toggle="' + escapeHtml(familyName) + '" aria-expanded="' + (insightExpanded ? 'true' : 'false') + '" title="Open the family insight panel">' + (insightExpanded ? 'Hide insight' : 'Show insight') + '</button>'
+			        + '</div>';
+			    }
+
+		    var bestEndpointId = bestEndpointIdForFamily(familyName);
+		    var inspectDisabled = bestEndpointId ? '' : ' disabled';
+		    var inspectTitle = bestEndpointId ? 'Select the highest-impact endpoint for this family' : 'No endpoint is available to inspect in this view';
+
+			    return '<div class="family-next-click-cell">'
+			      + '<button type="button" class="tertiary-action family-next-click-btn" data-inspect-top-endpoint="' + escapeHtml(bestEndpointId) + '"' + inspectDisabled + ' title="' + escapeHtml(inspectTitle) + '">Inspect top endpoint</button>'
+			      + '<button type="button" class="tertiary-action family-next-click-btn" data-expand-endpoints="' + escapeHtml(familyName) + '" title="Collapse inline endpoint rows">Hide endpoints</button>'
+			      + '<button type="button" class="tertiary-action family-next-click-btn" data-insight-toggle="' + escapeHtml(familyName) + '" aria-expanded="' + (insightExpanded ? 'true' : 'false') + '" title="Open the family insight panel">' + (insightExpanded ? 'Hide insight' : 'Show insight') + '</button>'
+			      + '</div>';
+			  }
+
+			  function buildFamilyRankedSummary(family) {
+			    var driver = pickFamilyDominantDriver(family);
+			    if (state.activeTopTab === 'workflow') {
+			      // Workflow Guidance should read as continuity-first; keep Driver aligned so
+			      // rows do not look like generic contract clustering in this tab.
+			      driver = { key: 'workflow', label: 'Workflow-driven', signalKey: 'workflow', score: driver.score || 0 };
+			    }
+			    if (state.activeTopTab === 'shape') {
+			      // Response Shape should be shape-first; avoid generic contract clustering framing.
+			      driver = { key: 'shape', label: 'Shape-driven', signalKey: 'shape', score: driver.score || 0 };
+			    }
+			    var dominantSignals = familyDominantSignalsForDriver(family, driver.signalKey || driver.key);
 
     var dxParts = dominantSignals.slice(0, 2).map(function (s) {
       return familyDxSignalFragment(s);
@@ -3634,12 +4236,12 @@
   function familyRowsInView(familyName) {
     var key = familyName || 'unlabeled family';
     var rows = filteredRows().filter(function (row) {
-      return (row.family || 'unlabeled family') === key && row.findings > 0;
+      return (row.family || 'unlabeled family') === key && lensFindingCountForRow(row) > 0;
     });
     if (rows.length) return rows;
 
-    return scopedRows(state.payload.endpoints || []).filter(function (row) {
-      return (row.family || 'unlabeled family') === key && row.findings > 0;
+    return rowsInScopeAll().filter(function (row) {
+      return (row.family || 'unlabeled family') === key && lensFindingCountForRow(row) > 0;
     });
   }
 
@@ -3649,7 +4251,9 @@
     if (selected) return selected;
     return rows.slice().sort(function (a, b) {
       if (priorityRank(a.priority) !== priorityRank(b.priority)) return priorityRank(a.priority) - priorityRank(b.priority);
-      if (a.findings !== b.findings) return b.findings - a.findings;
+      var aCount = lensFindingCountForRow(a);
+      var bCount = lensFindingCountForRow(b);
+      if (aCount !== bCount) return bCount - aCount;
       return (a.path || '').localeCompare(b.path || '');
     })[0] || null;
   }
@@ -3716,28 +4320,35 @@
     };
   }
 
-	  function renderFamilyInsightPanel(family, preferredEndpointId) {
-	    var model = familyInsightModel(family.family || 'unlabeled family', preferredEndpointId || '');
-	    if (!model) {
-	      return '<div class="family-insight-panel">'
-	        + '<p class="subtle">No evidence-bearing endpoint is currently available for this family in the current view.</p>'
-	        + '</div>';
-	    }
+		  function renderFamilyInsightPanel(family, preferredEndpointId) {
+		    var model = familyInsightModel(family.family || 'unlabeled family', preferredEndpointId || '');
+		    if (!model) {
+		      return '<div class="family-insight-panel">'
+		        + '<p class="subtle">No evidence-bearing endpoint is currently available for this family in the current view.</p>'
+		        + '</div>';
+		    }
 
-    var rankedFamily = buildFamilyRankedSummary(family || {});
-    var lead = model.topGroup;
-    var leadEndpoint = model.detail && model.detail.endpoint ? model.detail.endpoint : model.leadRow;
-    var leadFindings = (model.detail && model.detail.findings) ? model.detail.findings : [];
-    var workflowTrapGuidance = collectTrapGuidance(leadEndpoint, leadFindings, { prereq: [], establish: [], nextNeeds: [], hidden: [] }, [], [], null, '', false);
-	    var workflowTabActive = state.activeTopTab === 'workflow';
-	    var shapeTabActive = state.activeTopTab === 'shape';
-	    var primaryProblemText = lead && lead.messages[0] ? lead.messages[0] : 'No direct issue text is available for this endpoint.';
-	    var whyMattersText = lead && lead.impact
-	      ? lead.impact
-	      : 'Clients may need extra guesswork, follow-up reads, or runtime knowledge because the contract does not guide the next step clearly.';
-		    var recommendedChangeText = lead
-		      ? dimensionCleanerHint(lead.dimension)
-		      : 'Return an outcome-first response with explicit nextAction and handoff IDs.';
+	    var rankedFamily = buildFamilyRankedSummary(family || {});
+	    var lead = model.topGroup;
+	    var leadEndpoint = model.detail && model.detail.endpoint ? model.detail.endpoint : model.leadRow;
+	    var leadFindings = (model.detail && model.detail.findings) ? model.detail.findings : [];
+		    var workflowTabActive = state.activeTopTab === 'workflow';
+		    var shapeTabActive = state.activeTopTab === 'shape';
+		    var specRuleTabActive = state.activeTopTab === 'spec-rule';
+		    var workflowTrapGuidance = workflowTabActive
+		      ? collectTrapGuidance(leadEndpoint, leadFindings, { prereq: [], establish: [], nextNeeds: [], hidden: [] }, [], [], null, '', false)
+		      : [];
+		    var primaryProblemText = lead && lead.messages[0] ? lead.messages[0] : 'No direct issue text is available for this endpoint.';
+		    var whyMattersText = lead && lead.impact
+		      ? lead.impact
+		      : (specRuleTabActive
+		          ? 'This violates an explicit OpenAPI rule expectation, which breaks client tooling and increases integration risk.'
+		          : 'Clients may need extra guesswork, follow-up reads, or runtime knowledge because the contract does not guide the next step clearly.');
+			    var recommendedChangeText = lead
+			      ? dimensionCleanerHint(lead.dimension)
+			      : (specRuleTabActive
+			          ? 'Fix the OpenAPI rule violation at the referenced schema/response location.'
+			          : 'Return an outcome-first response with explicit nextAction and handoff IDs.');
 
 	    var insightEndpointLabel = model.leadRow.method + ' ' + model.leadRow.path;
 
@@ -3751,24 +4362,24 @@
 	    var improvementItems = buildContractImprovementItems(model.detail || {}, lensFindings);
 	    var topEvidence = model.groups.slice(0, 3);
 
-	    var groundingHtml = '<div class="expansion-grounding">'
-	      + renderOpenAPIContextPills(model.topContext || {}, true)
-	      + (lead && lead.isSpecRule ? renderSpecRuleGroundingForGroup(lead) : '')
-	      + '</div>';
+		    var groundingHtml = '<div class="expansion-grounding">'
+		      + renderOpenAPIContextPills(model.topContext || {}, true)
+		      + (lead && lead.isSpecRule ? renderSpecRuleGroundingForGroup(lead) : '')
+		      + '</div>';
 
-	    var problemBlock = '<div class="expansion-section expansion-problem">'
-	      + '<p class="expansion-section-title">What is the main problem</p>'
-	      + '<p class="expansion-text">' + escapeHtml(primaryProblemText) + '</p>'
-	      + groundingHtml
-	      + '</div>';
+		    var problemBlock = '<div class="expansion-section expansion-problem">'
+		      + '<p class="expansion-section-title">Lead issue</p>'
+		      + '<p class="expansion-text">' + escapeHtml(primaryProblemText) + '</p>'
+		      + groundingHtml
+		      + '</div>';
 
 	    var clientEffectText = (rankedFamily && rankedFamily.dxConsequence) ? rankedFamily.dxConsequence : '';
-	    var trapHtml = workflowTrapGuidance.length
-	      ? ('<div class="expansion-subblock">'
-	        + '<p class="expansion-text"><strong>Common traps:</strong></p>'
-	        + renderTrapGuidanceList(workflowTrapGuidance, { title: '', className: '', limit: 2 })
-	        + '</div>')
-	      : '';
+		    var trapHtml = (workflowTabActive && workflowTrapGuidance.length)
+		      ? ('<div class="expansion-subblock">'
+		        + '<p class="expansion-text"><strong>Common traps:</strong></p>'
+		        + renderTrapGuidanceList(workflowTrapGuidance, { title: '', className: '', limit: 2 })
+		        + '</div>')
+		      : '';
 	    var workflowContextHtml = (workflowTabActive && model.workflowLines.length)
 	      ? ('<div class="expansion-subblock">'
 	        + '<p class="expansion-text"><strong>Workflow context:</strong></p>'
@@ -3776,13 +4387,13 @@
 	        + '</div>')
 	      : '';
 
-	    var clientBlock = '<div class="expansion-section expansion-client-impact">'
-	      + '<p class="expansion-section-title">Why it matters to clients</p>'
-	      + '<p class="expansion-text">' + escapeHtml(whyMattersText) + '</p>'
-	      + (clientEffectText ? ('<p class="expansion-text"><strong>Client effect:</strong> ' + escapeHtml(clientEffectText) + '</p>') : '')
-	      + trapHtml
-	      + workflowContextHtml
-	      + '</div>';
+		    var clientBlock = '<div class="expansion-section expansion-client-impact">'
+		      + '<p class="expansion-section-title">Why it matters</p>'
+		      + '<p class="expansion-text">' + escapeHtml(whyMattersText) + '</p>'
+		      + (clientEffectText ? ('<p class="expansion-text"><strong>Client effect:</strong> ' + escapeHtml(clientEffectText) + '</p>') : '')
+		      + trapHtml
+		      + workflowContextHtml
+		      + '</div>';
 
 	    var changeItemsHtml = improvementItems.length
 	      ? '<div class="expansion-contract-items">'
@@ -3809,12 +4420,17 @@
 	        + '</div>')
 	      : '';
 
-	    var changeBlock = '<div class="expansion-section expansion-contract-change">'
-	      + '<p class="expansion-section-title">What to change in the contract</p>'
-	      + renderWhatToDoNextBlock(leadEndpoint, lensFindings, { maxItems: 2, leadCopy: '' })
-	      + changeItemsHtml
-	      + shapeComparisonHtml
-	      + '</div>';
+		    var recommendedAction = (rankedFamily && rankedFamily.recommendedAction) ? rankedFamily.recommendedAction : '';
+		    var actionLine = recommendedAction
+		      ? ('<p class="expansion-text"><strong>Recommended action:</strong> ' + escapeHtml(recommendedAction) + '</p>')
+		      : '';
+		    var changeBlock = '<div class="expansion-section expansion-contract-change">'
+		      + '<p class="expansion-section-title">Recommended action</p>'
+		      + actionLine
+		      + renderWhatToDoNextBlock(leadEndpoint, lensFindings, { maxItems: 2, leadCopy: '' })
+		      + changeItemsHtml
+		      + shapeComparisonHtml
+		      + '</div>';
 
 	    var evidenceListHtml = topEvidence.length
 	      ? ('<ul class="expansion-evidence-list">'
@@ -3827,12 +4443,12 @@
 		      + '<button type="button" class="secondary-action" data-focus-family="' + escapeHtml(family.family) + '">Filter to family in list</button>'
 		      + '</div>';
 
-		    var evidenceBlock = '<div class="expansion-section expansion-open-evidence">'
-		      + '<p class="expansion-section-title">Exact evidence groups</p>'
-		      + '<p class="subtle">Opens grouped issue instances and schema grounding for the selected endpoint.</p>'
-		      + evidenceListHtml
-		      + evidenceActions
-		      + '</div>';
+			    var evidenceBlock = '<div class="expansion-section expansion-open-evidence">'
+			      + '<p class="expansion-section-title">Evidence groups</p>'
+			      + '<p class="subtle">Grouped by schema field and issue type. Open exact evidence groups for the selected endpoint to inspect instances and schema grounding.</p>'
+			      + evidenceListHtml
+			      + evidenceActions
+			      + '</div>';
 
 		    var sections = [problemBlock, clientBlock, changeBlock, evidenceBlock];
 	
@@ -3855,6 +4471,142 @@
 		      + '</div>';
 		  }
 
+	  function familyTableColumnsForActiveTab() {
+	    // Each top tab has its own primary surface framing. Preserve shared mechanics
+	    // (filters, expansions, Inspect), but do not reuse Contract Issues framing unchanged.
+	    var workflow = state.activeTopTab === 'workflow';
+	    var shape = state.activeTopTab === 'shape';
+
+	    function endpointsHeaderHtml() {
+	      return '<span class="th-title">Endpoints</span>'
+	        + '<span class="th-helper" title="Click the endpoint count in a row to expand inline endpoints. Use Inspect endpoint in the nested table to open diagnostics.">click count to expand</span>';
+	    }
+
+	    var cols = [
+	      {
+	        key: 'family',
+	        thClass: 'family-col-name',
+	        th: 'Family',
+	        tdClass: 'family-col-name',
+	        render: function (family, ctx) {
+	          var familyName = ctx.familyName;
+	          return '<span class="selected-pill" aria-hidden="true">Selected</span>'
+	            + '<strong title="' + escapeHtml(humanFamilyLabel(familyName)) + '">' + escapeHtml(humanFamilyLabel(familyName)) + '</strong>'
+	            + pressureBadge(family.pressure, 'pressure-badge');
+	        }
+	      },
+	      {
+	        key: 'priority',
+	        thClass: 'family-col-priority',
+	        th: (workflow || shape) ? 'Pressure mix' : 'Priority',
+	        tdClass: 'family-col-priority',
+	        render: function (family) {
+	          return renderFamilyPriorityCountStack(family.priorityCounts || {});
+	        }
+	      },
+	      {
+	        key: 'endpoints',
+	        thClass: 'family-col-endpoints',
+	        thAttrs: ' title="Click the endpoint count in a row to expand inline endpoints. Use Inspect endpoint in the nested table to open diagnostics."',
+	        thHtml: endpointsHeaderHtml(),
+	        tdClass: 'family-col-endpoints',
+	        render: function (family, ctx) {
+	          var familyName = ctx.familyName;
+	          var endpointsExpanded = state.expandedFamily === familyName;
+	          return '<button type="button" class="endpoints-expand' + (endpointsExpanded ? ' is-expanded' : '') + '" data-expand-endpoints="' + escapeHtml(familyName) + '" title="' + escapeHtml(endpointsExpanded ? 'Hide endpoints in this family' : 'Show endpoints in this family') + '" aria-label="' + escapeHtml(endpointsExpanded ? 'Hide endpoints in this family' : 'Show endpoints in this family') + '">'
+	            + '<span class="endpoints-expand-count">' + family.endpoints + '</span>'
+	            + '<span class="endpoints-expand-chevron" aria-hidden="true"></span>'
+	            + '</button>';
+	        }
+	      },
+	      {
+	        key: 'signals',
+	        thClass: 'family-col-top-signal',
+	        th: workflow ? 'Continuity signals' : (shape ? 'Shape signals' : 'Top signal'),
+	        tdClass: 'family-col-top-signal',
+	        render: function (family, ctx) {
+	          return renderFamilyTopSignalCell(family, ctx.ranked);
+	        }
+	      }
+	    ];
+
+	    if (!workflow && !shape) {
+	      cols.splice(3, 0, {
+	        key: 'issues',
+	        thClass: 'family-col-issues',
+	        th: 'Issues',
+	        tdClass: 'family-col-issues',
+	        render: function (family) { return String(family.findings || 0); }
+	      });
+	      cols.push({
+	        key: 'driver',
+	        thClass: 'family-col-driver',
+	        thHtml: (function () {
+	          var driverSortActive = state.familyTableSort && state.familyTableSort.key === 'driver';
+	          var driverSortDirection = driverSortActive ? state.familyTableSort.direction : 'asc';
+	          var driverSortIndicator = driverSortActive ? (driverSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
+	          return '<button type="button" class="family-sort-button' + (driverSortActive ? ' is-active' : '') + '" data-family-sort="driver" aria-label="Sort by driver">Driver' + driverSortIndicator + '</button>';
+	        })(),
+	        tdClass: 'family-col-driver',
+	        render: function (family, ctx) {
+	          var ranked = ctx.ranked || {};
+	          return '<div class="family-driver-cell">'
+	            + '<span class="family-driver-chip family-driver-' + escapeHtml(ranked.driver) + '" title="' + escapeHtml('Driver: ' + ranked.driverLabel) + '">' + escapeHtml(ranked.driverLabel) + '</span>'
+	            + '<div class="family-driver-focus" title="' + escapeHtml(ranked.driverFocus || '') + '">' + escapeHtml(ranked.driverFocus || '') + '</div>'
+	            + '</div>';
+	        }
+	      });
+	    }
+
+	    cols.push({
+	      key: 'risk',
+	      thClass: 'family-col-primary-risk',
+	      th: workflow ? 'Main continuity risk' : (shape ? 'Main shape burden' : 'Primary risk'),
+	      tdClass: 'family-col-primary-risk',
+	      render: function (family, ctx) {
+	        var ranked = ctx.ranked || {};
+	        var primaryRisk = ranked.primaryRisk || (ranked.driver === 'workflow'
+	          ? 'workflow continuity risk'
+	          : ranked.driver === 'shape'
+	          ? 'response-shape burden'
+	          : 'contract drift risk');
+	        return renderFamilyTableClamp(primaryRisk, 'family-table-clamp family-table-clamp-3 family-table-clamp-risk');
+	      }
+	    });
+
+	    cols.push({
+	      key: 'impact',
+	      thClass: 'family-col-client-effect',
+	      th: workflow ? 'Client impact in flow' : (shape ? 'Caller burden' : 'Client effect'),
+	      tdClass: 'family-col-client-effect',
+	      render: function (family, ctx) {
+	        var ranked = ctx.ranked || {};
+	        var repeatCount = (ctx.dxCounts && ranked.dxConsequence) ? (ctx.dxCounts[ranked.dxConsequence] || 0) : 0;
+	        var clientEffect = renderDxConsequenceCellValue(ranked, repeatCount);
+	        return renderFamilyClientEffectCell(clientEffect);
+	      }
+	    });
+
+	    cols.push({
+	      key: 'next',
+	      thClass: 'family-col-next-click',
+	      th: 'Recommended next click',
+	      tdClass: 'family-col-next-click',
+	      render: function (family, ctx) {
+	        var familyName = ctx.familyName;
+	        var insightExpanded = state.expandedFamilyInsight === familyName;
+	        var endpointsExpanded = state.expandedFamily === familyName;
+	        return renderFamilyRecommendedNextClickCell(family, ctx.ranked, { insightExpanded: insightExpanded, endpointsExpanded: endpointsExpanded });
+	      }
+	    });
+
+	    return cols;
+	  }
+
+	  function familyTableColumnCountForActiveTab() {
+	    return familyTableColumnsForActiveTab().length;
+	  }
+
 	  function renderFamilyTableView(summaries) {
 	    if (!summaries.length) {
 	      return '';
@@ -3874,25 +4626,21 @@
 	      return match ? (match.family || '') : '';
 	    }
 
-	    var scoped = hasFamilyScopeActive();
-	    var focusedFamily = focusedFamilyNameFromSummaries(summaries);
-	    var backControl = scoped
-	      ? '<div class="family-table-backbar">'
-	          + '<button type="button" class="secondary-action family-table-back" data-recovery-action="back-to-all-families">Back to all families</button>'
-	        + '</div>'
-	      : '';
+		    var scoped = hasFamilyScopeActive();
+		    var drilled = hasFamilyDrillActive();
+		    var focusedFamily = focusedFamilyNameFromSummaries(summaries);
+		    var backControl = drilled
+		      ? '<div class="family-table-backbar">'
+		          + '<button type="button" class="secondary-action family-table-back" data-recovery-action="back-to-all-families">Back to all families</button>'
+		        + '</div>'
+		      : '';
 	    var focusLabel = focusedFamily
-	      ? '<div class="family-table-focusbar" role="status" aria-label="Focused family">'
-	          + '<span class="family-table-focuslabel">Focused family:</span> '
-	          + '<code class="family-table-focusvalue">' + escapeHtml(focusedFamily) + '</code>'
-	        + '</div>'
+	      ? '<p class="family-table-focusline" role="status" aria-label="Focused family">'
+	          + '<strong>Focused family:</strong> ' + escapeHtml(focusedFamily) + '.'
+	        + '</p>'
 	      : '';
-
-	    var driverSortActive = state.familyTableSort && state.familyTableSort.key === 'driver';
-	    var driverSortDirection = driverSortActive ? state.familyTableSort.direction : 'asc';
-	    var driverSortIndicator = driverSortActive
-      ? (driverSortDirection === 'asc' ? ' ↑' : ' ↓')
-      : '';
+	    var cols = familyTableColumnsForActiveTab();
+	    var colCount = cols.length;
 
     var rankedByFamily = {};
     var dxConsequenceCounts = {};
@@ -3907,7 +4655,7 @@
 	    var rows = [];
 	    summaries.forEach(function (family) {
 	      var key = family.family || 'unlabeled family';
-	      rows.push(renderFamilyTableRow(family, { ranked: rankedByFamily[key], dxCounts: dxConsequenceCounts }));
+	      rows.push(renderFamilyTableRow(family, { ranked: rankedByFamily[key], dxCounts: dxConsequenceCounts, columns: cols }));
 	      var expansionHtml = renderFamilyEndpointExpansion(family);
       if (expansionHtml) {
         rows.push(expansionHtml);
@@ -3918,110 +4666,61 @@
       }
 	    });
 
-	    return '<div class="family-table-shell' + (scoped ? ' family-table-shell-scoped' : '') + (focusedFamily ? ' family-table-shell-has-focus' : '') + '">'
-	      + focusLabel
-	      + backControl
-	      + '<table class="family-table">'
+		    return '<div class="family-table-shell' + (drilled ? ' family-table-shell-scoped' : '') + (focusedFamily ? ' family-table-shell-has-focus' : '') + '">'
+		      + focusLabel
+		      + backControl
+		      + '<table class="family-table">'
 	      + '<thead class="family-table-head">'
 	      + '<tr>'
-	      + '<th class="family-col-name">Family</th>'
-	      + '<th class="family-col-priority">Priority</th>'
-	      + '<th class="family-col-endpoints" title="Click the endpoint count in a row to expand inline endpoints. Use Inspect endpoint in the nested table to open diagnostics."><span class="th-title">Endpoints</span><span class="th-helper" title="Click the endpoint count in a row to expand inline endpoints. Use Inspect endpoint in the nested table to open diagnostics.">click count to expand</span></th>'
-	      + '<th class="family-col-issues">Issues</th>'
-	      + '<th class="family-col-dominant-signals">Dominant signals</th>'
-	      + '<th class="family-col-driver"><button type="button" class="family-sort-button' + (driverSortActive ? ' is-active' : '') + '" data-family-sort="driver" aria-label="Sort by driver">Driver' + driverSortIndicator + '</button></th>'
-	      + '<th class="family-col-dx-consequence">DX consequence</th>'
-	      + '<th class="family-col-recommended-action">Recommended action</th>'
-      + '<th class="family-col-actions">Actions</th>'
-      + '</tr>'
-      + '</thead>'
-      + '<tbody>'
-      + rows.join('')
-      + '</tbody>'
+		      + cols.map(function (col) {
+		          var klass = col.thClass ? (' class="' + col.thClass + '"') : '';
+		          var attrs = col.thAttrs || '';
+		          var label = col.thHtml ? col.thHtml : escapeHtml(col.th || '');
+		          return '<th' + klass + attrs + '>' + label + '</th>';
+		        }).join('')
+	      + '</tr>'
+	      + '</thead>'
+	      + '<tbody>'
+	      + rows.join('')
+	      + '</tbody>'
       + '</table>'
       + '</div>';
   }
 
-		  function renderFamilyTableRow(family, options) {
-		    options = options || {};
-		    var familyName = family.family || 'unlabeled family';
-		    var ranked = options.ranked || buildFamilyRankedSummary(family);
+			  function renderFamilyTableRow(family, options) {
+			    options = options || {};
+			    var familyName = family.family || 'unlabeled family';
+			    var ranked = options.ranked || buildFamilyRankedSummary(family);
+			    var expandedClass = state.expandedFamily === familyName ? ' is-expanded' : '';
+			    var search = (state.filters.search || '').trim().toLowerCase();
+			    var isFocused = (search && search.charAt(0) === '/' && familyName.trim().toLowerCase() === search)
+			      || state.expandedFamily === familyName
+		      || state.expandedFamilyInsight === familyName;
+		    var focusedClass = isFocused ? ' row-focused' : '';
 
-	    var priorityStackHtml = renderFamilyPriorityCountStack(family.priorityCounts || {});
+		    var workflowFamilyActiveClass = (state.activeTopTab === 'workflow' && state.expandedFamily === familyName)
+		      ? ' family-row-workflow-active'
+		      : '';
+	    var cols = options.columns || [];
+	    var ctx = {
+	      familyName: familyName,
+	      ranked: ranked,
+	      dxCounts: options.dxCounts || {}
+	    };
 
-		    var primaryRisk = ranked.primaryRisk || (ranked.driver === 'workflow'
-		      ? 'workflow continuity risk'
-		      : ranked.driver === 'shape'
-		      ? 'response-shape burden'
-		      : 'contract drift risk');
-		    var topSignalLabel = familyTopSignalLabelForRow(family, ranked);
-		    var repeatCount = (options.dxCounts && ranked.dxConsequence) ? (options.dxCounts[ranked.dxConsequence] || 0) : 0;
-		    var clientEffect = renderDxConsequenceCellValue(ranked, repeatCount);
-		    var nextClick = familyRecommendedNextClick(family, ranked);
-		    var expandedClass = state.expandedFamily === familyName ? ' is-expanded' : '';
-		    var search = (state.filters.search || '').trim().toLowerCase();
-		    var isFocused = (search && search.charAt(0) === '/' && familyName.trim().toLowerCase() === search)
-		      || state.expandedFamily === familyName
-	      || state.expandedFamilyInsight === familyName;
-	    var focusedClass = isFocused ? ' row-focused' : '';
-
-	    var workflowFamilyActiveClass = (state.activeTopTab === 'workflow' && state.expandedFamily === familyName)
-	      ? ' family-row-workflow-active'
-	      : '';
-    var insightExpanded = state.expandedFamilyInsight === familyName;
-
-	    return '<tr class="family-row pressure-' + family.pressure + expandedClass + focusedClass + workflowFamilyActiveClass + '" data-family="' + escapeHtml(family.family) + '" data-family-row="true" data-driver="' + escapeHtml(ranked.driver || 'contract') + '">'
-	      + '<td class="family-col-name" data-focus-family-cell="' + escapeHtml(familyName) + '">'
-	      + '<strong title="' + escapeHtml(humanFamilyLabel(familyName)) + '">' + escapeHtml(humanFamilyLabel(familyName)) + '</strong>'
-	      + pressureBadge(family.pressure, 'pressure-badge')
-	      + '</td>'
-      + '<td class="family-col-priority">' + priorityStackHtml + '</td>'
-	      + '<td class="family-col-endpoints"><button type="button" class="endpoints-expand" data-expand-endpoints="' + escapeHtml(familyName) + '" title="Show endpoints in this family" aria-label="Show endpoints in this family">' + family.endpoints + '</button></td>'
-	      + '<td class="family-col-issues">' + family.findings + '</td>'
-	      + '<td class="family-col-dominant-signals">' + renderFamilyDominantSignalsCell(family, ranked) + '</td>'
-		      + '<td class="family-col-driver">'
-	        + '<div class="family-driver-cell">'
-	        + '<span class="family-driver-chip family-driver-' + escapeHtml(ranked.driver) + '" title="' + escapeHtml('Driver: ' + ranked.driverLabel) + '">' + escapeHtml(ranked.driverLabel) + '</span>'
-	        + '<div class="family-driver-focus" title="' + escapeHtml(ranked.driverFocus || '') + '">' + escapeHtml(ranked.driverFocus || '') + '</div>'
-	        + '</div>'
-	        + '</td>'
-			      + '<td class="family-col-dx-consequence">'
-			        + '<div class="family-mini-fields">'
-		        + renderFamilyMiniField('Top signal:', topSignalLabel)
-		        + renderFamilyMiniField('Primary risk:', primaryRisk)
-		        + renderFamilyMiniField('Client effect:', clientEffect.value, { htmlValue: clientEffect.html })
-		        + renderFamilyMiniField('Recommended next click:', nextClick)
-		        + '</div>'
-		      + '</td>'
-	      + '<td class="family-col-recommended-action">'
-	        + renderFamilyTableClamp(ranked.recommendedAction || '—', 'family-table-clamp family-table-clamp-action')
-	      + '</td>'
-      + '<td class="family-col-actions">'
-      + '<span class="selected-pill" aria-hidden="true">Selected</span>'
-      + '<button type="button" class="secondary-action insight-toggle" data-insight-toggle="' + escapeHtml(familyName) + '">' + (insightExpanded ? 'Hide insight' : 'Show insight') + '</button>'
-      + '</td>'
-      + '</tr>';
-  }
-
-	  function renderFamilyMiniField(label, value, opts) {
-	    var options = opts || {};
-	    var display = value || '—';
-	    var titleText = options.htmlValue ? (label + ' ' + (stripHtml(display) || '').trim()) : (label + ' ' + display);
-	    return '<div class="family-mini-field" title="' + escapeHtml(titleText) + '">'
-	      + '<strong class="family-mini-label">' + escapeHtml(label) + '</strong>'
-	      + '<span class="family-mini-value">' + (options.htmlValue ? display : escapeHtml(display)) + '</span>'
-	      + '</div>';
+			    return '<tr class="family-row pressure-' + family.pressure + expandedClass + focusedClass + workflowFamilyActiveClass + '" data-family="' + escapeHtml(family.family) + '" data-family-row="true" data-driver="' + escapeHtml(ranked.driver || 'contract') + '">'
+			      + cols.map(function (col) {
+			          var tdClass = col.tdClass ? (' class="' + col.tdClass + '"') : '';
+			          var extra = (col.key === 'family') ? (' data-focus-family-cell="' + escapeHtml(familyName) + '"') : '';
+			          return '<td' + tdClass + extra + '>' + (col.render ? col.render(family, ctx) : '') + '</td>';
+			        }).join('')
+	      + '</tr>';
 	  }
 
-  function stripHtml(input) {
-    if (!input) return '';
-    return String(input).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-  }
-
-  function renderDxConsequenceCellValue(ranked, repeatCount) {
-    var DX_REPEAT_THRESHOLD = 4;
-    var consequence = (ranked && ranked.dxConsequence) ? ranked.dxConsequence : '';
-    if (!consequence) {
+	  function renderDxConsequenceCellValue(ranked, repeatCount) {
+	    var DX_REPEAT_THRESHOLD = 4;
+	    var consequence = (ranked && ranked.dxConsequence) ? ranked.dxConsequence : '';
+	    if (!consequence) {
       return { html: false, value: '—' };
     }
 
@@ -4037,8 +4736,16 @@
       };
     }
 
-    return { html: false, value: consequence };
-  }
+	    return { html: false, value: consequence };
+	  }
+
+	  function renderFamilyClientEffectCell(effect) {
+	    var e = effect || { html: false, value: '—' };
+	    if (e.html) {
+	      return '<div class="family-client-effect-chipwrap">' + e.value + '</div>';
+	    }
+	    return renderFamilyTableClamp(e.value || '—', 'family-table-clamp family-table-clamp-3 family-table-clamp-effect');
+	  }
 
   function renderFamilyPriorityCountStack(priorityCounts) {
     var counts = priorityCounts || {};
@@ -4068,7 +4775,7 @@
     }
 
     return '<tr class="family-expansion-row family-inline-insight-row is-expanded pressure-' + escapeHtml(family.pressure) + '" data-family="' + escapeHtml(family.family) + '">'
-      + '<td colspan="9" class="family-expansion-cell">'
+      + '<td colspan="' + String(familyTableColumnCountForActiveTab()) + '" class="family-expansion-cell">'
       + '<div class="family-row-insight">'
       + renderFamilyInsightPanel(family)
       + '</div>'
@@ -4076,34 +4783,53 @@
       + '</tr>';
   }
 
-  function renderFamilyEndpointExpansion(family) {
-    var familyName = family.family || 'unlabeled family';
-    var expanded = state.expandedFamily === familyName;
+	  function renderFamilyEndpointExpansion(family) {
+	    var familyName = family.family || 'unlabeled family';
+	    var expanded = state.expandedFamily === familyName;
 
     // Skip rendering if not expanded
     if (!expanded) {
       return '';
     }
 
-    var familyLabel = humanFamilyLabel(familyName);
-    var familyHeader = '<p class="family-endpoint-table-title">Endpoints in <code>' + escapeHtml(familyLabel) + '</code> family</p>';
+	    var familyLabel = humanFamilyLabel(familyName);
+	    var familyHeader = '<p class="family-endpoint-table-title">Endpoints in <code>' + escapeHtml(familyLabel) + '</code> family</p>';
+	    var backToTableControl = '<button type="button" class="secondary-action family-endpoint-back"'
+	      + ' data-recovery-action="back-to-family-table"'
+	      + ' aria-label="Back to family table" title="Back to family table">'
+	      + 'Back to family table'
+	      + '</button>';
+	    var collapseControl = '<button type="button" class="tertiary-action family-endpoint-toggle" data-expand-endpoints="' + escapeHtml(familyName) + '" aria-label="Hide endpoints" title="Hide endpoints">'
+	      + '<span class="family-endpoint-toggle-label">Hide endpoints</span>'
+	      + '<span class="family-endpoint-toggle-chevron" aria-hidden="true"></span>'
+	      + '</button>';
+	    var headerActions = '<div class="family-endpoint-table-actions">'
+	      + backToTableControl
+	      + collapseControl
+	      + '</div>';
+	    var headerRow = '<div class="family-endpoint-table-header-row">'
+	      + familyHeader
+	      + headerActions
+	      + '</div>';
     var endpointsInFamily = filteredRows().filter(function (ep) {
       return (ep.family || 'unlabeled family') === familyName;
     });
 
-    if (!endpointsInFamily.length) {
-      return '<tr class="family-expansion-row family-endpoint-table-row is-expanded pressure-' + escapeHtml(family.pressure) + '" data-family="' + escapeHtml(family.family) + '">'
-        + '<td colspan="9" class="family-expansion-cell">'
-        + '<div class="family-endpoint-table-shell">'
-        + '<div class="empty inline-empty family-inline-empty">'
-        + familyHeader
-        + '<strong>No endpoint rows match this family in the current lens.</strong>'
-        + '<p class="subtle">Widen the current filters or include endpoints without issues to repopulate this family-owned endpoint table.</p>'
-        + '</div>'
-        + '</div>'
-        + '</td>'
-        + '</tr>';
-    }
+	    if (!endpointsInFamily.length) {
+	      return '<tr class="family-expansion-row family-endpoint-table-row is-expanded pressure-' + escapeHtml(family.pressure) + '" data-family="' + escapeHtml(family.family) + '">'
+	        + '<td colspan="' + String(familyTableColumnCountForActiveTab()) + '" class="family-expansion-cell">'
+	        + '<div class="family-endpoint-table-shell">'
+	        + '<div class="empty inline-empty family-inline-empty">'
+	        + '<section class="family-endpoint-table-section" aria-label="' + escapeHtml('Endpoints in ' + familyLabel + ' family') + '">'
+	        + headerRow
+	        + '<strong>No endpoint rows match this family in the current lens.</strong>'
+	        + '<p class="subtle">Widen the current filters or include endpoints without issues to repopulate this family-owned endpoint table.</p>'
+	        + '</section>'
+	        + '</div>'
+	        + '</div>'
+	        + '</td>'
+	        + '</tr>';
+	    }
 
     var nestedRows = endpointsInFamily.map(function (ep) {
       var detail = state.payload.endpointDetails[ep.id];
@@ -4167,14 +4893,15 @@
       return html;
     }).join('');
 
-    return '<tr class="family-expansion-row family-endpoint-table-row is-expanded pressure-' + escapeHtml(family.pressure) + '" data-family="' + escapeHtml(family.family) + '">'
-      + '<td colspan="9" class="family-expansion-cell">'
-      + '<div class="family-endpoint-table-shell">'
-      + '<div class="family-endpoint-table-header">'
-      + familyHeader
-      + '<p class="eyebrow">' + escapeHtml(evidenceSectionTitleForActiveLens()) + '</p>'
-      + '<p class="subtle">Endpoint rows stay attached to this family so the ownership and investigation flow stay together.</p>'
-      + '</div>'
+	    return '<tr class="family-expansion-row family-endpoint-table-row is-expanded pressure-' + escapeHtml(family.pressure) + '" data-family="' + escapeHtml(family.family) + '">'
+	      + '<td colspan="' + String(familyTableColumnCountForActiveTab()) + '" class="family-expansion-cell">'
+	      + '<div class="family-endpoint-table-shell">'
+	      + '<section class="family-endpoint-table-section" aria-label="' + escapeHtml('Endpoints in ' + familyLabel + ' family') + '">'
+	      + '<div class="family-endpoint-table-header">'
+	      + headerRow
+	      + '<p class="eyebrow">' + escapeHtml(evidenceSectionTitleForActiveLens()) + '</p>'
+	      + '<p class="subtle">Endpoint rows stay attached to this family so the ownership and investigation flow stay together.</p>'
+	      + '</div>'
       + '<table class="nested-endpoint-table">'
       + '<thead>'
       + '<tr>'
@@ -4190,14 +4917,15 @@
       + nestedRows
       + '</tbody>'
       + '</table>'
-      + '</div>'
-      + '</td>'
-      + '</tr>';
-  }
+	      + '<div class="family-endpoint-table-footer"><span class="subtle">End of endpoints in <code>' + escapeHtml(familyLabel) + '</code> family.</span></div>'
+	      + '</section>'
+	      + '</div>'
+	      + '</td>'
+	      + '</tr>';
+	  }
 
 	  function buildFamilySurfaceContext(summaries) {
 	    var visibleFamilies = summaries.length;
-	    var lensActive = state.filters.search || state.filters.category !== 'all' || state.filters.burden !== 'all' || state.filters.familyPressure !== 'all';
 	    var allFamiliesInLens = familySummariesRaw();
 	    var totalInLens = allFamiliesInLens.length;
 
@@ -4214,38 +4942,42 @@
 
     var showingTruncated = visibleFamilies < familiesInPressureTier;
 
-	    var tierLabel = state.filters.familyPressure === 'all' ? 'all tiers' : state.filters.familyPressure + ' tier';
+    var hasNarrowing = !!(state.filters.search
+      || state.filters.category !== 'all'
+      || state.filters.burden !== 'all'
+      || state.filters.familyPressure !== 'all'
+      || state.filters.includeNoIssueRows
+      || state.familyTableBackState);
 
-	    var copy = '<div class="context-block family-context-block">';
-	    copy += renderActiveScopeStrip({ dense: true });
-	    copy += '<ul class="count-semantics">'
-	      + '<li><strong>Families in spec:</strong> ' + specTotal + ' (all distinct family labels, no filters)</li>'
-	      + '<li><strong>Matching search / category / burden:</strong> ' + totalInLens + ' (families with at least one endpoint carrying matching issues in the current view)</li>'
-	      + '<li><strong>In ' + tierLabel + ':</strong> ' + familiesInPressureTier + ' (of those ' + totalInLens + ')</li>'
-	      + '<li><strong>Cards shown:</strong> ' + visibleFamilies + (showingTruncated ? ' — top 24 of ' + familiesInPressureTier + ' (' + (familiesInPressureTier - visibleFamilies) + ' not shown)' : '') + '</li>'
-	      + '</ul>';
-	    copy += '<div class="context-actions">'
-	      + '<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all families in current scope</button>'
-	      + '<button type="button" class="secondary-action" data-recovery-action="clear-table-filters">Clear table filters</button>'
-	      + '</div>'
-	      + '</div>';
-
-    if (state.activeTopTab === 'shape') {
-      var shapeTotals = collectShapeSignalTotals(summaries);
-      copy += '<div class="context-block shape-lens-context">'
-        + '<p><strong>Shape burden focus in this slice:</strong> ' + escapeHtml(shapeTotals.summary) + '</p>'
-        + '<ul class="count-semantics">'
-        + '<li><strong>Deep nesting:</strong> ' + shapeTotals.deep + '</li>'
-        + '<li><strong>Internal/incidental fields:</strong> ' + shapeTotals.internal + '</li>'
-        + '<li><strong>Duplicated state:</strong> ' + shapeTotals.dup + '</li>'
-        + '<li><strong>Snapshot-heavy responses:</strong> ' + shapeTotals.snapshot + '</li>'
-        + '<li><strong>Unclear source-of-truth fields:</strong> ' + shapeTotals.source + '</li>'
-        + '<li><strong>Missing outcome framing:</strong> ' + shapeTotals.outcome + '</li>'
-        + '<li><strong>Missing next-actions:</strong> ' + shapeTotals.nextAction + '</li>'
-        + '</ul>'
-        + '</div>';
+    var summaryLine = '';
+    if (!totalInLens) {
+      summaryLine = 'No families match the current scope.';
+    } else if (showingTruncated) {
+      summaryLine = 'Showing ' + visibleFamilies + ' of ' + familiesInPressureTier + ' matching families (' + specTotal + ' total in spec).';
+    } else {
+      summaryLine = 'Showing ' + visibleFamilies + ' matching famil' + (visibleFamilies === 1 ? 'y' : 'ies') + ' (' + specTotal + ' total in spec).';
     }
 
+    var actionButtons = [];
+    if (showingTruncated && !state.familyTableShowAll) {
+      actionButtons.push('<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all families in current scope</button>');
+    }
+    if (hasNarrowing) {
+      actionButtons.push('<button type="button" class="secondary-action" data-recovery-action="clear-table-filters">Clear table filters</button>');
+    }
+    var actionsHtml = actionButtons.length
+      ? ('<div class="context-actions">' + actionButtons.join('') + '</div>')
+      : '';
+
+    var copy = '<div class="context-block family-context-block">';
+    copy += renderActiveScopeStrip({ dense: true });
+    copy += '<p class="context-summary">' + escapeHtml(summaryLine) + '</p>';
+    if (state.activeTopTab === 'shape' && summaries && summaries.length) {
+      var shapeTotals = collectShapeSignalTotals(summaries);
+      copy += '<p class="context-summary context-summary-shape"><strong>Shape focus:</strong> ' + escapeHtml(shapeTotals.summary) + '.</p>';
+    }
+    copy += actionsHtml;
+    copy += '</div>';
     return copy;
   }
 
@@ -4307,49 +5039,80 @@
     return 'No extra family narrowing is active; this is the broader matching family view.';
   }
 
-  function familySummariesRaw() {
-    var rows = scopedRows(state.payload.endpoints || []);
-    var byFamily = {};
+		  function familySummariesRaw() {
+	    var counts = {};
+	    function lensCount(row) {
+	      if (!row || !row.id) return 0;
+	      if (counts[row.id] !== undefined) return counts[row.id];
+	      counts[row.id] = lensFindingCountForRow(row);
+	      return counts[row.id];
+	    }
 
-    rows.forEach(function (row) {
-      var hasEvidence = row.findings > 0;
-      if (!hasEvidence && !state.filters.includeNoIssueRows) return;
+	    var lensLocked = state.filters.category !== 'all' || state.filters.burden !== 'all';
+	    var rows = scopedRows(state.payload.endpoints || []);
+	    if (lensLocked) {
+	      rows = rows.filter(function (row) { return lensCount(row) > 0; });
+	    }
+	    var byFamily = {};
 
-      var key = row.family || "unlabeled family";
-      if (!byFamily[key]) {
-        byFamily[key] = {
-          family: key,
-          findings: 0,
-          endpoints: 0,
-          priorityCounts: { high: 0, medium: 0, low: 0 },
-          burdenCounts: {},
-          dimensionCounts: {},
-          workflowSignalCounts: {},
-          shapeSignalCounts: {},
-          consistencySignalCounts: {}
-        };
-      }
+		    rows.forEach(function (row) {
+	      var inScopeFindings = lensCount(row);
+	      var hasEvidence = inScopeFindings > 0;
+	      if (!hasEvidence && !state.filters.includeNoIssueRows) return;
 
-      var item = byFamily[key];
-      item.findings += row.findings;
-      item.endpoints += 1;
-      item.priorityCounts[row.priority] = (item.priorityCounts[row.priority] || 0) + 1;
+	      var key = row.family || "unlabeled family";
+		      if (!byFamily[key]) {
+		        byFamily[key] = {
+	          family: key,
+	          findings: 0,
+	          endpoints: 0,
+	          workflowChainKeys: {},
+	          workflowChainCount: 0,
+	          priorityCounts: { high: 0, medium: 0, low: 0 },
+	          burdenCounts: {},
+	          dimensionCounts: {},
+	          workflowSignalCounts: {},
+	          shapeSignalCounts: {},
+	          consistencySignalCounts: {}
+	        };
+		      }
 
-      (row.burdenFocuses || []).forEach(function (focus) {
-        item.burdenCounts[focus] = (item.burdenCounts[focus] || 0) + (row.findings > 0 ? row.findings : 1);
-      });
+	      var item = byFamily[key];
+	      item.findings += inScopeFindings;
+	      item.endpoints += 1;
+	      item.priorityCounts[row.priority] = (item.priorityCounts[row.priority] || 0) + 1;
 
-      var detail = state.payload.endpointDetails[row.id];
-      if (detail && detail.findings) {
-        detail.findings.forEach(function (finding) {
-          var dimension = issueDimensionForFinding(finding.code, finding.category, finding.burdenFocus);
-          item.dimensionCounts[dimension] = (item.dimensionCounts[dimension] || 0) + 1;
+	      var burdenWeight = hasEvidence ? inScopeFindings : 1;
+	      (row.burdenFocuses || []).forEach(function (focus) {
+	        item.burdenCounts[focus] = (item.burdenCounts[focus] || 0) + burdenWeight;
+	      });
 
-          var code = finding.code || '';
-          var msg = (finding.message || '').toLowerCase();
+		      var detail = state.payload.endpointDetails[row.id];
+		      if (detail) {
+		        // Track which workflow chains this family participates in so Workflow Guidance
+		        // can rank rows by continuity burden and chain membership (not generic pressure).
+		        if (detail.relatedChains && detail.relatedChains.length) {
+		          detail.relatedChains.forEach(function (chain) {
+		            var ids = (chain && chain.endpointIds) ? chain.endpointIds : [];
+		            if (!ids.length) return;
+		            var kind = (chain && chain.kind) ? String(chain.kind) : 'workflow';
+		            var chainKey = kind + '|' + ids.join(',');
+		            item.workflowChainKeys[chainKey] = true;
+		          });
+		          item.workflowChainCount = Object.keys(item.workflowChainKeys).length;
+		        }
+		      }
+		      if (detail && detail.findings) {
+		        var lensFindings = findingsForActiveLens(detail.findings || []);
+		        lensFindings.forEach(function (finding) {
+	          var dimension = issueDimensionForFinding(finding.code, finding.category, finding.burdenFocus);
+	          item.dimensionCounts[dimension] = (item.dimensionCounts[dimension] || 0) + 1;
 
-          // Do not let spec-rule findings contaminate heuristic burden signal counts.
-          if (finding.evidenceType === 'spec-rule') return;
+	          var code = finding.code || '';
+	          var msg = (finding.message || '').toLowerCase();
+
+	          // Do not let spec-rule findings contaminate heuristic burden signal counts.
+	          if (finding.evidenceType === 'spec-rule') return;
 
           if (code === 'weak-follow-up-linkage' || code === 'weak-action-follow-up-linkage' || code === 'weak-accepted-tracking-linkage' || code === 'weak-outcome-next-action-guidance' || code === 'prerequisite-task-burden') {
             bumpFamilySignal(item.workflowSignalCounts, 'hidden token/context handoff appears likely');
@@ -4400,19 +5163,31 @@
       }
     });
 
-    return Object.values(byFamily).map(function (family) {
-      var dominantBurden = Object.entries(family.burdenCounts).sort(function (a, b) { return b[1] - a[1]; });
-      var dimensions = Object.entries(family.dimensionCounts).sort(function (a, b) { return b[1] - a[1]; });
-      family.pressure = familyPressureLabel(family.priorityCounts);
+		    return Object.values(byFamily).map(function (family) {
+	      var dominantBurden = Object.entries(family.burdenCounts).sort(function (a, b) { return b[1] - a[1]; });
+	      var dimensions = Object.entries(family.dimensionCounts).sort(function (a, b) { return b[1] - a[1]; });
+	      family.pressure = familyPressureLabel(family.priorityCounts);
       family.dominantBurden = dominantBurden.length ? dominantBurden[0][0].replaceAll("-", " ") : "mixed";
       family.topDimensions = dimensions.slice(0, 3).map(function (entry) { return entry[0]; });
-      return family;
-    }).sort(function (a, b) {
-      if (priorityRank(a.pressure) !== priorityRank(b.pressure)) return priorityRank(a.pressure) - priorityRank(b.pressure);
-      if (a.findings !== b.findings) return b.findings - a.findings;
-      return a.family.localeCompare(b.family);
-    });
-  }
+	      return family;
+	    }).sort(function (a, b) {
+	      // Workflow Guidance: rank by workflow continuity burden and chain membership,
+	      // not by generic endpoint pressure counts.
+	      if (state.activeTopTab === 'workflow') {
+	        var aScore = sumSignalCounts(a.workflowSignalCounts || {});
+	        var bScore = sumSignalCounts(b.workflowSignalCounts || {});
+	        if (aScore !== bScore) return bScore - aScore;
+	        if ((a.workflowChainCount || 0) !== (b.workflowChainCount || 0)) return (b.workflowChainCount || 0) - (a.workflowChainCount || 0);
+	        if (a.findings !== b.findings) return b.findings - a.findings;
+	        if (priorityRank(a.pressure) !== priorityRank(b.pressure)) return priorityRank(a.pressure) - priorityRank(b.pressure);
+	        return a.family.localeCompare(b.family);
+	      }
+
+	      if (priorityRank(a.pressure) !== priorityRank(b.pressure)) return priorityRank(a.pressure) - priorityRank(b.pressure);
+	      if (a.findings !== b.findings) return b.findings - a.findings;
+	      return a.family.localeCompare(b.family);
+	    });
+	  }
 
   function familySummaries() {
     var families = familySummariesRaw().filter(function (family) {
@@ -4451,28 +5226,21 @@
     return output;
   }
 
-  function workflowScopedRows() {
-    var rows = scopedRows(state.payload.endpoints || []).filter(function (row) {
-      return state.filters.includeNoIssueRows || row.findings > 0;
-    });
+			  function renderEndpointRows() {
+			    if (!el.endpointRows || !el.listContext) {
+			      return;
+			    }
+		    // The investigation flow is now: filters -> family table -> inline endpoints -> inline inspector.
+		    // Avoid a detached "endpoint evidence" module far below the family table.
+		    var listSection = el.endpointRows ? el.endpointRows.closest('.section') : null;
+		    if (listSection) {
+		      listSection.style.display = 'none';
+		    }
+		    return;
 
-    if (state.filters.familyPressure === 'all') return rows;
-
-    var pressureMap = familyPressureByFamily(rows);
-    return rows.filter(function (row) {
-      var key = row.family || 'unlabeled family';
-      return pressureMap[key] === state.filters.familyPressure;
-    });
-  }
-
-	  function renderEndpointRows() {
-	    if (!el.endpointRows || !el.listContext) {
-	      return;
-	    }
-    var rows = filteredRows();
-    var total = scopedRows(state.payload.endpoints || []).length;
-    var listSection = el.endpointRows ? el.endpointRows.closest('.section') : null;
-    var evidenceListTitle = evidenceSectionTitleForActiveLens();
+		    var rows = filteredRows();
+		    var total = rowsInScopeAll().length;
+		    var evidenceListTitle = evidenceSectionTitleForActiveLens();
 
     // Keep section heading in sync with the active tab
     var listHeading = listSection ? listSection.querySelector('#endpointListHeading') : null;
@@ -4508,55 +5276,60 @@
     el.listContext.innerHTML = buildListContext(rows.length, total);
     bindRecoveryButtons(el.listContext);
 
-    if (!rows.length) {
-      state.selectedEndpointId = "";
-      el.endpointRows.innerHTML = '<tr><td colspan="3">'
-        + '<div class="empty inline-empty">'
-        + '<strong>No endpoints match this view.</strong>'
-        + '<p class="subtle">No endpoints with matching issues are left after the current filters. Use the family no-match recovery above to reset this view.</p>'
-        + '</div>'
-        + '</td></tr>';
-      return;
-    }
+	    if (!rows.length) {
+	      state.selectedEndpointId = "";
+	      el.endpointRows.innerHTML = '<tr><td colspan="3">'
+	        + '<div class="empty inline-empty">'
+	        + '<strong>No endpoints match this view.</strong>'
+	        + '<p class="subtle">No endpoints with matching issues are left after the current filters. Use the family no-match recovery above to reset this view.</p>'
+	        + '</div>'
+	        + '</td></tr>';
+	      return;
+	    }
 
-    if (!rows.find(function (row) { return row.id === state.selectedEndpointId; })) {
-      state.selectedEndpointId = firstVisibleEndpointId(rows);
-    }
+		    if (!rows.find(function (row) { return row.id === state.selectedEndpointId; })) {
+		      // Never auto-pick a different endpoint. If filters invalidate selection,
+		      // clear it and let the user pick via "Inspect endpoint".
+		      state.selectedEndpointId = '';
+		    }
 
     el.endpointRows.innerHTML = rows.map(function (row) {
       return renderEndpointRow(row);
     }).join("");
 
-	    Array.prototype.forEach.call(el.endpointRows.querySelectorAll("tr[data-id]"), function (tr) {
-	      tr.addEventListener("click", function () {
-	        selectEndpointForInspector(tr.getAttribute("data-id") || "");
-	      });
-	    });
+			    Array.prototype.forEach.call(el.endpointRows.querySelectorAll("tr[data-id]"), function (tr) {
+			      tr.addEventListener("click", function () {
+			        selectEndpointForInspector(tr.getAttribute("data-id") || "");
+			      });
+			    });
 
-		    Array.prototype.forEach.call(el.endpointRows.querySelectorAll('.severity-badge.is-interactive'), function (badge) {
-		      badge.addEventListener('click', function (event) {
+			    Array.prototype.forEach.call(el.endpointRows.querySelectorAll('.severity-badge.is-interactive'), function (badge) {
+			      badge.addEventListener('click', function (event) {
+			        event.preventDefault();
+			        event.stopPropagation();
+			        var row = badge.closest('tr[data-id]');
+			        if (!row) return;
+		        var endpointId = row.getAttribute('data-id') || "";
+		        if (!endpointId) return;
+		        state.detailEvidenceOpenForId = endpointId;
+		        selectEndpointForInspector(endpointId, 'exact');
+		      });
+		      badge.addEventListener('keydown', function (event) {
+		        if (event.key !== 'Enter' && event.key !== ' ') return;
+		        event.preventDefault();
+		        badge.click();
+		      });
+		    });
+
+		    Array.prototype.forEach.call(el.endpointRows.querySelectorAll("button[data-focus-endpoint]"), function (btn) {
+		      btn.addEventListener("click", function (event) {
 		        event.preventDefault();
 		        event.stopPropagation();
-		        var row = badge.closest('tr[data-id]');
-		        if (!row) return;
-	        selectEndpointForInspector(row.getAttribute('data-id') || "");
-	      });
-	      badge.addEventListener('keydown', function (event) {
-	        if (event.key !== 'Enter' && event.key !== ' ') return;
-	        event.preventDefault();
-	        badge.click();
-	      });
-	    });
-
-	    Array.prototype.forEach.call(el.endpointRows.querySelectorAll("button[data-focus-endpoint]"), function (btn) {
-	      btn.addEventListener("click", function (event) {
-	        event.preventDefault();
-	        event.stopPropagation();
-	        var endpointId = btn.getAttribute("data-focus-endpoint") || "";
-	        if (!endpointId) return;
-	        selectEndpointForInspector(endpointId);
-	      });
-	    });
+		        var endpointId = btn.getAttribute("data-focus-endpoint") || "";
+		        if (!endpointId) return;
+		        selectEndpointForInspector(endpointId);
+		      });
+		    });
 
 		    Array.prototype.forEach.call(el.endpointRows.querySelectorAll('button[data-toggle-row-findings]'), function (btn) {
 		      btn.addEventListener('click', function (event) {
@@ -4581,8 +5354,8 @@
 	    });
   }
 
-			  function renderEndpointRow(row, options) {
-			    options = options || {};
+				  function renderEndpointRow(row, options) {
+				    options = options || {};
 		    var detail = state.payload.endpointDetails[row.id] || { findings: [] };
 		    var lensFindings = findingsForActiveLens(detail.findings || []);
 		    var firstFinding = lensFindings[0] || null;
@@ -4606,17 +5379,38 @@
 		      ? '<button type="button" class="row-additional-findings-toggle" data-toggle-row-findings="' + escapeHtml(row.id) + '" aria-expanded="' + (additionalOpen ? 'true' : 'false') + '">' + (additionalOpen ? 'Hide ' : 'Show ') + additionalCount + ' additional finding' + (additionalCount === 1 ? '' : 's') + '</button>'
 		      : '';
 		    var additionalFindingsList = additionalCount && additionalOpen
-		      ? '<div class="row-additional-findings-list">'
-		          + additionalFindings.map(function (finding) {
-	              var scope = issueScopeLabelForKey(findingGroupKey(finding), scopeFamilyName);
-	              var findingContext = renderOpenAPIContextPills(extractOpenAPIContext(finding), true);
-	              return '<div class="row-additional-finding-item">'
-	                + '<p class="row-additional-finding-message">' + escapeHtml(finding.message || 'No issue message extracted.') + '</p>'
-	                + '<p class="row-additional-finding-scope"><strong>Scope:</strong> ' + escapeHtml(scope) + '</p>'
-	                + '<div class="row-additional-finding-context">' + findingContext + '</div>'
-	                + '</div>';
-	            }).join('')
-		        + '</div>'
+		      ? (function () {
+		          var scopes = additionalFindings.map(function (finding) {
+		            return issueScopeLabelForKey(findingGroupKey(finding), scopeFamilyName);
+		          });
+		          var common = scopes[0] || '';
+		          for (var i = 1; i < scopes.length; i++) {
+		            if (scopes[i] !== common) { common = ''; break; }
+		          }
+		          // Reduce repetitive "Scope: ..." lines inside each finding row.
+		          // If all additional findings share the same scope, show it once (or not at all
+		          // if it matches the primary finding scope already visible in the row header).
+		          var headerScopeLine = '';
+		          if (common && common !== primaryScope) {
+		            headerScopeLine = '<p class="row-additional-findings-scope"><strong>Scope:</strong> ' + escapeHtml(common) + '</p>';
+		          }
+		          return '<div class="row-additional-findings-list">'
+		            + headerScopeLine
+		            + additionalFindings.map(function (finding) {
+		                var scope = issueScopeLabelForKey(findingGroupKey(finding), scopeFamilyName);
+		                var findingContext = renderOpenAPIContextPills(extractOpenAPIContext(finding), true);
+		                var scopeLine = '';
+		                if (!common && scope && scope !== primaryScope) {
+		                  scopeLine = '<p class="row-additional-finding-scope"><strong>Scope:</strong> ' + escapeHtml(scope) + '</p>';
+		                }
+		                return '<div class="row-additional-finding-item">'
+		                  + '<p class="row-additional-finding-message">' + escapeHtml(finding.message || 'No issue message extracted.') + '</p>'
+		                  + scopeLine
+		                  + '<div class="row-additional-finding-context">' + findingContext + '</div>'
+		                  + '</div>';
+		              }).join('')
+		            + '</div>';
+		        })()
 		      : '';
 	    var additionalFindingsRowInline = additionalFindingsList
 	      ? '<tr class="nested-endpoint-findings-row" data-endpoint-id="' + escapeHtml(row.id) + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
@@ -4635,12 +5429,12 @@
       : (inspectSelected ? 'Selected' : 'Inspect endpoint');
 	    var rowClasses = (options.inlineTable ? 'nested-endpoint-row ' : '') + selected + ' row-pressure-' + row.priority + (additionalOpen ? ' findings-expanded' : '');
 
-		    if (options.inlineTable) {
+			    if (options.inlineTable) {
 		      var endpointIdentityTitle = escapeHtml(((row.method || '').toUpperCase() + ' ' + (row.path || '') + ' — ' + intent).trim());
 		      var scopeBadge = primaryScope
 		        ? '<span class="row-issue-scope-pill" title="' + escapeHtml('Scope: ' + primaryScope) + '"><strong>Scope:</strong> ' + escapeHtml(primaryScope) + '</span>'
 		        : '';
-		      var rowHtml = '<tr class="' + rowClasses.trim() + '" data-id="' + row.id + '" data-endpoint-id="' + row.id + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
+			      var rowHtml = '<tr class="' + rowClasses.trim() + '" data-id="' + row.id + '" data-endpoint-id="' + row.id + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
 		        + '<td class="nested-endpoint-path-cell">'
 		        + '<div class="endpoint-row-main">'
 		        + '<strong title="' + endpointIdentityTitle + '">' + escapeHtml(row.path) + '</strong>'
@@ -4654,20 +5448,37 @@
 		        + (additionalFindingsControl ? '<div class="nested-endpoint-issue-actions">' + additionalFindingsControl + '</div>' : '')
 		        + '</div>'
 		        + '</td>'
-		        + '<td class="nested-endpoint-severity-cell">' + (firstFinding ? severityBadge(severity) : '<span class="subtle">No issue</span>') + '</td>'
-		        + '<td class="nested-endpoint-instance-cell"><span class="instance-count-chip">' + instanceCount + ' instance' + (instanceCount === 1 ? '' : 's') + '</span></td>'
-		        + '<td class="nested-endpoint-actions-cell">'
-		        + '<div class="nested-endpoint-actions">'
-		        + '<span class="selected-pill endpoint-selected-pill" aria-hidden="true">Selected</span>'
-		        + '<button type="button" class="' + inspectButtonClass + '" data-focus-endpoint="' + escapeHtml(row.id) + '" aria-pressed="' + (inspectSelected ? 'true' : 'false') + '" aria-busy="' + (inspectLoading ? 'true' : 'false') + '">' + inspectButtonLabel + '</button>'
-		        + '<button type="button" class="tertiary-action endpoint-insight-toggle" data-endpoint-insight-toggle="' + escapeHtml(row.id) + '">' + (state.expandedEndpointInsightIds[row.id] ? 'Hide preview' : 'Preview') + '</button>'
-		        + '</div>'
+			        + '<td class="nested-endpoint-severity-cell">' + (firstFinding ? severityBadgeEvidenceCTA(severity, row.id) : '<span class="subtle">No issue</span>') + '</td>'
+			        + '<td class="nested-endpoint-instance-cell"><button type="button" class="instance-count-chip is-interactive" data-open-evidence-id="' + escapeHtml(row.id) + '" title="Open exact evidence groups" aria-label="Open exact evidence groups">' + instanceCount + ' instance' + (instanceCount === 1 ? '' : 's') + '</button></td>'
+			        + '<td class="nested-endpoint-actions-cell">'
+			        + '<div class="nested-endpoint-actions">'
+			        + '<span class="selected-pill endpoint-selected-pill" aria-hidden="true">Selected</span>'
+			        + '<button type="button" class="' + inspectButtonClass + '" data-focus-endpoint="' + escapeHtml(row.id) + '" aria-pressed="' + (inspectSelected ? 'true' : 'false') + '" aria-busy="' + (inspectLoading ? 'true' : 'false') + '">' + inspectButtonLabel + '</button>'
+			        + '<button type="button" class="tertiary-action endpoint-insight-toggle" data-endpoint-insight-toggle="' + escapeHtml(row.id) + '">' + (state.expandedEndpointInsightIds[row.id] ? 'Hide preview' : 'Preview') + '</button>'
+			        + '</div>'
 		        + '</td>'
 		        + '</tr>';
-		      return rowHtml + additionalFindingsRowInline;
-		    }
+			      var inspectorInlineRowNested = (row.id === state.selectedEndpointId && state.inspectPlacementHint === 'nested')
+			        ? renderInlineInspectorMountRow(row.id, 6, 'nested')
+			        : '';
+			      var workspaceAnchorRow = '';
+			      if (row.id === state.selectedEndpointId && state.detachedInspectorVisible) {
+			        workspaceAnchorRow = '<tr class="workspace-anchor-row" data-endpoint-id="' + escapeHtml(row.id) + '">'
+			          + '<td colspan="6" class="workspace-anchor-cell">'
+			          + '<div class="workspace-nav-anchor" role="status" aria-label="Workspace navigation">'
+			          + '<div class="workspace-nav-label">Viewing workspace for: <code>' + escapeHtml(((row.method || '').toUpperCase() + ' ' + (row.path || '')).trim()) + '</code></div>'
+			          + '<div class="workspace-nav-actions">'
+			          + '<button type="button" class="secondary-action" data-jump-to-workspace="1">Jump to workspace</button>'
+			          + '<button type="button" class="tertiary-action" data-return-to-row="' + escapeHtml(row.id) + '">Return to row</button>'
+			          + '</div>'
+			          + '</div>'
+			          + '</td>'
+			          + '</tr>';
+			      }
+			      return rowHtml + additionalFindingsRowInline + workspaceAnchorRow + inspectorInlineRowNested;
+			    }
 
-		    var baseRow = '<tr class="' + rowClasses.trim() + '" data-id="' + row.id + '" data-endpoint-id="' + row.id + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
+			    var baseRow = '<tr class="' + rowClasses.trim() + '" data-id="' + row.id + '" data-endpoint-id="' + row.id + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
 		      + '<td>'
 		      + '<div class="endpoint-row-main">'
 		      + '<strong>' + escapeHtml(row.method + ' ' + row.path) + '</strong>'
@@ -4695,16 +5506,252 @@
 		      + '</td>'
 		      + '</tr>';
 
-		    var additionalFindingsRow = additionalFindingsList
-		      ? '<tr class="endpoint-row-findings-row" data-endpoint-id="' + escapeHtml(row.id) + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
-		          + '<td colspan="3" class="endpoint-row-findings-cell">'
-		          + additionalFindingsList
-		          + '</td>'
-		        + '</tr>'
-		      : '';
+			    var additionalFindingsRow = additionalFindingsList
+			      ? '<tr class="endpoint-row-findings-row" data-endpoint-id="' + escapeHtml(row.id) + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
+			          + '<td colspan="3" class="endpoint-row-findings-cell">'
+			          + additionalFindingsList
+			          + '</td>'
+			        + '</tr>'
+			      : '';
 
-		    return baseRow + additionalFindingsRow;
-		  }
+			    var inspectorInlineRow = (row.id === state.selectedEndpointId && state.inspectPlacementHint === 'endpoint-list')
+			      ? renderInlineInspectorMountRow(row.id, 3, 'endpoint-list')
+			      : '';
+
+			    return baseRow + additionalFindingsRow + inspectorInlineRow;
+			  }
+
+	  function renderInlineInspectorMountRow(endpointId, colSpan, variant) {
+	    var v = variant || 'nested';
+	    return '<tr class="inline-inspector-row inline-inspector-row-' + escapeHtml(v) + '" data-inline-inspector-row="1" data-endpoint-id="' + escapeHtml(endpointId) + '">'
+	      + '<td colspan="' + String(colSpan || 1) + '" class="inline-inspector-cell">'
+	      + '<div class="inline-inspector-shell inline-inspector-shell-' + escapeHtml(v) + '" data-inline-inspector-mount="1" data-inline-endpoint-id="' + escapeHtml(endpointId) + '"></div>'
+	      + '</td>'
+	      + '</tr>';
+	  }
+
+	  function findInlineInspectorMount(endpointId) {
+	    if (!endpointId) return null;
+	    var mounts = document.querySelectorAll('[data-inline-inspector-mount="1"]');
+	    for (var i = 0; i < mounts.length; i++) {
+	      if ((mounts[i].getAttribute('data-inline-endpoint-id') || '') === endpointId) {
+	        return mounts[i];
+	      }
+	    }
+	    return null;
+	  }
+
+			  function buildEndpointDiagnosticsBody(detail, findings) {
+		    var endpoint = (detail && detail.endpoint) ? detail.endpoint : {};
+		    var workflowTabActive = state.activeTopTab === 'workflow';
+		    var shapeTabActive = state.activeTopTab === 'shape';
+		    var specRuleTabActive = state.activeTopTab === 'spec-rule';
+		    var relatedChains = (detail && detail.relatedChains) ? detail.relatedChains : [];
+
+			    var body = '';
+			    var collapseTarget = shapeTabActive ? 'shape-workspace' : '';
+			    body += renderInspectorWorkspaceHeader(detail, findings, {
+			      collapseTarget: collapseTarget,
+			      collapsed: shapeTabActive ? !!state.shapeWorkspaceCollapsed : false
+			    });
+
+			    var workspaceBodyClass = 'inspector-workspace-body'
+			      + (shapeTabActive && state.shapeWorkspaceCollapsed ? ' is-collapsed' : '');
+			    var workspaceBodyAttr = collapseTarget
+			      ? (' data-workspace-collapse-target="' + escapeHtml(collapseTarget) + '"')
+			      : '';
+			    body += '<div class="' + workspaceBodyClass + '"' + workspaceBodyAttr + '>';
+			    body += renderActiveScopeStrip({ dense: true });
+
+			    // Workflow Guidance must foreground step-specific continuity guidance first.
+			    // This keeps the workspace from reading like generic contract-rule output.
+			    if (workflowTabActive) {
+			      body += renderWorkflowStepWorkspace(detail);
+			    }
+
+			    // Compact cross-tab workflow link: when an endpoint belongs to a chain, surface a
+			    // minimal affordance to jump into Workflow Guidance without dragging chain content
+			    // into Contract Issues / Response Shape.
+			    if (!workflowTabActive && relatedChains.length) {
+		      var primary = relatedChains[0] || {};
+		      var steps = primary.endpointIds || [];
+		      var idx = state.selectedEndpointId ? steps.indexOf(state.selectedEndpointId) : -1;
+		      var stepLabel = (idx >= 0 && steps.length)
+		        ? ('Step ' + (idx + 1) + ' of ' + steps.length)
+		        : (steps.length ? (steps.length + ' steps') : 'in chain');
+		      var linkTitle = 'Workflow chain available';
+		      var linkCopy = 'This endpoint participates in an inferred call sequence. Open the step-by-step chain to see purpose, required context, traps, and likely next actions.';
+		      body += '<section class="workflow-chain-link-card" aria-label="' + escapeHtml(linkTitle) + '">'
+		        + '<div class="workflow-chain-link-row">'
+		        + '<p class="workflow-chain-link-title"><strong>' + escapeHtml(linkTitle) + '</strong> <span class="subtle">' + escapeHtml(stepLabel) + '</span></p>'
+		        + '<button type="button" class="secondary-action" data-open-workflow-chain="1" title="Open Workflow Guidance chain view">Open chain in Workflow Guidance</button>'
+		        + '</div>'
+		        + '<p class="subtle workflow-chain-link-copy">' + escapeHtml(linkCopy) + '</p>'
+		        + '</section>';
+			    }
+			    if (findings && findings.length) {
+			      body += renderWhatToDoNextBlock(endpoint, findings, { maxItems: 2, showEndpointLabel: false });
+			    }
+			    if (workflowTabActive) {
+			      body += renderWorkflowDiagnosticsFrame(detail);
+		    }
+
+		    // Workflow chain/handoff context only belongs in Workflow Guidance.
+		    if (workflowTabActive && state.endpointDiagnosticsSubTab !== 'summary') {
+		      body += renderInspectorWorkflowContextSupport(detail, { defaultOpen: true });
+		    }
+
+	    body += renderInspectorContentMap();
+	    body += renderEndpointDiagnosticsTabs();
+	    if (!findings || !findings.length) {
+	      body += renderEndpointDiagnosticsEmptyState();
+	    } else if (state.endpointDiagnosticsSubTab === 'exact') {
+	      body += renderEndpointDiagnosticsExact(detail);
+	    } else if (state.endpointDiagnosticsSubTab === 'consistency') {
+	      body += renderEndpointDiagnosticsConsistency(detail);
+	    } else if (state.endpointDiagnosticsSubTab === 'cleaner') {
+	      body += renderEndpointDiagnosticsCleaner(detail);
+	    } else {
+	      body += workflowTabActive
+	        ? renderEndpointDiagnosticsWorkflowSummary(detail)
+	        : (shapeTabActive ? renderEndpointDiagnosticsShapeSummary(detail) : renderEndpointDiagnosticsSummary(detail));
+	    }
+
+	    body += '</div>';
+	    return body;
+	  }
+
+		  function bindEndpointDiagnosticsInteractions(container) {
+		    if (!container) return;
+
+		    var workflowContextDrawer = container.querySelector('[data-inspector-workflow-context]');
+		    if (workflowContextDrawer) {
+		      workflowContextDrawer.addEventListener('toggle', function () {
+		        state.inspectorWorkflowContextOpen = !!workflowContextDrawer.open;
+		      });
+		    }
+
+		    var workspaceCollapseBtn = container.querySelector('button[data-workspace-collapse-toggle]');
+		    if (workspaceCollapseBtn && !workspaceCollapseBtn.__workspaceCollapseBound) {
+		      workspaceCollapseBtn.__workspaceCollapseBound = true;
+		      var target = workspaceCollapseBtn.getAttribute('data-workspace-collapse-toggle') || '';
+		      var workspaceBody = target
+		        ? container.querySelector('[data-workspace-collapse-target="' + target + '"]')
+		        : null;
+		      var openLabel = workspaceCollapseBtn.getAttribute('data-open-label') || 'Collapse';
+		      var closedLabel = workspaceCollapseBtn.getAttribute('data-closed-label') || 'Expand';
+
+		      function syncWorkspaceCollapseUi(collapsed) {
+		        if (!workspaceBody) return;
+		        workspaceBody.classList.toggle('is-collapsed', !!collapsed);
+		        workspaceCollapseBtn.textContent = collapsed ? closedLabel : openLabel;
+		        workspaceCollapseBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+		        workspaceCollapseBtn.title = collapsed ? 'Expand workspace' : 'Collapse workspace';
+		      }
+
+		      // Ensure DOM reflects state on first bind.
+		      if (state.activeTopTab === 'shape' && target === 'shape-workspace') {
+		        syncWorkspaceCollapseUi(!!state.shapeWorkspaceCollapsed);
+		      }
+
+		      workspaceCollapseBtn.addEventListener('click', function (event) {
+		        event.preventDefault();
+		        event.stopPropagation();
+		        if (!workspaceBody) return;
+		        var nextCollapsed = !workspaceBody.classList.contains('is-collapsed');
+		        if (state.activeTopTab === 'shape' && target === 'shape-workspace') {
+		          state.shapeWorkspaceCollapsed = nextCollapsed;
+		        }
+		        syncWorkspaceCollapseUi(nextCollapsed);
+		      });
+		    }
+
+		    Array.prototype.forEach.call(container.querySelectorAll('details.detail-evidence-drawer'), function (drawer) {
+		      var labelNode = drawer.querySelector('[data-evidence-drawer-label]');
+		      if (!labelNode) return;
+		      function syncLabel() {
+		        var openLabel = labelNode.getAttribute('data-open-label') || 'Hide full exact evidence';
+		        var closedLabel = labelNode.getAttribute('data-closed-label') || 'Open full exact evidence';
+		        labelNode.textContent = drawer.open ? openLabel : closedLabel;
+		      }
+		      syncLabel();
+		      drawer.addEventListener('toggle', syncLabel);
+		    });
+
+		    // Close buttons inside expandable drawers. We keep the close action inside the
+		    // expanded visual block so users never have to guess how to reverse the open state.
+		    Array.prototype.forEach.call(container.querySelectorAll('button[data-close-details]'), function (btn) {
+		      if (btn.__closeDetailsBound) return;
+		      btn.__closeDetailsBound = true;
+		      btn.addEventListener('click', function (event) {
+		        event.preventDefault();
+		        event.stopPropagation();
+		        var details = null;
+		        if (btn.closest) {
+		          details = btn.closest('details');
+		        } else {
+		          var node = btn.parentNode;
+		          while (node && node.tagName !== 'DETAILS') node = node.parentNode;
+		          details = node;
+		        }
+		        if (details) details.open = false;
+		        if (details && details.getAttribute && details.getAttribute('data-full-exact-evidence')) {
+		          state.detailEvidenceOpenForId = '';
+		        }
+		      });
+		    });
+
+		    var fullEvidenceDrawer = container.querySelector('details[data-full-exact-evidence]');
+		    if (fullEvidenceDrawer && !fullEvidenceDrawer.__fullEvidenceBound) {
+		      fullEvidenceDrawer.__fullEvidenceBound = true;
+		      fullEvidenceDrawer.addEventListener('toggle', function () {
+		        state.detailEvidenceOpenForId = fullEvidenceDrawer.open ? (state.selectedEndpointId || '') : '';
+		      });
+		    }
+
+		    Array.prototype.forEach.call(container.querySelectorAll('button[data-open-workflow-chain]'), function (btn) {
+		      btn.addEventListener('click', function (event) {
+		        event.preventDefault();
+		        event.stopPropagation();
+		        var endpointId = state.selectedEndpointId || '';
+		        var detail = endpointId ? endpointDetailForId(endpointId) : null;
+		        var endpoint = detail && detail.endpoint ? detail.endpoint : null;
+		        var family = endpoint ? (endpoint.family || '') : '';
+
+		        // Switch tabs without clearing the user's current search/family pressure context.
+		        state.activeTopTab = 'workflow';
+		        state.filters.category = 'all';
+		        state.filters.burden = 'workflow-burden';
+		        state.endpointDiagnosticsSubTab = 'summary';
+		        state.workflowChainsOpen = true;
+
+		        // Keep the selected endpoint and keep the family table anchored to its owner.
+		        if (family) {
+		          state.expandedFamily = family;
+		          state.expandedFamilyInsight = '';
+		        }
+		        render();
+		        syncWorkflowStepSelectionHighlight();
+		      });
+		    });
+
+		    Array.prototype.forEach.call(container.querySelectorAll('button[data-endpoint-subtab]'), function (btn) {
+		      btn.addEventListener('click', function () {
+		        state.endpointDiagnosticsSubTab = btn.getAttribute('data-endpoint-subtab') || 'summary';
+		        renderEndpointDiagnostics();
+	      });
+	    });
+
+			    Array.prototype.forEach.call(container.querySelectorAll('[data-chain-step-id]'), function (elem) {
+			      elem.addEventListener('click', function () {
+			        var endpointId = elem.getAttribute('data-chain-step-id') || '';
+			        if (!endpointId) return;
+			        // Always attach workflow chain selections to the family surface.
+			        // Do not jump the user down to a detached endpoint list/inspector module.
+			        selectEndpointForInspector(endpointId, 'summary');
+			      });
+			    });
+			  }
 
   function bumpCounter(map, key) {
     map[key] = (map[key] || 0) + 1;
@@ -4792,16 +5839,16 @@
     var signals = collectDynamicBurdenSignals(rows, burdenLens);
     if (!signals.length) return '';
 
-    var chips = signals.map(function (signal) {
+    var heading = burdenLens === 'consistency'
+      ? 'Most common differences in this view:'
+      : 'Most common in this slice:';
+    var parts = signals.slice(0, 4).map(function (signal) {
       var label = burdenLens === 'consistency' ? humanizeSignalLabel(signal.label) : signal.label;
-      return '<span class="chip">' + escapeHtml(label) + ' (' + signal.count + ')</span>';
-    }).join('');
-
-    var heading = burdenLens === 'consistency' ? 'Most common differences in this view:' : 'Most common in this slice:';
+      return label + ' (' + signal.count + ')';
+    }).filter(Boolean);
 
     return '<div class="burden-dynamic-signals">'
-      + '<strong>' + escapeHtml(heading) + '</strong>'
-      + '<div class="chips">' + chips + '</div>'
+      + '<p class="burden-dynamic-signals-line"><strong>' + escapeHtml(heading) + '</strong> ' + escapeHtml(parts.join(', ')) + '.</p>'
       + '</div>';
   }
 
@@ -5087,12 +6134,12 @@
       + '</section>';
   }
 
-	  function renderEndpointInspectionContent(detail, options) {
-	    var opts = options || {};
-	    var findings = findingsForActiveLens(detail.findings || []);
-	    var endpoint = detail.endpoint || {};
-	    var familyName = endpoint.family || '';
-	    var groups = groupFindings(findings);
+		  function renderEndpointInspectionContent(detail, options) {
+		    var opts = options || {};
+		    var findings = findingsForActiveLens(detail.findings || []);
+		    var endpoint = detail.endpoint || {};
+		    var familyName = endpoint.family || '';
+		    var groups = groupFindings(findings);
 	    var severity = dominantSeverity(findings);
 	    var topGroup = groups[0] || null;
 	    var groupedFindingsCount = groups.length;
@@ -5116,8 +6163,8 @@
 	        + '</details>';
 	    }
 
-    var workflowExample = renderWorkflowShapedExample(detail, findings);
-    var openDrawer = !!opts.openEvidence;
+	    var workflowExample = renderWorkflowShapedExample(detail, findings);
+	    var openDrawer = !!opts.openEvidence;
 
     var html = ''
       + '<div class="detail-hero pressure-' + endpoint.priority + '">'
@@ -5149,15 +6196,7 @@
       html += workflowExample;
     }
 
-		    html += '<details class="detail-evidence-drawer"' + (openDrawer ? ' open' : '') + '>'
-		      + '<summary>' + escapeHtml(evidenceGroupsSummaryLabel(groups.length)) + '</summary>'
-		      + '<section class="detail-section detail-section-tight">'
-		      + '  <p class="subtle detail-section-copy">' + escapeHtml(evidenceGroupsGroupingBasisCopy()) + '</p>'
-		      + groups.map(function (group, index) {
-		            return renderIssueGroup(group, index, { familyName: familyName, endpoint: endpoint });
-		          }).join('')
-		      + '</section>'
-		      + '</details>';
+			    html += renderFullExactEvidenceDrawer(groups, { endpoint: endpoint, familyName: familyName, open: openDrawer });
 
     if (chainContext) {
       html += chainContext;
@@ -5166,38 +6205,50 @@
     return html;
   }
 
-  function syncSelectedEndpointHighlight() {
-    if (!el.familySurface) return;
+		  function syncSelectedEndpointHighlight() {
+		    if (!el.familySurface) return;
 
-    // Clear all selected states
-    Array.prototype.forEach.call(el.familySurface.querySelectorAll('.family-row.row-selected, .endpoint-subrow.row-selected, .nested-endpoint-row.row-selected'), function (row) {
-      row.classList.remove('row-selected');
-    });
+		    // Clear all selected states
+		    Array.prototype.forEach.call(el.familySurface.querySelectorAll('.family-row.row-selected, .endpoint-subrow.row-selected, .nested-endpoint-row.row-selected'), function (row) {
+		      row.classList.remove('row-selected');
+		    });
+		    Array.prototype.forEach.call(el.familySurface.querySelectorAll('tr[data-family-row="true"].row-has-selected-child'), function (row) {
+		      row.classList.remove('row-has-selected-child');
+		    });
 
-    if (!state.selectedEndpointId) return;
+	    // Expanded rows get a subtle structural highlight via `.is-expanded`.
+	    // Selection is reserved for an explicitly inspected endpoint (stronger highlight).
+	    if (!state.selectedEndpointId) return;
 
-    var selectedDetail = state.payload && state.payload.endpointDetails ? state.payload.endpointDetails[state.selectedEndpointId] : null;
-    var selectedFamilyName = selectedDetail && selectedDetail.endpoint ? (selectedDetail.endpoint.family || '') : '';
+	    var selectedDetail = state.payload && state.payload.endpointDetails ? state.payload.endpointDetails[state.selectedEndpointId] : null;
+	    var selectedFamilyName = selectedDetail && selectedDetail.endpoint ? (selectedDetail.endpoint.family || '') : '';
 
     // Apply the selected-row background to only the currently active row:
     // 1) If the selected endpoint row is rendered (expanded), highlight that.
     // 2) Otherwise, fall back to highlighting the family row so selection is still visible.
-    var selectedSubrow = el.familySurface.querySelector('.nested-endpoint-row[data-endpoint-id="' + state.selectedEndpointId + '"], .endpoint-subrow[data-endpoint-id="' + state.selectedEndpointId + '"]');
-    if (selectedSubrow) {
-      selectedSubrow.classList.add('row-selected');
-      return;
-    }
+	    var selectedSubrow = el.familySurface.querySelector('.nested-endpoint-row[data-endpoint-id="' + state.selectedEndpointId + '"], .endpoint-subrow[data-endpoint-id="' + state.selectedEndpointId + '"]');
+	    if (selectedSubrow) {
+	      selectedSubrow.classList.add('row-selected');
+	      // Keep family ownership visible even when the endpoint row is the only tinted selection.
+	      var ownerFamily = selectedSubrow.getAttribute('data-family') || selectedFamilyName;
+	      if (ownerFamily) {
+	        var ownerRow = el.familySurface.querySelector('tr[data-family="' + ownerFamily + '"][data-family-row="true"]');
+	        if (ownerRow) ownerRow.classList.add('row-has-selected-child');
+	      }
+	      return;
+	    }
     if (selectedFamilyName) {
       var familyRow = el.familySurface.querySelector('tr[data-family="' + selectedFamilyName + '"][data-family-row="true"]');
       if (familyRow) familyRow.classList.add('row-selected');
     }
   }
 
-  function endpointHasWorkflowBurden(detail) {
-    if (!detail) return false;
-    if ((detail.relatedChains || []).length) return true;
-    var findings = detail.findings || [];
-    return findings.some(function (f) {
+		  function endpointHasWorkflowBurden(detail) {
+	    if (state.activeTopTab !== 'workflow') return false;
+	    if (!detail) return false;
+	    if ((detail.relatedChains || []).length) return true;
+	    var findings = detail.findings || [];
+	    return findings.some(function (f) {
       if (!f) return false;
       if (f.burdenFocus === 'workflow-burden') return true;
       var code = f.code || '';
@@ -5210,9 +6261,9 @@
     });
   }
 
-  function renderInspectorWorkflowContextSupport(detail, options) {
-    var opts = options || {};
-    if (!endpointHasWorkflowBurden(detail)) return '';
+	  function renderInspectorWorkflowContextSupport(detail, options) {
+	    var opts = options || {};
+	    if (!endpointHasWorkflowBurden(detail)) return '';
 
     var chainCount = (detail.relatedChains || []).length;
     var hasChain = chainCount > 0;
@@ -5224,19 +6275,21 @@
     var open = (typeof state.inspectorWorkflowContextOpen === 'boolean')
       ? state.inspectorWorkflowContextOpen
       : defaultOpen;
-    var openAttr = open ? ' open' : '';
-    var bodyHtml = hasChain
-      ? renderWorkflowChainContextForEndpoint(detail)
-      : '<div class="family-insight-card"><p class="subtle">Workflow burden signals exist for this endpoint, but it is not currently linked to an inferred call chain in this payload.</p></div>';
+	    var openAttr = open ? ' open' : '';
+	    var bodyHtml = hasChain
+	      ? renderWorkflowChainContextForEndpoint(detail)
+	      : '<div class="family-insight-card"><p class="subtle">Workflow burden signals exist for this endpoint, but it is not currently linked to an inferred call chain in this payload.</p></div>';
 
-    return '<details class="detail-evidence-drawer inspector-workflow-context-drawer"' + openAttr + ' data-inspector-workflow-context="1">'
-      + '<summary>Workflow chain context (' + escapeHtml(summaryMeta) + ')</summary>'
-      + '<p class="subtle">Use this when the contract forces hidden handoffs or unclear next steps. Click a step to inspect that endpoint.</p>'
-      + bodyHtml
-      + '</details>';
-  }
+	    return '<details class="detail-evidence-drawer inspector-workflow-context-drawer"' + openAttr + ' data-inspector-workflow-context="1">'
+	      + '<summary>Workflow chain context (' + escapeHtml(summaryMeta) + ')</summary>'
+	      + '<div class="workspace-section-body">'
+	      + '<p class="subtle">Use this when the contract forces hidden handoffs or unclear next steps. Click a step to inspect that endpoint.</p>'
+	      + bodyHtml
+	      + '</div>'
+	      + '</details>';
+	  }
 
-  function renderEndpointDiagnostics() {
+	  function renderEndpointDiagnostics() {
     // ============================================================================
     // CONTENT PRESERVATION AUDIT & MAPPING
     // ============================================================================
@@ -5353,15 +6406,31 @@
     //
     // ============================================================================
 
-    if (!el.endpointDiagnosticsSection) return;
-    el.endpointDiagnosticsSection.style.display = 'block';
+		    if (!el.endpointDiagnosticsSection) return;
 
-    var workflowTabActive = state.activeTopTab === 'workflow';
-    var shapeTabActive = state.activeTopTab === 'shape';
-    var diagnosticsTitle = el.endpointDiagnosticsSection.querySelector('h2');
-	    if (diagnosticsTitle) {
-	      diagnosticsTitle.textContent = workflowTabActive
-	        ? 'Workflow Guidance — endpoint continuity inspector'
+		    var workflowTabActive = state.activeTopTab === 'workflow';
+		    var shapeTabActive = state.activeTopTab === 'shape';
+		    var inlineMount = findInlineInspectorMount(state.selectedEndpointId);
+		    // Never render a detached bottom inspector module. The inspector mounts inline beneath
+		    // the selected endpoint row inside the family surface.
+		    el.endpointDiagnosticsSection.style.display = 'none';
+		    el.endpointDiagnosticsBody.innerHTML = '';
+		    el.endpointDiagnosticsHelp.textContent = '';
+		    state.detachedInspectorVisible = false;
+
+		    // Fallback: if we cannot find an inline mount, render a detached workspace below the
+		    // family table (and provide a sticky in-flow anchor beneath the selected row).
+		    // Inline placement is preferred and should normally be used.
+		    var useDetached = !inlineMount;
+		    if (useDetached) {
+		      inlineMount = el.endpointDiagnosticsBody;
+		      el.endpointDiagnosticsSection.style.display = 'block';
+		      state.detachedInspectorVisible = true;
+		    }
+		    var diagnosticsTitle = el.endpointDiagnosticsSection.querySelector('h2');
+		    if (diagnosticsTitle) {
+		      diagnosticsTitle.textContent = workflowTabActive
+		        ? 'Workflow Guidance — endpoint continuity inspector'
 	        : shapeTabActive
 	        ? 'Response Shape — endpoint pain inspector'
 	        : 'Contract Issues — endpoint inspector';
@@ -5381,128 +6450,30 @@
       el.endpointDiagnosticsSection.classList.remove('endpoint-diagnostics-shape-compact');
     }
 
-	    var detail = state.selectedEndpointId ? state.payload.endpointDetails[state.selectedEndpointId] : null;
-	    var hasValidSelection = !!detail && hasValidSelectedEndpointInCurrentView();
-	    document.body.classList.toggle('has-endpoint-selection', hasValidSelection);
+		    var detail = state.selectedEndpointId ? endpointDetailForId(state.selectedEndpointId) : null;
+		    var hasValidSelection = !!detail && hasValidSelectedEndpointInCurrentView();
+		    document.body.classList.toggle('has-endpoint-selection', hasValidSelection);
 
-	    if (!hasValidSelection) {
-	      el.endpointDiagnosticsSection.classList.add('endpoint-diagnostics-secondary');
-	      el.endpointDiagnosticsHelp.textContent = 'Select an endpoint from the expanded family row above to inspect its summary, evidence, drift, and contract improvements.';
-	      el.endpointDiagnosticsBody.innerHTML = renderActiveScopeStrip({ dense: true }) + renderEndpointDiagnosticsEmptyState();
-	      syncSelectedEndpointHighlight();
-	      return;
-	    }
+			    if (!hasValidSelection) {
+			      inlineMount.innerHTML = renderActiveScopeStrip({ dense: true }) + renderEndpointDiagnosticsEmptyState();
+			      bindEndpointDiagnosticsInteractions(inlineMount);
+			      syncSelectedEndpointHighlight();
+			      return;
+			    }
 
-    el.endpointDiagnosticsSection.classList.remove('endpoint-diagnostics-secondary');
-    syncSelectedEndpointHighlight();
+	    syncSelectedEndpointHighlight();
 
-	    var endpoint = detail.endpoint || {};
-	    var findings = findingsForActiveLens(detail.findings || []);
-	    var endpointLabel = endpoint.method + ' ' + endpoint.path;
-	    var selectedIndicator = ' (selected)';
+		    var endpoint = detail.endpoint || {};
+		    var findings = findingsForActiveLens((detail.findings || []));
+			    // Keep the inspector chrome stable: selected endpoint identity is shown in the
+			    // inspector header block itself (method/path + issue count). Avoid mixing in a
+			    // second "helper" line that can go stale across selection/filter changes.
+			    el.endpointDiagnosticsHelp.textContent = '';
 
-	    // Promote endpoint identity into the title when selected (makes the inspector
-	    // feel like the main workspace instead of another card).
-	    if (diagnosticsTitle) {
-	      diagnosticsTitle.textContent = endpointLabel;
-	    }
-	    if (diagnosticsEyebrow) {
-	      diagnosticsEyebrow.textContent = activeTopTabLabel() + ' workspace';
-	    }
-
-	    if (workflowTabActive) {
-	      var chainCount = (detail.relatedChains || []).length;
-	      var workflowSignalSummary = summarizeWorkflowHeaderSignals(detail);
-	      el.endpointDiagnosticsHelp.textContent = endpointIntentCue(endpoint.method, endpoint.path)
-	        + ' | ' + humanFamilyLabel(endpoint.family)
-	        + (findings.length ? ' | ' + findings.length + ' issues' : ' | no direct issues')
-	        + (chainCount ? ' | in ' + chainCount + ' workflow' + (chainCount === 1 ? '' : 's') : '')
-	        + (workflowSignalSummary ? ' | ' + workflowSignalSummary : '');
-	    } else if (shapeTabActive) {
-	      var shapeTotals = collectShapeSignalTotalsForDetail(detail);
-	      var shapeGroups = groupFindings(findingsForActiveLens(detail.findings || []));
-	      el.endpointDiagnosticsHelp.textContent = endpointIntentCue(endpoint.method, endpoint.path)
-	        + ' | ' + humanFamilyLabel(endpoint.family)
-	        + (findings.length ? ' | ' + findings.length + ' shape signals' : ' | no issues')
-	        + (shapeGroups.length ? ' | ' + shapeGroups.length + ' groups' : '')
-	        + ' | ' + shapeTotals.deep + '/' + shapeTotals.internal + '/' + shapeTotals.dup + '/' + shapeTotals.snapshot;
-	    } else {
-	      el.endpointDiagnosticsHelp.textContent = endpointIntentCue(endpoint.method, endpoint.path)
-	        + ' | ' + humanFamilyLabel(endpoint.family)
-	        + (findings.length ? ' | ' + findings.length + ' issues' : ' | no issues');
-	    }
-
-	    if (!findings.length) {
-	      el.endpointDiagnosticsBody.innerHTML = renderActiveScopeStrip({ dense: true }) + renderEndpointDiagnosticsEmptyState();
-	      return;
-	    }
-
-		    var body = '';
-		    body += renderActiveScopeStrip({ dense: true });
-		    body += renderInspectorWorkspaceHeader(detail, findings);
-		    body += renderWhatToDoNextBlock(endpoint, findings, { maxItems: 2, showEndpointLabel: false });
-		    if (workflowTabActive) {
-		      body += renderWorkflowDiagnosticsFrame(detail);
-		    }
-
-		    // Keep call-path context attached to endpoints even when the user is not in the
-		    // Workflow Guidance top tab (or is on a different inspector sub-tab).
-		    if (!(workflowTabActive && state.endpointDiagnosticsSubTab === 'summary')) {
-		      body += renderInspectorWorkflowContextSupport(detail, {
-		        defaultOpen: workflowTabActive && state.endpointDiagnosticsSubTab !== 'summary'
-		      });
-		    }
-
-	    body += renderInspectorContentMap();
-	    body += renderEndpointDiagnosticsTabs();
-	    if (state.endpointDiagnosticsSubTab === 'exact') {
-	      body += renderEndpointDiagnosticsExact(detail);
-	    } else if (state.endpointDiagnosticsSubTab === 'consistency') {
-      body += renderEndpointDiagnosticsConsistency(detail);
-    } else if (state.endpointDiagnosticsSubTab === 'cleaner') {
-      body += renderEndpointDiagnosticsCleaner(detail);
-    } else {
-      body += workflowTabActive
-        ? renderEndpointDiagnosticsWorkflowSummary(detail)
-        : (shapeTabActive ? renderEndpointDiagnosticsShapeSummary(detail) : renderEndpointDiagnosticsSummary(detail));
-    }
-	
-	    el.endpointDiagnosticsBody.innerHTML = body;
-
-	    var workflowContextDrawer = el.endpointDiagnosticsBody.querySelector('[data-inspector-workflow-context]');
-	    if (workflowContextDrawer) {
-	      workflowContextDrawer.addEventListener('toggle', function () {
-	        state.inspectorWorkflowContextOpen = !!workflowContextDrawer.open;
-	      });
-	    }
-	
-	    Array.prototype.forEach.call(el.endpointDiagnosticsBody.querySelectorAll('button[data-endpoint-subtab]'), function (btn) {
-	      btn.addEventListener('click', function () {
-	        state.endpointDiagnosticsSubTab = btn.getAttribute('data-endpoint-subtab') || 'summary';
-	        renderEndpointDiagnostics();
-      });
-    });
-
-	    // Bind chain step navigation in workflow chain context
-	    Array.prototype.forEach.call(el.endpointDiagnosticsBody.querySelectorAll('[data-chain-step-id]'), function (elem) {
-	      elem.addEventListener('click', function () {
-	        var endpointId = elem.getAttribute('data-chain-step-id') || '';
-	        if (!endpointId) return;
-	        var d = state.payload.endpointDetails[endpointId];
-	        var family = d && d.endpoint ? (d.endpoint.family || '') : '';
-	        state.selectedEndpointId = endpointId;
-	        state.endpointDiagnosticsSubTab = 'summary';
-	        if (family) {
-	          focusFamilySurface(family);
-	          return;
-	        }
-	        renderEndpointRows();
-	        renderEndpointDiagnostics();
-	        renderEndpointDetail();
-	        syncSelectedEndpointHighlight();
-	      });
-	    });
-	  }
+					    var body = buildEndpointDiagnosticsBody(detail, findings);
+					    inlineMount.innerHTML = body;
+					    bindEndpointDiagnosticsInteractions(inlineMount);
+			  }
 
   function summarizeWorkflowHeaderSignals(detail) {
     var findings = (detail && detail.findings) || [];
@@ -5538,10 +6509,10 @@
   // Maps real finding codes → developer pain, concrete examples, caller-needed
   // ---------------------------------------------------------------------------
 
-  function collectShapePainSignals(endpoint, findings) {
-    var path = ((endpoint && endpoint.path) || '').toLowerCase();
-    var method = ((endpoint && endpoint.method) || '').toUpperCase();
-    var signals = [];
+	  function collectShapePainSignals(endpoint, findings) {
+	    var path = ((endpoint && endpoint.path) || '').toLowerCase();
+	    var method = ((endpoint && endpoint.method) || '').toUpperCase();
+	    var signals = [];
 
     function hasCode(code) {
       return findings.some(function (f) { return (f.code || '') === code; });
@@ -5560,8 +6531,8 @@
     var isAction   = path.indexOf('/_action/') !== -1;
     var isMutation = method === 'POST' || method === 'PATCH' || method === 'PUT';
 
-    // 1. Deep nesting
-    if (hasCode('deeply-nested-response-structure') || hasMsgMatch(/nested|deep/)) {
+	    // 1. Deep nesting
+	    if (hasCode('deeply-nested-response-structure') || hasMsgMatch(/nested|deep/)) {
       var nestEx = isOrder
         ? 'An order creation response returns the full order graph: lineItems[].product.media[].thumbnails.url alongside billing/shipping addresses, all at equal depth. The "did my order succeed?" answer is buried 3–4 levels down in a structure meant for the database, not the client.'
         : isCart
@@ -5572,15 +6543,17 @@
         : isCart
         ? '{ "token": "…", "itemCount": 3, "total": { "gross": 99.95, "currency": "EUR" }, "nextAction": "checkout" }'
         : 'A flat outcome block with changed state and next action near the top, not buried inside nested objects.';
-      signals.push({
-        code: 'deep-nesting',
-        label: 'Deep nesting hides outcome meaning',
-        pain: 'Developers must traverse multiple nesting levels to reach what actually changed. Access paths like response.lineItems[0].product.price.gross become fragile — a schema change at any level silently breaks the client. The fields needed for the next API call may require 4+ chained property lookups.',
-        example: nestEx,
-        callerNeeded: nestNeeded,
-        icon: 'Depth'
-      });
-    }
+	      signals.push({
+	        code: 'deep-nesting',
+	        label: 'Deep nesting hides outcome meaning',
+	        pain: 'Developers must traverse multiple nesting levels to reach what actually changed. Access paths like response.lineItems[0].product.price.gross become fragile — a schema change at any level silently breaks the client. The fields needed for the next API call may require 4+ chained property lookups.',
+	        example: nestEx,
+	        callerNeeded: nestNeeded,
+	        notice: 'Outcome IDs/status/nextAction are not top-level, so callers must traverse incidental branches to continue the workflow.',
+	        recommendedChange: 'Flatten outcome and nextAction fields near the top level (or add a dedicated outcome block) so clients can read the result without deep traversal.',
+	        icon: 'Depth'
+	      });
+	    }
 
     // 2. Storage-shaped / snapshot-heavy
     if (hasCode('snapshot-heavy-response') || hasCode('contract-shape-workflow-guidance-burden') || hasMsgMatch(/snapshot|storage|model structure|full model/)) {
@@ -5594,15 +6567,17 @@
         : isCart
         ? '{ "token": "…", "gross": 99.95, "net": 84.00, "tax": 15.95, "currency": "EUR", "itemCount": 3 }'
         : 'A compact outcome-first payload: status, authoritative identifiers, and next action close to the top level with incidental fields omitted.';
-      signals.push({
-        code: 'snapshot-heavy',
-        label: 'Storage-shaped response — the database model mirrors back',
-        pain: 'The response reflects what the server stores rather than what the caller needs next. Developers must reverse-engineer which fields are authoritative, which are incidental, and what the operation actually changed. Onboarding cost multiplies because there is no contract-level hint about purpose — developers read the whole object hoping to find the relevant fragment.',
-        example: snapEx,
-        callerNeeded: snapNeeded,
-        icon: 'Snapshot'
-      });
-    }
+	      signals.push({
+	        code: 'snapshot-heavy',
+	        label: 'Storage-shaped response — the database model mirrors back',
+	        pain: 'The response reflects what the server stores rather than what the caller needs next. Developers must reverse-engineer which fields are authoritative, which are incidental, and what the operation actually changed. Onboarding cost multiplies because there is no contract-level hint about purpose — developers read the whole object hoping to find the relevant fragment.',
+	        example: snapEx,
+	        callerNeeded: snapNeeded,
+	        notice: 'The success outcome is not foregrounded; storage/internal fields compete visually with the task result.',
+	        recommendedChange: 'Return a compact outcome-first payload (ids, status, nextActions) and move full snapshots behind explicit follow-up endpoints.',
+	        icon: 'Snapshot'
+	      });
+	    }
 
     // 3. Duplicated state
     if (hasCode('duplicated-state-response') || hasMsgMatch(/duplicate|source of truth|authoritative/)) {
@@ -5612,15 +6587,17 @@
       var dupNeeded = isOrder
         ? 'A single explicit status field. If state machine detail is needed separately, expose it as a sub-resource: { "status": "open", "stateDetail": "/order/{id}/state" }'
         : 'One canonical field name mapped to one authoritative value. Derived representations removed or explicitly labelled as read-only views.';
-      signals.push({
-        code: 'duplicated-state',
-        label: 'Duplicated state — no clear source of truth',
-        pain: "When the same concept appears under multiple keys, developers pick one and rely on it. When those values diverge in production (cache lag, eventual consistency, partial update), the bug is silent until a customer notices. Client code that picked the \"wrong\" duplicate is correct until the day it isn't.",
-        example: dupEx,
-        callerNeeded: dupNeeded,
-        icon: 'State'
-      });
-    }
+	      signals.push({
+	        code: 'duplicated-state',
+	        label: 'Duplicated state — no clear source of truth',
+	        pain: "When the same concept appears under multiple keys, developers pick one and rely on it. When those values diverge in production (cache lag, eventual consistency, partial update), the bug is silent until a customer notices. Client code that picked the \"wrong\" duplicate is correct until the day it isn't.",
+	        example: dupEx,
+	        callerNeeded: dupNeeded,
+	        notice: 'The same domain concept is represented multiple ways with no contract hint about which field is authoritative.',
+	        recommendedChange: 'Pick one canonical field for the concept (status/total/etc), remove duplicates, and if derived views must remain, label them explicitly as derived/read-only.',
+	        icon: 'State'
+	      });
+	    }
 
     // 4. Incidental internal fields
     if (hasCode('incidental-internal-field-exposure') || hasMsgMatch(/internal|incidental|audit|raw id/)) {
@@ -5632,15 +6609,17 @@
       var intNeeded = isOrder
         ? 'Domain fields only: { "id": "…", "orderNumber": "…", "customerId": "…", "status": "…", "total": { "gross": …, "currency": "…" } }'
         : 'Only fields that carry domain meaning or are needed for the next API call. Internal/audit fields behind a separate admin-scoped endpoint if tooling genuinely needs them.';
-      signals.push({
-        code: 'internal-fields',
-        label: 'Incidental internal fields crowd out domain meaning',
-        pain: "Internal fields force developers to figure out which fields matter. They become accidental documentation targets: once a developer couples client code to versionId or autoIncrement, those fields can't be renamed without a breaking change. The contract grows stickier in the wrong direction.",
-        example: intEx,
-        callerNeeded: intNeeded,
-        icon: 'Internal'
-      });
-    }
+	      signals.push({
+	        code: 'internal-fields',
+	        label: 'Incidental internal fields crowd out domain meaning',
+	        pain: "Internal fields force developers to figure out which fields matter. They become accidental documentation targets: once a developer couples client code to versionId or autoIncrement, those fields can't be renamed without a breaking change. The contract grows stickier in the wrong direction.",
+	        example: intEx,
+	        callerNeeded: intNeeded,
+	        notice: 'Backend/audit/join fields appear alongside domain fields at equal depth, encouraging accidental coupling.',
+	        recommendedChange: 'Remove internal/audit fields from the default success payload (or move them to explicitly internal components/endpoints) and keep only domain + workflow-handoff fields.',
+	        icon: 'Internal'
+	      });
+	    }
 
     // 5. Missing outcome framing
     if (hasCode('weak-outcome-next-action-guidance') || hasMsgMatch(/outcome|what changed|result mean/)) {
@@ -5656,15 +6635,17 @@
         : isAction
         ? '{ "outcome": "accepted", "appliedNow": false, "transitionTo": "in_progress", "followUp": "/order/{id}/state" }'
         : '{ "applied": true, "status": "confirmed", "nextAction": null } — or for async: { "accepted": true, "pendingConfirmation": true, "confirmUrl": "…" }';
-	      signals.push({
-	        code: 'missing-outcome',
-	        label: 'Missing outcome framing — caller must infer what happened',
-	        pain: "Without explicit outcome framing, developers write defensive code that checks 3–4 fields to infer state. 'Did it work?' becomes a runtime question that needs a contract-level answer. Integration tests grow complex because they must mock guesses rather than trust explicit outcome fields.",
-	        example: outEx,
-	        callerNeeded: outNeeded,
-	        icon: 'Outcome'
-	      });
-    }
+		      signals.push({
+		        code: 'missing-outcome',
+		        label: 'Missing outcome framing — caller must infer what happened',
+		        pain: "Without explicit outcome framing, developers write defensive code that checks 3–4 fields to infer state. 'Did it work?' becomes a runtime question that needs a contract-level answer. Integration tests grow complex because they must mock guesses rather than trust explicit outcome fields.",
+		        example: outEx,
+		        callerNeeded: outNeeded,
+		        notice: 'Success/accepted/pending outcomes look the same; clients must poll or do follow-up reads to confirm what happened.',
+		        recommendedChange: 'Add explicit outcome fields (applied/accepted/pending, status, trackingId/confirmUrl) so clients can continue without reverse-engineering.',
+		        icon: 'Outcome'
+		      });
+	    }
 
     // 6. Missing next-action cues
     if (hasCode('weak-follow-up-linkage') || hasCode('weak-action-follow-up-linkage') || hasCode('weak-accepted-tracking-linkage') || hasMsgMatch(/next[-\s]?step|follow[-\s]?up|tracking/)) {
@@ -5678,43 +6659,109 @@
         : isCart
         ? '{ "token": "…", "readyForCheckout": false, "blockers": [{ "type": "shippingMethod", "message": "Select a shipping method to continue" }] }'
         : 'An explicit nextAction field or _links object that guides the caller to the next step without requiring out-of-band documentation.';
-      signals.push({
-        code: 'missing-next-action',
-        label: 'Missing next-action cues — handoff requires reading docs',
-        pain: "Without next-step cues, developers learn the call sequence from documentation, Slack questions, or reverse-engineering prior implementations. This multiplies per-developer integration time and produces brittle hard-coded assumptions about workflow sequencing — assumptions that break when the workflow changes.",
-        example: nextEx,
-        callerNeeded: nextNeeded,
-        icon: 'Next'
-      });
-    }
+	      signals.push({
+	        code: 'missing-next-action',
+	        label: 'Missing next-action cues — handoff requires reading docs',
+	        pain: "Without next-step cues, developers learn the call sequence from documentation, Slack questions, or reverse-engineering prior implementations. This multiplies per-developer integration time and produces brittle hard-coded assumptions about workflow sequencing — assumptions that break when the workflow changes.",
+	        example: nextEx,
+	        callerNeeded: nextNeeded,
+	        notice: 'The response does not name the next valid operation or provide the identifier/linkage needed for the next step.',
+	        recommendedChange: 'Expose `nextActions` (or `_links`) with the next endpoint(s), required context, and handoff IDs so the workflow can be chained deterministically.',
+	        icon: 'Next'
+	      });
+	    }
 
     return signals;
   }
 
-  function renderShapePainSignals(signals) {
-    if (!signals || !signals.length) return '';
-    return '<div class="shape-pain-signals">'
-      + signals.map(function (signal) {
-          return '<div class="shape-pain-signal">'
-            + '<div class="shape-pain-signal-header">'
-            + '<span class="shape-pain-icon">' + signal.icon + '</span>'
-            + '<strong class="shape-pain-label">' + escapeHtml(signal.label) + '</strong>'
-            + '</div>'
-            + '<p class="shape-pain-why">' + escapeHtml(signal.pain) + '</p>'
-            + (signal.example
-                ? '<details class="shape-pain-detail">'
-                  + '<summary>Concrete example</summary>'
-                  + '<blockquote class="shape-pain-example">' + escapeHtml(signal.example) + '</blockquote>'
-                  + '</details>'
-                : '')
-            + '<div class="shape-pain-needed">'
-            + '<span class="shape-pain-needed-label">Caller probably needed:</span>'
-            + '<samp class="shape-pain-needed-code">' + escapeHtml(signal.callerNeeded) + '</samp>'
-            + '</div>'
-            + '</div>';
-        }).join('')
-      + '</div>';
-  }
+	  function renderShapePainSignals(signals) {
+	    if (!signals || !signals.length) return '';
+
+	    function sentenceCount(text) {
+	      if (!text) return 0;
+	      var t = String(text).trim();
+	      if (!t) return 0;
+	      var parts = t.split(/[.!?]+/).map(function (p) { return p.trim(); }).filter(Boolean);
+	      return parts.length || 1;
+	    }
+
+	    function firstSentence(text) {
+	      if (!text) return '';
+	      var t = String(text).trim();
+	      if (!t) return '';
+	      var m = t.match(/^(.+?[.!?])(\s|$)/);
+	      return m ? m[1].trim() : t;
+	    }
+
+	    function renderConcreteExample(signal) {
+	      // Every expandable example must include three explicit parts:
+	      // 1) What is shown in the current payload (pattern)
+	      // 2) Why this is burdensome for the caller
+	      // 3) What an improved task-shaped contract would surface instead
+	      var current = (signal.example || '').trim();
+	      var burden = (signal.notice || '').trim() || firstSentence(signal.pain || '');
+	      var improved = (signal.callerNeeded || '').trim();
+	      var change = (signal.recommendedChange || '').trim();
+
+	      // Build the 3-part content (always explicit, even when not expandable).
+	      var blocks = [];
+	      blocks.push('<div class="shape-example-item">'
+	        + '<span class="shape-example-label">Current payload shows</span>'
+	        + '<p class="shape-example-text">' + escapeHtml(current || 'A storage-shaped response pattern where the outcome is not foregrounded.') + '</p>'
+	        + '</div>');
+	      blocks.push('<div class="shape-example-item">'
+	        + '<span class="shape-example-label">Why this burdens the caller</span>'
+	        + '<p class="shape-example-text">' + escapeHtml(burden || 'The caller must infer outcome meaning, traverse deep state, or carry hidden context into the next step.') + '</p>'
+	        + '</div>');
+
+	      var improvedBody = '';
+	      if (improved) {
+	        improvedBody += '<pre class="shape-example-code"><code>' + escapeHtml(improved) + '</code></pre>';
+	      } else {
+	        improvedBody += '<p class="shape-example-text">Return an outcome-first payload with explicit nextAction/context fields.</p>';
+	      }
+	      if (change) {
+	        improvedBody += '<p class="shape-example-text"><strong>Contract change:</strong> ' + escapeHtml(change) + '</p>';
+	      }
+	      blocks.push('<div class="shape-example-item">'
+	        + '<span class="shape-example-label">Improved task-shaped contract would surface</span>'
+	        + improvedBody
+	        + '</div>');
+
+	      // Keep accordions only when they reveal materially more than one-line filler
+	      // (payload fragments, before/after examples, multi-part guidance).
+	      var material = false;
+	      if (improved) material = true; // code fragment is always material
+	      if (!material && current && sentenceCount(current) > 1) material = true;
+	      if (!material && change && change.length > 90) material = true;
+	      if (!material && (String(current).length + String(burden).length + String(improved).length + String(change).length) > 260) material = true;
+
+	      if (!material) {
+	        return '<div class="shape-example-inline-block">'
+	          + '<p class="subtle"><strong>Concrete example:</strong></p>'
+	          + '<div class="shape-example-grid">' + blocks.join('') + '</div>'
+	          + '</div>';
+	      }
+
+	      return '<details class="shape-pain-detail">'
+	        + '<summary>Concrete example</summary>'
+	        + '<div class="shape-example-grid">' + blocks.join('') + '</div>'
+	        + '</details>';
+	    }
+
+	    return '<div class="shape-pain-signals">'
+	      + signals.map(function (signal) {
+	          return '<div class="shape-pain-signal">'
+	            + '<div class="shape-pain-signal-header">'
+	            + '<span class="shape-pain-icon">' + signal.icon + '</span>'
+	            + '<strong class="shape-pain-label">' + escapeHtml(signal.label) + '</strong>'
+	            + '</div>'
+	            + '<p class="shape-pain-why">' + escapeHtml(signal.pain) + '</p>'
+	            + renderConcreteExample(signal)
+	            + '</div>';
+	        }).join('')
+	      + '</div>';
+	  }
 
   function collectShapeSignalTotalsForDetail(detail) {
     var findings = findingsForActiveLens((detail && detail.findings) || []);
@@ -5980,6 +7027,8 @@
 			    var unit = count === 1 ? 'instance' : 'instances';
 			    var scopeFamilyName = options.familyName || '';
 			    var scopeLabel = issueScopeLabelForKey(group.groupKey || '', scopeFamilyName);
+			    var commonScopeLabel = options.commonScopeLabel || '';
+			    var showScopeInline = !commonScopeLabel || scopeLabel !== commonScopeLabel;
 			    var scopePill = '<span class="issue-group-scope-pill" title="' + escapeHtml('Scope: ' + scopeLabel) + '"><strong>Scope:</strong> ' + escapeHtml(scopeLabel) + '</span>';
 			    var titleLine = evidenceGroupTitleLine(group);
 			    var titleHtml = '<span class="issue-group-titleline" title="' + escapeHtml(titleLine) + '">' + escapeHtml(titleLine) + '</span>';
@@ -5995,7 +7044,7 @@
 			      + '<span class="issue-group-title">'
 		      + titleHtml
 		      + '<span class="issue-group-count-inline">' + count + ' ' + unit + '</span>'
-		      + scopePill
+		      + (showScopeInline ? scopePill : '')
 		      + '</span>'
 		      + '</summary>'
 		      + '<div class="issue-group-body">'
@@ -6005,7 +7054,7 @@
 		      + expandMore
 		      + specGrounding
 		      + openAPIMeta
-		      + '  <p class="issue-scope-line"><strong>Scope:</strong> ' + escapeHtml(scopeLabel) + '</p>'
+		      + (showScopeInline ? ('  <p class="issue-scope-line"><strong>Scope:</strong> ' + escapeHtml(scopeLabel) + '</p>') : '')
 		      + (inspectTarget ? ('  <p class="issue-inspect-hint"><strong>Inspect in schema:</strong> ' + escapeHtml(inspectTarget) + '</p>') : '')
 		      + '  <p class="issue-impact"><strong>Why it matters:</strong> ' + escapeHtml(group.impact) + '</p>'
 		      + '</div>'
@@ -6225,42 +7274,84 @@
     return uniq(highlights).slice(0, 6);
   }
 
-  function scopedRows(rows) {
-    return rows.filter(function (row) {
-      if (state.filters.search) {
-        var hay = (row.method + ' ' + row.path + ' ' + (row.family || '')).toLowerCase();
-        if (hay.indexOf(state.filters.search) === -1) return false;
-      }
-      if (state.filters.category !== 'all' && !((row.categoryCounts || {})[state.filters.category] > 0)) return false;
-      if (state.filters.burden !== 'all' && (row.burdenFocuses || []).indexOf(state.filters.burden) === -1) return false;
-      return true;
-    });
-  }
+	  function scopedRows(rows) {
+	    return rows.filter(function (row) {
+	      if (state.filters.search) {
+	        var hay = (row.method + ' ' + row.path + ' ' + (row.family || '')).toLowerCase();
+	        if (hay.indexOf(state.filters.search) === -1) return false;
+	      }
+	      return true;
+	    });
+	  }
 
-  function filteredRows() {
-    var rows = scopedRows(state.payload.endpoints || []).filter(function (row) {
-      return state.filters.includeNoIssueRows || row.findings > 0;
-    });
+	  function rowsInScopeAll() {
+	    // All endpoints that match the current "lens" filters (search/category/burden/family pressure),
+	    // regardless of evidence-only vs include-no-issue mode.
+	    var counts = {};
+	    function lensCount(row) {
+	      if (!row || !row.id) return 0;
+	      if (counts[row.id] !== undefined) return counts[row.id];
+	      counts[row.id] = lensFindingCountForRow(row);
+	      return counts[row.id];
+	    }
 
-    rows.sort(function (a, b) {
-      if (priorityRank(a.priority) !== priorityRank(b.priority)) return priorityRank(a.priority) - priorityRank(b.priority);
-      if (a.findings !== b.findings) return b.findings - a.findings;
-      return a.path.localeCompare(b.path);
-    });
+	    var rows = scopedRows(state.payload.endpoints || []);
 
-    return rows;
-  }
+	    // Category/burden lenses define an "issue-carrying" slice. Endpoints with no in-lens
+	    // findings should not be treated as matching that lens.
+	    if (state.filters.category !== 'all' || state.filters.burden !== 'all') {
+	      rows = rows.filter(function (row) { return lensCount(row) > 0; });
+	    }
 
-  function firstEvidenceEndpointId(rows) {
-    var found = (rows || []).find(function (row) { return row.findings > 0; });
-    return found ? found.id : (rows[0] ? rows[0].id : '');
-  }
+	    if (state.filters.familyPressure !== 'all') {
+	      var pressureMap = familyPressureByFamily(rows);
+	      rows = rows.filter(function (row) {
+	        var key = row.family || 'unlabeled family';
+	        return pressureMap[key] === state.filters.familyPressure;
+	      });
+	    }
 
-  function firstVisibleEndpointId(rows) {
-    if (!rows || !rows.length) return '';
-    var withEvidence = rows.find(function (row) { return row.findings > 0; });
-    return withEvidence ? withEvidence.id : rows[0].id;
-  }
+	    return rows;
+	  }
+
+	  function filteredRows() {
+	    var counts = {};
+	    function lensCount(row) {
+	      if (!row || !row.id) return 0;
+	      if (counts[row.id] !== undefined) return counts[row.id];
+	      counts[row.id] = lensFindingCountForRow(row);
+	      return counts[row.id];
+	    }
+
+	    var rows = rowsInScopeAll();
+
+	    // Evidence-only mode must be based on *in-scope* findings, not total findings,
+	    // otherwise category/burden changes can leave stale "issue counts" visible.
+	    if (!state.filters.includeNoIssueRows) {
+	      rows = rows.filter(function (row) { return lensCount(row) > 0; });
+	    }
+
+	    rows.sort(function (a, b) {
+	      if (priorityRank(a.priority) !== priorityRank(b.priority)) return priorityRank(a.priority) - priorityRank(b.priority);
+	      var aCount = lensCount(a);
+	      var bCount = lensCount(b);
+	      if (aCount !== bCount) return bCount - aCount;
+	      return a.path.localeCompare(b.path);
+	    });
+
+	    return rows;
+	  }
+
+	  function firstEvidenceEndpointId(rows) {
+	    var found = (rows || []).find(function (row) { return lensFindingCountForRow(row) > 0; });
+	    return found ? found.id : (rows[0] ? rows[0].id : '');
+	  }
+
+	  function firstVisibleEndpointId(rows) {
+	    if (!rows || !rows.length) return '';
+	    var withEvidence = rows.find(function (row) { return lensFindingCountForRow(row) > 0; });
+	    return withEvidence ? withEvidence.id : rows[0].id;
+	  }
 
   function rowDominantIssue(row) {
     var detail = state.payload.endpointDetails[row.id];
@@ -6297,12 +7388,21 @@
 	      + '</span>';
 	  }
 
-	  function severityBadgeInteractive(severity) {
-	    return '<span class="severity-badge severity-' + escapeHtml(severity) + ' is-interactive" role="button" tabindex="0" title="Select endpoint and update endpoint inspector">'
-	      + '<span class="severity-icon">' + escapeHtml(severityIcon(severity)) + '</span>'
-	      + '<span>' + escapeHtml(severity.toUpperCase()) + '</span>'
-	      + '</span>';
-	  }
+		  function severityBadgeInteractive(severity) {
+		    return '<span class="severity-badge severity-' + escapeHtml(severity) + ' is-interactive" role="button" tabindex="0" title="Open exact evidence for this endpoint">'
+		      + '<span class="severity-icon">' + escapeHtml(severityIcon(severity)) + '</span>'
+		      + '<span>' + escapeHtml(severity.toUpperCase()) + '</span>'
+		      + '</span>';
+		  }
+
+		  function severityBadgeEvidenceCTA(severity, endpointId) {
+		    if (!severity) return '';
+		    if (!endpointId) return severityBadge(severity);
+		    return '<button type="button" class="severity-badge severity-' + escapeHtml(severity) + ' is-interactive" data-open-evidence-id="' + escapeHtml(endpointId) + '" aria-label="Open exact evidence groups" title="Open exact evidence groups">'
+		      + '<span class="severity-icon" aria-hidden="true">' + escapeHtml(severityIcon(severity)) + '</span>'
+		      + '<span>' + escapeHtml(severity.toUpperCase()) + '</span>'
+		      + '</button>';
+		  }
 
   function severityIcon(severity) {
     if (severity === 'error') return 'x';
@@ -6405,16 +7505,20 @@
     });
   }
 
-  function applyRecoveryAction(action) {
-    if (action === 'clear-search') {
-      state.filters.search = '';
-    } else if (action === 'back-to-all-families') {
-      resetFamilySurfaceScope();
-    } else if (action === 'reset-burden') {
-      state.filters.burden = 'all';
-      state.filters.category = 'all';
-      state.familyTableShowAll = false;
-    } else if (action === 'show-all-families') {
+			  function applyRecoveryAction(action) {
+		    if (action === 'clear-search') {
+		      state.filters.search = '';
+		    } else if (action === 'back-to-all-families') {
+	      restoreFamilyTableBackState();
+	    } else if (action === 'back-to-family-table') {
+	      // Return to the family table surface without changing the active tab or clearing filters.
+	      // This collapses family/endpoint drill expansions and restores the prior pre-drill table state when available.
+	      restoreFamilyTableBackState();
+	    } else if (action === 'reset-burden') {
+	      state.filters.burden = 'all';
+	      state.filters.category = 'all';
+	      state.familyTableShowAll = false;
+	    } else if (action === 'show-all-families') {
       state.familyTableShowAll = true;
     } else if (action === 'show-all-workflows') {
       state.filters.search = '';
@@ -6423,31 +7527,32 @@
       state.filters.familyPressure = 'all';
     } else if (action === 'include-no-issue-rows') {
       state.filters.includeNoIssueRows = true;
-    } else if (action === 'clear-table-filters') {
-      state.filters.search = '';
-      state.filters.category = 'all';
-      state.filters.burden = 'all';
-      state.filters.familyPressure = 'all';
-      state.filters.includeNoIssueRows = false;
-      state.familyTableShowAll = false;
-      state.expandedFamily = '';
-      state.expandedFamilyInsight = '';
-      state.expandedEndpointInsightIds = {};
-      state.expandedEndpointRowFindings = {};
-      state.detailEvidenceOpenForId = '';
-    } else if (action === 'clear-current-lens') {
-      if (state.activeTopTab === 'spec-rule') {
-        state.activeTopTab = 'spec-rule';
-        state.filters.search = '';
-        state.filters.category = 'spec-rule';
-        state.filters.burden = 'all';
-        state.filters.familyPressure = 'all';
-        state.filters.includeNoIssueRows = false;
-        state.expandedFamily = '';
-        state.expandedFamilyInsight = '';
-        state.expandedEndpointInsightIds = {};
-        state.detailEvidenceOpenForId = '';
-        state.familyTableShowAll = false;
+	    } else if (action === 'clear-table-filters') {
+	      state.filters.search = '';
+	      state.filters.category = 'all';
+	      state.filters.burden = 'all';
+	      state.filters.familyPressure = 'all';
+	      state.filters.includeNoIssueRows = false;
+	      state.familyTableShowAll = false;
+	      state.familyTableBackState = null;
+	      state.expandedFamily = '';
+	      state.expandedFamilyInsight = '';
+	      state.expandedEndpointInsightIds = {};
+	      state.expandedEndpointRowFindings = {};
+	      state.detailEvidenceOpenForId = '';
+	    } else if (action === 'clear-current-lens') {
+	      if (state.activeTopTab === 'spec-rule') {
+	        state.filters.search = '';
+	        state.filters.category = 'spec-rule';
+	        state.filters.burden = 'all';
+	        state.filters.familyPressure = 'all';
+	        state.filters.includeNoIssueRows = false;
+	        state.familyTableBackState = null;
+	        state.expandedFamily = '';
+	        state.expandedFamilyInsight = '';
+	        state.expandedEndpointInsightIds = {};
+	        state.detailEvidenceOpenForId = '';
+	        state.familyTableShowAll = false;
         state.endpointDiagnosticsSubTab = 'exact';
         state.selectedEndpointId = '';
       } else {
@@ -6456,14 +7561,17 @@
       }
     }
 
-    if (state.activeTopTab === 'shape') {
-      state.endpointDiagnosticsSubTab = 'summary';
-    }
+	    if (state.activeTopTab === 'shape') {
+	      state.endpointDiagnosticsSubTab = 'summary';
+	    }
 
-    state.selectedEndpointId = firstVisibleEndpointId(filteredRows());
-    render();
-    pulseLensUpdate();
-  }
+	    // Recovery actions adjust scope; do not auto-select an endpoint (avoids stale blue row state).
+	    state.selectedEndpointId = '';
+	    state.userSelectedEndpoint = false;
+	    state.detailEvidenceOpenForId = '';
+	    render();
+	    pulseLensUpdate();
+	  }
 
   function pulseLensUpdate() {
     [el.familySurfaceContext, el.listContext, el.workflowSection].forEach(function (node) {
@@ -6476,6 +7584,7 @@
 
   function recoveryLabel(action) {
     if (action === 'back-to-all-families') return 'Back to all families';
+    if (action === 'back-to-family-table') return 'Back to family table';
     if (action === 'clear-search') return 'Clear search';
     if (action === 'reset-burden') return 'Reset burden';
     if (action === 'show-all-families') return 'Show all families in current scope';
