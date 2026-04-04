@@ -4046,7 +4046,7 @@
 	      if (/internal fields|incidental/.test(blob)) return 'Incidental/internal fields encourage brittle client coupling';
 	      if (/snapshot-heavy|storage-shaped/.test(blob)) return 'Storage-shaped payload buries task outcome and next action';
 	      if (/enum|weak typing|typing/.test(blob)) return 'Weak typing (missing enums/constraints) increases client guesswork';
-	      return 'Response-shape burden (hard to parse and hard to hand off)';
+	      return 'Hard-to-parse response shape (outcome and next action are easy to miss)';
 	    }
 
 	    if (/parameter naming/.test(blob)) return 'Parameter naming drift breaks reuse across sibling routes';
@@ -4655,14 +4655,14 @@
 	    cols.push({
 	      key: 'risk',
 	      thClass: 'family-col-primary-risk',
-	      th: workflow ? 'Main continuity risk' : (shape ? 'Main shape burden' : 'Primary risk'),
+	      th: workflow ? 'Main continuity risk' : (shape ? 'Main response-shape risk' : 'Primary risk'),
 	      tdClass: 'family-col-primary-risk',
 	      render: function (family, ctx) {
 	        var ranked = ctx.ranked || {};
 	        var primaryRisk = ranked.primaryRisk || (ranked.driver === 'workflow'
 	          ? 'workflow continuity risk'
 	          : ranked.driver === 'shape'
-	          ? 'response-shape burden'
+	          ? 'response-shape risk'
 	          : 'contract drift risk');
 	        return renderFamilyTableClamp(primaryRisk, 'family-table-clamp family-table-clamp-3 family-table-clamp-risk');
 	      }
