@@ -3435,7 +3435,7 @@ body.lens-shape .family-context-block {
 }
 
 body.lens-shape .family-row {
-  border-bottom-color: #e5d3ce;
+  border-bottom: 2px solid rgba(var(--accent-rgb), 0.18);
   /* Keep shape accenting in headers/chips/left-edge rails, not row-wide tints. */
   background: transparent;
 }
@@ -3488,11 +3488,11 @@ body.lens-shape .family-burden-why {
 
 /* Response Shape: make family rows denser (avoid tall blank padding). */
 body.lens-shape .family-row td {
-  padding: 0.38rem 0.42rem;
+  padding: 0.48rem 0.44rem;
 }
 
 body.lens-shape .family-row > td:first-child {
-  padding-left: calc(0.42rem - 3px);
+  padding-left: calc(0.44rem - 3px);
 }
 
 body.lens-shape .family-col-name strong {
@@ -3511,6 +3511,16 @@ body.lens-shape .family-row td.family-col-priority .pressure-mix-inline,
 body.lens-shape .family-row td.family-col-top-signal .family-signal-cell,
 body.lens-shape .family-row td.family-col-client-effect .caller-burden-cell {
   margin-top: 0.06rem;
+}
+
+/* Response Shape: reduce competing emphasis (keep primary signal strong, soften secondary chips). */
+body.lens-shape .family-table .chip-secondary.family-signal-chip {
+  font-weight: 780;
+  box-shadow: none;
+}
+
+body.lens-shape .chip-secondary.caller-burden-chip {
+  font-weight: 780;
 }
 
 /* Response Shape: fixed column priorities that fit within the visible table width.
