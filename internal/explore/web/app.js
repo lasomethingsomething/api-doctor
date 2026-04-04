@@ -4830,7 +4830,8 @@
     if (repeatCount >= DX_REPEAT_THRESHOLD) {
       var parts = (ranked.dxParts && ranked.dxParts.length) ? ranked.dxParts : [consequence.replace(/\.$/, '')];
       var label = parts[0] || consequence.replace(/\.$/, '');
-      if (parts.length > 1) {
+      // Only add a count suffix when it materially changes triage (avoid noisy "(+1)").
+      if (parts.length > 2) {
         label = label + ' (+' + (parts.length - 1) + ')';
       }
       return {
