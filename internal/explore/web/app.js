@@ -5112,10 +5112,10 @@
 	      + '</tr>';
 	  }
 
-	  function buildFamilySurfaceContext(summaries) {
-	    var visibleFamilies = summaries.length;
-	    var allFamiliesInLens = familySummariesRaw();
-	    var totalInLens = allFamiliesInLens.length;
+  function buildFamilySurfaceContext(summaries) {
+    var visibleFamilies = summaries.length;
+    var allFamiliesInLens = familySummariesRaw();
+    var totalInLens = allFamiliesInLens.length;
 
     // Spec total: all distinct family labels across every endpoint, no filters applied.
     var specTotal = new Set((state.payload.endpoints || []).map(function (r) {
@@ -5158,10 +5158,14 @@
       : '';
 
     var copy = '<div class="context-block family-context-block">';
-    copy += '<p class="context-summary">' + escapeHtml(summaryLine) + '</p>';
-    if (state.activeTopTab === 'shape' && summaries && summaries.length) {
-      var shapeTotals = collectShapeSignalTotals(summaries);
-      copy += '<p class="context-summary context-summary-shape"><strong>Shape focus:</strong> ' + escapeHtml(shapeTotals.summary) + '.</p>';
+    if (state.activeTopTab === 'shape') {
+      // Keep this purpose-first and concise (2 lines max). Avoid repeating filter values here.
+      var line1 = (totalInLens ? ('Showing ' + visibleFamilies + ' families. ') : '') + 'Ranks families by response-shape burden and highlights top shape signals.';
+      var line2 = 'Expand Endpoints to review endpoint evidence inline.';
+      copy += '<p class="context-summary context-summary-shape">' + escapeHtml(line1) + '</p>';
+      copy += '<p class="context-summary context-summary-shape">' + escapeHtml(line2) + '</p>';
+    } else {
+      copy += '<p class="context-summary">' + escapeHtml(summaryLine) + '</p>';
     }
     copy += actionsHtml;
     copy += '</div>';
