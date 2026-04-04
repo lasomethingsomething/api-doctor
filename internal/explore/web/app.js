@@ -1662,8 +1662,9 @@
 	  }
 
   function clearCurrentLens() {
-    state.activeTopTab = "spec-rule";
-    state.endpointDiagnosticsSubTab = "summary";
+    var tab = state.activeTopTab;
+    if (tab !== 'spec-rule' && tab !== 'workflow' && tab !== 'shape') tab = 'spec-rule';
+
     state.expandedFamily = "";
     state.expandedFamilyInsight = "";
     state.expandedEndpointInsightIds = {};
@@ -1672,11 +1673,29 @@
     state.familyTableShowAll = false;
     state.detailEvidenceOpenForId = "";
     state.filters.search = "";
-    state.filters.category = "all";
-    state.filters.burden = "all";
     state.filters.familyPressure = "all";
     state.filters.includeNoIssueRows = false;
-    state.selectedEndpointId = firstEvidenceEndpointId(state.payload.endpoints || []);
+
+    // Reset filters within the currently active top-level tab only.
+    // Never change the active tab as a side effect of reset.
+    if (tab === 'spec-rule') {
+      state.filters.category = 'spec-rule';
+      state.filters.burden = 'all';
+      state.endpointDiagnosticsSubTab = 'exact';
+    } else if (tab === 'workflow') {
+      state.filters.category = 'all';
+      state.filters.burden = 'workflow-burden';
+      state.endpointDiagnosticsSubTab = 'summary';
+    } else if (tab === 'shape') {
+      state.filters.category = 'all';
+      state.filters.burden = 'contract-shape';
+      state.endpointDiagnosticsSubTab = 'summary';
+    }
+
+    // Keep selected endpoint coherent with the current view after reset.
+    var rows = selectionRowsForActiveView();
+    state.selectedEndpointId = rows.length ? firstVisibleEndpointId(rows) : '';
+
     render();
     pulseLensUpdate();
   }
