@@ -3501,6 +3501,14 @@ body.lens-shape .endpoints-expand {
   font-size: 0.8rem;
 }
 
+/* Response Shape: align "first content" across columns to a consistent top baseline region. */
+body.lens-shape .family-row td.family-col-endpoints .endpoints-expand,
+body.lens-shape .family-row td.family-col-priority .pressure-mix-inline,
+body.lens-shape .family-row td.family-col-top-signal .family-signal-cell,
+body.lens-shape .family-row td.family-col-client-effect .caller-burden-cell {
+  margin-top: 0.06rem;
+}
+
 /* Response Shape: fixed column priorities that fit within the visible table width.
    Key surfaces: Family, Shape signals, Main shape burden, Caller burden, Recommended next click.
    Supporting numeric columns: Pressure mix, Endpoints. */
