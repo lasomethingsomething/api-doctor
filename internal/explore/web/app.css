@@ -6523,12 +6523,13 @@ body:not(.lens-shape):not(.lens-workflow):not(.lens-spec-rule) {
 }
 
 body.lens-shape {
-  --signal-chip-bg: #f3ebe9;
-  --signal-chip-border: #d4b2ab;
-  --signal-chip-text: #3b2320;
-  --signal-chip-bg-secondary: #faf4f3;
-  --signal-chip-border-secondary: #e4cbc6;
-  --signal-chip-text-secondary: #5b3a35;
+  /* Stronger, higher-contrast clay tints (avoid washed-out pink-on-pink). */
+  --signal-chip-bg: #eadbd7;
+  --signal-chip-border: #b67c73;
+  --signal-chip-text: #2b1411;
+  --signal-chip-bg-secondary: #f4ecea;
+  --signal-chip-border-secondary: #caa39d;
+  --signal-chip-text-secondary: #3f1f1a;
 }
 
 .family-table .family-signal-chip {
