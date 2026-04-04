@@ -4269,9 +4269,13 @@
 			    }
 			    var dominantSignals = familyDominantSignalsForDriver(family, driver.signalKey || driver.key);
 
-    var dxParts = dominantSignals.slice(0, 2).map(function (s) {
-      return familyDxSignalFragment(s);
-    }).filter(Boolean);
+    var dxSignals = dominantSignals.slice();
+    if (state.activeTopTab === 'shape') {
+      // Caller-burden should reflect the strongest shape signals, not just the top two.
+      dxSignals = sortedSignalLabels((family && family.shapeSignalCounts) ? family.shapeSignalCounts : {}, 6);
+    }
+    var dxReasons = uniq(dxSignals.map(function (s) { return familyDxSignalFragment(s); }).filter(Boolean));
+    var dxParts = dxReasons.slice(0, 2);
     var dxConsequence = '';
     if (dxParts.length === 0) {
       dxConsequence = 'Contract clarity is uneven, so similar operations may still teach different integration habits.';
@@ -4288,6 +4292,7 @@
 		      driverFocus: familyDriverFocus(driver.signalKey || driver.key, dominantSignals),
 		      primaryRisk: familyPrimaryRisk(driver.key, dominantSignals),
 		      dxParts: dxParts,
+		      dxReasons: dxReasons,
 		      dxConsequence: dxConsequence,
 		      recommendedAction: familyRecommendedAction(driver.key, dominantSignals)
 		    };
@@ -4663,18 +4668,18 @@
 	      }
 	    });
 
-	    cols.push({
-	      key: 'impact',
-	      thClass: 'family-col-client-effect',
-	      th: workflow ? 'Client impact in flow' : (shape ? 'Caller burden' : 'Client effect'),
-	      tdClass: 'family-col-client-effect',
-	      render: function (family, ctx) {
-	        var ranked = ctx.ranked || {};
-	        var repeatCount = (ctx.dxCounts && ranked.dxConsequence) ? (ctx.dxCounts[ranked.dxConsequence] || 0) : 0;
-	        var clientEffect = renderDxConsequenceCellValue(ranked, repeatCount);
-	        return renderFamilyClientEffectCell(clientEffect);
-	      }
-	    });
+	      cols.push({
+	        key: 'impact',
+	        thClass: 'family-col-client-effect',
+	        th: workflow ? 'Client impact in flow' : (shape ? 'Caller burden' : 'Client effect'),
+	        tdClass: 'family-col-client-effect',
+	        render: function (family, ctx) {
+	          var ranked = ctx.ranked || {};
+	          var repeatCount = (ctx.dxCounts && ranked.dxConsequence) ? (ctx.dxCounts[ranked.dxConsequence] || 0) : 0;
+	        var val = shape ? renderCallerBurdenCellValue(ranked) : renderDxConsequenceCellValue(ranked, repeatCount);
+	        return renderFamilyClientEffectCell(val);
+	        }
+	      });
 
 	    cols.push({
 	      key: 'next',
@@ -4835,6 +4840,57 @@
     }
 
 	    return { html: false, value: consequence };
+	  }
+
+	  function renderCallerBurdenCellValue(ranked) {
+	    var reasons = (ranked && ranked.dxReasons && ranked.dxReasons.length)
+	      ? ranked.dxReasons.slice()
+	      : ((ranked && ranked.dxParts && ranked.dxParts.length) ? ranked.dxParts.slice() : []);
+	    reasons = uniq((reasons || []).filter(Boolean));
+	    if (!reasons.length) return { html: false, value: '—' };
+
+	    var primary = reasons[0] || '';
+	    var secondary = reasons[1] || '';
+	    var hidden = reasons.slice(1);
+
+	    if (reasons.length === 1) {
+	      return {
+	        html: true,
+	        value: '<div class="caller-burden-cell">'
+	          + '<span class="chip chip-primary caller-burden-chip" title="' + escapeHtml(primary) + '">'
+	            + escapeHtml(primary)
+	          + '</span>'
+	        + '</div>'
+	      };
+	    }
+
+	    if (reasons.length === 2) {
+	      return {
+	        html: true,
+	        value: '<div class="caller-burden-cell">'
+	          + '<span class="chip chip-primary caller-burden-chip" title="' + escapeHtml(primary) + '">'
+	            + escapeHtml(primary)
+	          + '</span>'
+	          + '<span class="chip chip-secondary caller-burden-chip" title="' + escapeHtml(secondary) + '">'
+	            + escapeHtml(secondary)
+	          + '</span>'
+	        + '</div>'
+	      };
+	    }
+
+	    // 3+ reasons: show the first reason in full, and collapse the rest behind "+N more"
+	    // only when N >= 2 (i.e., 3+ total).
+	    var moreCount = hidden.length;
+	    var moreTitle = hidden.join('; ');
+	    return {
+	      html: true,
+	      value: '<div class="caller-burden-cell">'
+	        + '<span class="chip chip-primary caller-burden-chip" title="' + escapeHtml(primary) + '">'
+	          + escapeHtml(primary)
+	        + '</span>'
+	        + '<span class="chip chip-secondary caller-burden-chip caller-burden-more" title="' + escapeHtml(moreTitle) + '">+' + String(moreCount) + ' more</span>'
+	      + '</div>'
+	    };
 	  }
 
 	  function renderFamilyClientEffectCell(effect) {

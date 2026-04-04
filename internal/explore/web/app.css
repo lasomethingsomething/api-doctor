@@ -1567,6 +1567,43 @@ select:focus {
   min-width: 0;
 }
 
+body.lens-shape .family-client-effect-chipwrap {
+  justify-content: flex-start;
+}
+
+.caller-burden-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  align-items: flex-start;
+  justify-content: flex-start;
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.lens-shape .caller-burden-chip {
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.14);
+  color: #24110f;
+  font-weight: 900;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.18;
+}
+
+body.lens-shape .chip-secondary.caller-burden-chip {
+  border-color: rgba(var(--accent-rgb), 0.34);
+  background: rgba(var(--accent-rgb), 0.08);
+  color: #3b2320;
+  font-weight: 850;
+  opacity: 1;
+}
+
+body.lens-shape .caller-burden-more {
+  border-style: dashed;
+}
+
 .family-next-click-cell {
   display: grid;
   gap: 0.22rem;
