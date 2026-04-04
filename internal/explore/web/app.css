@@ -3244,8 +3244,9 @@ body.lens-shape .caller-burden-more {
 
 .shape-lens-context {
   margin-top: 0.36rem;
-  border-color: #e4d0cb;
-  background: linear-gradient(180deg, #fff9f8 0%, #fff4f2 100%);
+  border-color: rgba(var(--accent-rgb), 0.22);
+  background-color: #fbfaf9;
+  background-image: linear-gradient(180deg, #ffffff 0%, #fbfaf9 70%, rgba(var(--accent-rgb), 0.03) 100%);
 }
 
 .burden-explanation {
@@ -3347,15 +3348,10 @@ body.lens-shape .caller-burden-more {
   margin-top: 0;
 }
 
-body.lens-shape .endpoint-diagnostics-section {
-  border-color: #e6c9c4;
-  background: linear-gradient(180deg, #fffdfd 0%, #fff6f4 100%);
-}
-
 body.lens-shape .section.shape-primary-surface {
-  border-color: #d9b8b1;
-  background: linear-gradient(180deg, #fffefe 0%, #fff6f3 100%);
-  box-shadow: 0 2px 10px rgba(117, 68, 61, 0.08);
+  border-color: rgba(var(--accent-rgb), 0.28);
+  background: linear-gradient(180deg, #ffffff 0%, #fbf8f7 100%);
+  box-shadow: 0 2px 10px rgba(var(--accent-rgb), 0.06);
 }
 
 body.lens-shape .section.shape-primary-surface .section-heading .eyebrow {
@@ -3369,7 +3365,7 @@ body.lens-shape .section.shape-primary-surface .section-heading h2 {
 
 body.lens-shape .section.shape-secondary-surface {
   border-color: #ebdfdb;
-  background: linear-gradient(180deg, #fffefe 0%, #fffaf8 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #fdfbfa 100%);
 }
 
 body.lens-shape .section.shape-secondary-surface .section-heading .eyebrow {
@@ -3425,9 +3421,17 @@ body.lens-shape .endpoint-diagnostics-section.endpoint-diagnostics-shape-compact
   padding: 0.42rem 0.52rem;
 }
 
+body.lens-shape .endpoint-diagnostics-section {
+  border-color: rgba(var(--accent-rgb), 0.22);
+  background: linear-gradient(180deg, #ffffff 0%, #fdf9f8 100%);
+}
+
 body.lens-shape .family-context-block {
-  border-color: #e4d0cb;
-  background: linear-gradient(180deg, #fff9f8 0%, #fff3f1 100%);
+  /* Neutral, intentional lens context (avoid "error-ish" pink panels). */
+  border-color: rgba(var(--accent-rgb), 0.22);
+  background-color: #fbfaf9;
+  background-image: linear-gradient(180deg, #ffffff 0%, #fbfaf9 70%, rgba(var(--accent-rgb), 0.035) 100%);
+  box-shadow: inset 3px 0 0 rgba(var(--accent-rgb), 0.2), 0 1px 0 rgba(23, 33, 47, 0.04);
 }
 
 body.lens-shape .family-row {
@@ -6994,7 +6998,7 @@ details[open] .issue-toggle-indicator {
     grid-template-columns: 1fr;
   }
 
-  .detail-hero-head {
-    flex-direction: column;
-  }
+.detail-hero-head {
+  flex-direction: column;
+}
 }
