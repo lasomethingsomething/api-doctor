@@ -5150,6 +5150,19 @@
       summaryLine = 'Showing ' + visibleFamilies + ' matching famil' + (visibleFamilies === 1 ? 'y' : 'ies') + ' (' + specTotal + ' total in spec).';
     }
 
+    // Response Shape wants a more explicit, lens-aware plain-English result sentence.
+    if (state.activeTopTab === 'shape') {
+      if (!totalInLens) {
+        summaryLine = 'No families with response-shape findings match the current filtered view.';
+      } else if (showingTruncated) {
+        summaryLine = 'Showing ' + visibleFamilies + ' families with response-shape findings in the current filtered view ('
+          + familiesInPressureTier + ' matching families in scope; ' + specTotal + ' families in spec total).';
+      } else {
+        summaryLine = 'Showing ' + visibleFamilies + ' families with response-shape findings in the current filtered view ('
+          + specTotal + ' families in spec total).';
+      }
+    }
+
     var actionButtons = [];
     if (showingTruncated && !state.familyTableShowAll) {
       actionButtons.push('<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all families in current scope</button>');
