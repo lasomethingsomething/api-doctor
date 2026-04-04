@@ -51,7 +51,7 @@ func TestResponseShapeContextPanelCopyStaysConcise(t *testing.T) {
 		t.Fatalf("context-panel copy regression script did not finish\n%s", out)
 	}
 	if report.failures != 0 {
-		t.Fatalf("expected Response Shape context panel copy to remain concise and purpose-first, got %d failures\n%s", report.failures, report.detail)
+		t.Fatalf("expected Response Shape to consolidate scope/results copy into two lines (no redundancy), got %d failures\n%s", report.failures, report.detail)
 	}
 }
 
@@ -135,6 +135,13 @@ func responseShapeContextPanelCopyHarness() string {
       return;
     }
 
+    var help = document.getElementById('familySurfaceHelp');
+    var helpText = help ? (help.textContent || '').trim() : '';
+    if (helpText) {
+      failures.push({ kind: 'unexpected-help-copy', step: step, text: helpText });
+      return;
+    }
+
     var lines = panel.querySelectorAll('p.context-summary.context-summary-shape');
     if (!lines || lines.length !== 2) {
       failures.push({ kind: 'wrong-line-count', step: step, expected: 2, got: (lines ? lines.length : 0) });
@@ -153,14 +160,24 @@ func responseShapeContextPanelCopyHarness() string {
       }
     }
 
-    var t0 = (lines[0].textContent || '').toLowerCase();
-    var t1 = (lines[1].textContent || '').toLowerCase();
-    if (t0.indexOf('ranks') === -1 || t0.indexOf('shape') === -1 || t0.indexOf('signals') === -1) {
-      failures.push({ kind: 'missing-purpose', step: step, line: 0, text: lines[0].textContent });
+    var t0 = (lines[0].textContent || '');
+    var t1 = (lines[1].textContent || '');
+    if (t0.indexOf('Scope:') !== 0) {
+      failures.push({ kind: 'missing-scope-prefix', step: step, text: t0 });
       return;
     }
-    if (t1.indexOf('expand') === -1 || t1.indexOf('endpoints') === -1 || t1.indexOf('evidence') === -1) {
-      failures.push({ kind: 'missing-action', step: step, line: 1, text: lines[1].textContent });
+    if (t1.indexOf('Results:') !== 0) {
+      failures.push({ kind: 'missing-results-prefix', step: step, text: t1 });
+      return;
+    }
+    var low0 = t0.toLowerCase();
+    if (low0.indexOf('ranks') === -1 || low0.indexOf('shape') === -1 || low0.indexOf('signals') === -1) {
+      failures.push({ kind: 'scope-missing-purpose', step: step, text: t0 });
+      return;
+    }
+    var low1 = t1.toLowerCase();
+    if (low1.indexOf('showing') === -1 || low1.indexOf('famil') === -1) {
+      failures.push({ kind: 'results-missing-count', step: step, text: t1 });
       return;
     }
   }
@@ -216,4 +233,3 @@ func responseShapeContextPanelCopyReport(dom string) responseShapeContextPanelCo
 
 	return responseShapeContextPanelCopy{ready: ready, failures: failures, detail: detail}
 }
-

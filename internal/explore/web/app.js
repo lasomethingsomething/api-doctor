@@ -2706,6 +2706,10 @@
 
 	  function familySurfaceHelpCopy() {
 	    var burden = state.filters.burden;
+	    if (state.activeTopTab === 'shape') {
+	      // Keep scope/results consolidated in the context summary box for this tab.
+	      return '';
+	    }
 	    if (burden === 'workflow-burden') {
 	      return 'Families ranked by workflow burden in the current slice: hidden dependencies, brittle sequencing, missing handoff IDs, and weak next-step cues.';
 	    }
@@ -5159,11 +5163,11 @@
 
     var copy = '<div class="context-block family-context-block">';
     if (state.activeTopTab === 'shape') {
-      // Keep this purpose-first and concise (2 lines max). Avoid repeating filter values here.
-      var line1 = (totalInLens ? ('Showing ' + visibleFamilies + ' families. ') : '') + 'Ranks families by response-shape burden and highlights top shape signals.';
-      var line2 = 'Expand Endpoints to review endpoint evidence inline.';
-      copy += '<p class="context-summary context-summary-shape">' + escapeHtml(line1) + '</p>';
-      copy += '<p class="context-summary context-summary-shape">' + escapeHtml(line2) + '</p>';
+      // Consolidate to one scope sentence + one results sentence (avoid repeated scope/filter prose).
+      var scopeLine = 'Scope: Ranks families by response-shape burden and highlights top shape signals for endpoints matching the current filters.';
+      var resultsLine = 'Results: ' + summaryLine;
+      copy += '<p class="context-summary context-summary-shape">' + escapeHtml(scopeLine) + '</p>';
+      copy += '<p class="context-summary context-summary-shape">' + escapeHtml(resultsLine) + '</p>';
     } else {
       copy += '<p class="context-summary">' + escapeHtml(summaryLine) + '</p>';
     }
