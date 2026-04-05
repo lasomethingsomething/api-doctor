@@ -18,7 +18,7 @@ Use `analyze` for deterministic baseline output, then use `explore` as the prima
   - Clean information hierarchy: lens choice → family overview → expand endpoints → inline endpoint workspace
   - No redundant explanations; each section builds on the previous without repetition
   - Top-level navigation is fixed to 3 primary lenses: Spec rule violations, Workflow burden, Shape burden
-  - Endpoint workspaces render inline under the selected endpoint row (summary + exact evidence everywhere, plus lens-relevant supporting diagnostics)
+  - Endpoint workspaces render inline under the selected endpoint row (summary + grouped deviations everywhere, plus lens-relevant supporting diagnostics)
   - Top shortcut/lens cards use subtle per-lens pastel tinting for fast visual distinction; reset remains a separate neutral utility control
 - CLI (`analyze`, `workflows`, `diff`): canonical deterministic engine for local scripts, CI, and machine-readable outputs.
 - TUI (`tui`): secondary terminal read-only view of the same deterministic data.
@@ -142,7 +142,7 @@ api-doctor now surfaces:
 Implementation checklist:
 - Keep the Workflow lens centered on handoff burden: required IDs, tokens, auth/context spread, and what the next valid call is.
 - Keep the Shape lens centered on task outcome visibility: storage-shaped payloads, deep nesting, duplicated state, internal-field exposure, and outcome-first redesign hints.
-- Preserve the full evidence path for every surfaced trap: lead summary, exact grouped evidence, OpenAPI grounding, workflow-chain context, and consistency/drift context where relevant.
+- Preserve the full evidence path for every surfaced trap: lead summary, grouped deviations, OpenAPI grounding, workflow-chain context, and consistency/drift context where relevant.
 - Avoid replacing workflow language with schema-only language. The primary question should stay: "can a caller safely continue the task from this response?"
 - Add regression coverage whenever detail surfaces are consolidated so preservation claims are verified by tests, not only by UI comments.
 
@@ -154,7 +154,7 @@ Still-missing capabilities:
 - No full screenshot-based visual test suite for the explorer UI. There is regression coverage for key explorer behaviors (filters, inline endpoint workspace interactions, and tab-surface invariants), but it is DOM/assertion based.
 
 Preservation confirmation:
-- Existing displayed information appears preserved in the current consolidated explorer. Exact evidence, OpenAPI grounding, spec-rule details, cleaner-contract guidance, consistency/drift context, workflow-chain context, and shape interpretation still have rendered homes in the inline endpoint workspace and supporting sections.
+- Existing displayed information appears preserved in the current consolidated explorer. Grouped deviations, OpenAPI grounding, spec-rule details, cleaner-contract guidance, consistency/drift context, workflow-chain context, and shape interpretation still have rendered homes in the inline endpoint workspace and supporting sections.
 - Current preservation evidence is implementation-based, not just narrative: see the consolidation mapping comment in `internal/explore/web/app.js` and the inline workspace tabs/drawers that render each prior surface.
 
 ---

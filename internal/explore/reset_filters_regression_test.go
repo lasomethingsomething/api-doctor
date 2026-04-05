@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -21,6 +22,7 @@ func TestResetFiltersDoesNotChangeActiveTopTab(t *testing.T) {
 
 	outDir := t.TempDir()
 	htmlPath := filepath.Join(outDir, "reset-filters-regression.html")
+	userDataDir := filepath.Join(outDir, "chrome-profile")
 	if err := os.WriteFile(htmlPath, []byte(inlineResetRegressionDocument(t, resetFiltersRegressionPayload())), 0o600); err != nil {
 		t.Fatalf("write regression fixture: %v", err)
 	}
@@ -34,6 +36,9 @@ func TestResetFiltersDoesNotChangeActiveTopTab(t *testing.T) {
 		"--headless",
 		"--disable-gpu",
 		"--no-sandbox",
+		"--no-first-run",
+		"--no-default-browser-check",
+		"--user-data-dir="+userDataDir,
 		"--hide-scrollbars",
 		"--run-all-compositor-stages-before-draw",
 		"--virtual-time-budget=8000",
@@ -55,20 +60,35 @@ func TestResetFiltersDoesNotChangeActiveTopTab(t *testing.T) {
 	}
 }
 
+var chromePathOnce sync.Once
+var chromePathResolved string
+
 func findChromeForResetRegression() string {
-	candidates := []string{
-		os.Getenv("API_DOCTOR_CHROME_BIN"),
-		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-	}
-	for _, candidate := range candidates {
-		if candidate == "" {
-			continue
+	chromePathOnce.Do(func() {
+		candidates := []string{
+			os.Getenv("API_DOCTOR_CHROME_BIN"),
 		}
-		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-			return candidate
+		for _, candidate := range candidates {
+			if candidate == "" {
+				continue
+			}
+			if info, err := os.Stat(candidate); err != nil || info.IsDir() {
+				continue
+			}
+			// Some environments can see Chrome but cannot execute it (sandbox / Gatekeeper / CI).
+			// Treat it as unavailable in that case so browser regressions cleanly skip.
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, candidate, "--headless", "--disable-gpu", "--no-sandbox", "--version")
+			if err := cmd.Run(); err != nil {
+				continue
+			}
+			chromePathResolved = candidate
+			break
 		}
-	}
-	return ""
+	})
+
+	return chromePathResolved
 }
 
 func inlineResetRegressionDocument(t *testing.T, payload *Payload) string {

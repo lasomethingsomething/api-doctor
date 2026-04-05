@@ -51,7 +51,7 @@ func TestResponseShapeRiskSummaryClampsToTwoLines(t *testing.T) {
 		t.Fatalf("risk lineclamp regression script did not finish\n%s", out)
 	}
 	if report.failures != 0 {
-		t.Fatalf("expected Response Shape risk summaries to be 2 lines max and use Problem/Effect phrasing, got %d failures\n%s", report.failures, report.detail)
+		t.Fatalf("expected Response Shape risk summaries to be 2 lines max and not duplicate effect phrasing, got %d failures\n%s", report.failures, report.detail)
 	}
 }
 
@@ -136,26 +136,28 @@ func responseShapeRiskLineclampHarness() string {
     return Math.round((el.getBoundingClientRect().height / lh) * 10) / 10;
   }
 
-  function assertRiskClamped(step, failures) {
-    var cells = document.querySelectorAll('tr.family-row[data-family-row="true"] td.family-col-primary-risk .family-table-clamp-risk');
-    if (!cells || !cells.length) {
-      failures.push({ kind: 'missing-risk-cells', step: step, count: (cells ? cells.length : 0) });
-      return;
-    }
-    for (var i = 0; i < cells.length; i++) {
-      var el = cells[i];
-      var text = (el.textContent || '').trim();
-      if (text.indexOf('Problem:') !== 0 || text.indexOf('Effect:') === -1) {
-        failures.push({ kind: 'missing-problem-effect', step: step, index: i, text: text });
-        return;
-      }
-      var lc = lineCount(el);
-      if (lc > 2.2) {
-        failures.push({ kind: 'too-many-lines', step: step, index: i, lines: lc, text: text });
-        return;
-      }
-    }
-  }
+	  function assertRiskClamped(step, failures) {
+	    var cells = document.querySelectorAll('tr.family-row[data-family-row="true"] td.family-col-primary-risk .family-table-clamp-risk');
+	    if (!cells || !cells.length) {
+	      failures.push({ kind: 'missing-risk-cells', step: step, count: (cells ? cells.length : 0) });
+	      return;
+	    }
+	    for (var i = 0; i < cells.length; i++) {
+	      var el = cells[i];
+	      var text = (el.textContent || '').trim();
+	      // Risk column should be concise and risk-focused; avoid copying the "developer experience"
+	      // phrasing that belongs in Client effect.
+	      if (text.indexOf('Developers') !== -1 || text.indexOf('developers') !== -1) {
+	        failures.push({ kind: 'risk-mentions-developer-effect', step: step, index: i, text: text });
+	        return;
+	      }
+	      var lc = lineCount(el);
+	      if (lc > 2.2) {
+	        failures.push({ kind: 'too-many-lines', step: step, index: i, lines: lc, text: text });
+	        return;
+	      }
+	    }
+	  }
 
   function waitForUI() {
     if (!document.querySelector('button.quick-action[data-id="shape"]')) {
@@ -208,4 +210,3 @@ func responseShapeRiskLineclampReport(dom string) responseShapeRiskLineclamp {
 
 	return responseShapeRiskLineclamp{ready: ready, failures: failures, detail: detail}
 }
-

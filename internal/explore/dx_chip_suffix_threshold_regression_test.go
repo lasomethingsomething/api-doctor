@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func TestDxChipDoesNotShowPlusOneSuffixWhenCountAddsNoValue(t *testing.T) {
+func TestClientEffectRepeatLabelDoesNotShowPlusOneSuffixWhenCountAddsNoValue(t *testing.T) {
 	chromePath := findChromeForResetRegression()
 	if chromePath == "" {
 		t.Skip("skipping browser regression: Google Chrome not available")
@@ -51,15 +51,15 @@ func TestDxChipDoesNotShowPlusOneSuffixWhenCountAddsNoValue(t *testing.T) {
 		t.Fatalf("dx-chip suffix regression script did not finish\n%s", out)
 	}
 	if report.failures != 0 {
-		t.Fatalf("expected dx chips to avoid noisy (+1) suffixes, got %d failures\n%s", report.failures, report.detail)
+		t.Fatalf("expected Client effect repeat labels to avoid noisy (+1) suffixes, got %d failures\n%s", report.failures, report.detail)
 	}
 }
 
 func dxChipSuffixPayload() *Payload {
 	now := "2026-04-04T00:00:00Z"
 
-	// Create 4 families with identical workflow signals so the dx-consequence chip
-	// renders (repeat threshold) and previously would show "(+1)".
+		// Create 4 families with identical workflow signals so the repeat label renders
+		// (repeat threshold) and must not show "(+1)".
 	families := []string{"/dx-suffix-1", "/dx-suffix-2", "/dx-suffix-3", "/dx-suffix-4"}
 
 	endpoints := make([]EndpointRow, 0, len(families))
@@ -183,20 +183,20 @@ func dxChipSuffixHarness() string {
     if (el) el.click();
   }
 
-  function assertNoPlusOneSuffix(step, failures) {
-    var chips = document.querySelectorAll('.family-table .family-dx-chip');
-    if (!chips || chips.length < 1) {
-      failures.push({ kind: 'missing-dx-chips', step: step, count: (chips ? chips.length : 0) });
-      return;
-    }
-    for (var i = 0; i < chips.length; i++) {
-      var text = (chips[i].textContent || '').trim();
-      if (text.indexOf('(+1)') !== -1) {
-        failures.push({ kind: 'found-plus-one', step: step, text: text });
-        return;
-      }
-    }
-  }
+	  function assertNoPlusOneSuffix(step, failures) {
+	    var labels = document.querySelectorAll('.family-table .family-effect-repeat');
+	    if (!labels || labels.length < 1) {
+	      failures.push({ kind: 'missing-effect-repeat-labels', step: step, count: (labels ? labels.length : 0) });
+	      return;
+	    }
+	    for (var i = 0; i < labels.length; i++) {
+	      var text = (labels[i].textContent || '').trim();
+	      if (text.indexOf('(+1)') !== -1) {
+	        failures.push({ kind: 'found-plus-one', step: step, text: text });
+	        return;
+	      }
+	    }
+	  }
 
   function waitForUI() {
     if (!document.querySelector('button.quick-action[data-id="workflow"]')) {
@@ -249,4 +249,3 @@ func dxChipSuffixReport(dom string) dxChipSuffix {
 
 	return dxChipSuffix{ready: ready, failures: failures, detail: detail}
 }
-

@@ -149,6 +149,8 @@ Explorer UI clarity goals (recent):
 - each top-level tab has its own accent styling, used only for focus/CTA/scope cues
 - family headers and empty/no-match cards are intentionally concise: one scope sentence + only real recovery actions
 - Contract Issues no-match states explain what happened + provide concrete recovery actions
+- family and endpoint insights toggle inline in-place (no page jumps, no detached inspector panel)
+- grouped deviations and deviation counts use plain-language labels (no “instances” ambiguity)
 - header utility action "View payload" opens the raw analyzer payload backing the UI
 
 ---

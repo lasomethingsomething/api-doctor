@@ -169,15 +169,25 @@ func responseShapeRowSemanticsHarness() string {
     }
   }
 
-  function collectAndAssert(step, failures) {
-    var firstRow = document.querySelector('tr.family-row[data-family-row="true"]');
-    if (!firstRow) {
-      failures.push({ kind: 'missing-first-row', step: step });
-      return;
-    }
-    var endpointsBtn = firstRow.querySelector('td.family-col-endpoints .endpoints-expand');
-    var signalChip = firstRow.querySelector('td.family-col-top-signal .family-signal-chip');
-    var mixHigh = firstRow.querySelector('td.family-col-priority .pressure-mix-chip.mix-high');
+	  function collectAndAssert(step, failures) {
+	    var firstRow = document.querySelector('tr.family-row[data-family-row="true"]');
+	    if (!firstRow) {
+	      failures.push({ kind: 'missing-first-row', step: step });
+	      return;
+	    }
+	    // Base table surface must remain neutral (avoid "error tint" row backgrounds).
+	    var cell = firstRow.querySelector('td');
+	    var bg = cell ? window.getComputedStyle(cell).backgroundColor : '';
+	    if (bg && bg !== 'transparent' && bg !== 'rgba(0, 0, 0, 0)') {
+	      var rgb = parseRGB(bg);
+	      var white = { r: 255, g: 255, b: 255, a: 1 };
+	      if (rgb && rgb.a > 0 && colorDistance(rgb, white) > 26) {
+	        failures.push({ kind: 'row-background-not-neutral', step: step, backgroundColor: bg });
+	      }
+	    }
+	    var endpointsBtn = firstRow.querySelector('td.family-col-endpoints .endpoints-expand');
+	    var signalChip = firstRow.querySelector('td.family-col-top-signal .family-signal-chip');
+	    var mixHigh = firstRow.querySelector('td.family-col-priority .pressure-mix-chip.mix-high');
 
     if (!endpointsBtn || !signalChip || !mixHigh) {
       failures.push({
@@ -285,4 +295,3 @@ func responseShapeRowSemanticsReport(dom string) responseShapeRowSemantics {
 
 	return responseShapeRowSemantics{ready: ready, failures: failures, detail: detail}
 }
-

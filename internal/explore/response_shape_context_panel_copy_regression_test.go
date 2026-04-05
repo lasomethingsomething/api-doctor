@@ -154,7 +154,7 @@ func responseShapeContextPanelCopyHarness() string {
         failures.push({ kind: 'line-too-long', step: step, index: i, length: text.length, text: text });
         return;
       }
-      if (/search:|category:|burden:|family pressure:/i.test(text)) {
+      if (/search:|category:|burden:|family priority:/i.test(text)) {
         failures.push({ kind: 'mentions-filters', step: step, index: i, text: text });
         return;
       }

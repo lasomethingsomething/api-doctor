@@ -123,12 +123,12 @@ func endpointsExpandSemanticsHarness() string {
     n.textContent = JSON.stringify(failures);
   }
 
-  function assertButtonFocusable(step, failures) {
-    var btn = document.querySelector('tr.family-row[data-family-row="true"] button.endpoints-expand[data-expand-endpoints]');
-    if (!btn) {
-      failures.push({ kind: 'missing-button', step: step });
-      return;
-    }
+	  function assertButtonFocusable(step, failures) {
+	    var btn = document.querySelector('tr.family-row[data-family-row="true"] button.endpoints-expand[data-expand-endpoints]');
+	    if (!btn) {
+	      failures.push({ kind: 'missing-button', step: step });
+	      return;
+	    }
 
     if (btn.tagName !== 'BUTTON') {
       failures.push({ kind: 'not-button-tag', step: step, tag: btn.tagName });
@@ -143,22 +143,50 @@ func endpointsExpandSemanticsHarness() string {
       failures.push({ kind: 'not-tabbable', step: step, tabIndex: btn.tabIndex });
     }
 
-    btn.focus();
-    if (document.activeElement !== btn) {
-      failures.push({ kind: 'not-focusable', step: step, active: (document.activeElement && document.activeElement.tagName) });
-    }
-  }
+	    btn.focus();
+	    if (document.activeElement !== btn) {
+	      failures.push({ kind: 'not-focusable', step: step, active: (document.activeElement && document.activeElement.tagName) });
+	    }
+	  }
+
+	  function assertExpandsInline(step, failures, done) {
+	    var row = document.querySelector('tr.family-row[data-family-row="true"]');
+	    var btn = row ? row.querySelector('button.endpoints-expand[data-expand-endpoints]') : null;
+	    if (!btn) {
+	      failures.push({ kind: 'missing-button-for-expand', step: step });
+	      return done();
+	    }
+	    btn.click();
+	    window.setTimeout(function () {
+	      var expanded = (btn.getAttribute('aria-expanded') || '').toLowerCase() === 'true' || btn.classList.contains('is-expanded');
+	      if (!expanded) {
+	        failures.push({ kind: 'did-not-set-expanded-state', step: step, ariaExpanded: btn.getAttribute('aria-expanded'), className: btn.className });
+	      }
+	      var family = row.getAttribute('data-family') || '';
+	      var expansion = family ? document.querySelector('tr.family-endpoint-table-row[data-family="' + family + '"]') : null;
+	      if (!expansion) {
+	        failures.push({ kind: 'missing-expansion-row', step: step, family: family });
+	        return done();
+	      }
+	      if (!expansion.querySelector('table.nested-endpoint-table')) {
+	        failures.push({ kind: 'missing-nested-endpoint-table', step: step, family: family });
+	      }
+	      done();
+	    }, 220);
+	  }
 
   function waitForUI() {
     if (!document.querySelector('.family-table')) {
       return window.setTimeout(waitForUI, 50);
     }
-    window.setTimeout(function () {
-      var failures = [];
-      assertButtonFocusable('family-table', failures);
-      finish(failures);
-    }, 200);
-  }
+	    window.setTimeout(function () {
+	      var failures = [];
+	      assertButtonFocusable('family-table', failures);
+	      assertExpandsInline('expand', failures, function () {
+	        finish(failures);
+	      });
+	    }, 200);
+	  }
 
   waitForUI();
 })();
@@ -194,4 +222,3 @@ func endpointsExpandSemanticsReport(dom string) endpointsExpandSemantics {
 
 	return endpointsExpandSemantics{ready: ready, failures: failures, detail: detail}
 }
-

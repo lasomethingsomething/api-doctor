@@ -21,6 +21,7 @@ func TestWorkflowAndShapeControlsPreserveActiveTopTab(t *testing.T) {
 
 	outDir := t.TempDir()
 	htmlPath := filepath.Join(outDir, "top-tab-preservation-regression.html")
+	userDataDir := filepath.Join(outDir, "chrome-profile")
 	if err := os.WriteFile(htmlPath, []byte(inlineTopTabPreservationDocument(t, resetFiltersRegressionPayload())), 0o600); err != nil {
 		t.Fatalf("write regression fixture: %v", err)
 	}
@@ -34,6 +35,9 @@ func TestWorkflowAndShapeControlsPreserveActiveTopTab(t *testing.T) {
 		"--headless",
 		"--disable-gpu",
 		"--no-sandbox",
+		"--no-first-run",
+		"--no-default-browser-check",
+		"--user-data-dir="+userDataDir,
 		"--hide-scrollbars",
 		"--run-all-compositor-stages-before-draw",
 		"--virtual-time-budget=9000",

@@ -142,7 +142,7 @@ func inspectRegressionHarness() string {
 
       window.setTimeout(function () {
         // First selection: open the inspector so we can intentionally switch subtabs.
-        click('button.endpoint-inspect-action[data-focus-endpoint="tax-rule-list"]');
+        click('button.nested-endpoint-path-toggle[data-focus-endpoint="tax-rule-list"]');
 
         window.setTimeout(function () {
           // Switch to a non-default inspector subtab to ensure Inspect preserves it.
@@ -155,7 +155,7 @@ func inspectRegressionHarness() string {
             }
 
             // Second selection: Inspect endpoint for GET /tax-rule/{id} (this endpoint intentionally has no endpointDetails entry).
-            click('button.endpoint-inspect-action[data-focus-endpoint="tax-rule-detail"]');
+            click('button.nested-endpoint-path-toggle[data-focus-endpoint="tax-rule-detail"]');
 
             window.setTimeout(function () {
               var code = inspectorEndpointCode();

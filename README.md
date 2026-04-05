@@ -50,8 +50,8 @@ How to use it quickly:
 1. Click one of the three top-level lenses/tabs: **Contract Issues**, **Workflow Guidance**, or **Response Shape**.
 2. Each top-level lens uses its own accent styling intentionally (focus/CTA/scope cues), while severity/error styling remains reserved for actual errors and warnings.
 3. Use the **Current filters** bar under the filter row to confirm scope quickly; when filters match nothing, it shows concrete next actions.
-4. Use the **Family investigation clusters** section as the primary entry point — click an **Endpoints** count to expand/collapse, and use **Show insight** for the family summary.
-5. In the expanded endpoints table, click **Inspect endpoint** to open the endpoint workspace inline under that row (Summary, Exact evidence, and supporting diagnostics).
+4. Use the **Family investigation clusters** section as the primary entry point — expand a family via the **Endpoints** count, and toggle **Family Insight** by clicking the family name.
+5. In the expanded endpoints table, click an endpoint **Path** to open its inline workspace (Summary, Grouped deviations, and supporting diagnostics). Click again to close.
 6. Use the top-right **View payload** button to inspect the raw analyzer output backing the UI.
 
 ## Explorer vs CLI (quick decision)

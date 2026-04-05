@@ -21,6 +21,7 @@ func TestCategoryAndFamilyPressureFiltersAcrossTopTabs(t *testing.T) {
 
 	outDir := t.TempDir()
 	htmlPath := filepath.Join(outDir, "filters-regression.html")
+	userDataDir := filepath.Join(outDir, "chrome-profile")
 	if err := os.WriteFile(htmlPath, []byte(inlineFiltersRegressionDocument(t, filtersRegressionPayload())), 0o600); err != nil {
 		t.Fatalf("write regression fixture: %v", err)
 	}
@@ -34,6 +35,9 @@ func TestCategoryAndFamilyPressureFiltersAcrossTopTabs(t *testing.T) {
 		"--headless",
 		"--disable-gpu",
 		"--no-sandbox",
+		"--no-first-run",
+		"--no-default-browser-check",
+		"--user-data-dir="+userDataDir,
 		"--hide-scrollbars",
 		"--run-all-compositor-stages-before-draw",
 		"--virtual-time-budget=9000",
@@ -51,7 +55,7 @@ func TestCategoryAndFamilyPressureFiltersAcrossTopTabs(t *testing.T) {
 		t.Fatalf("filters regression script did not finish\n%s", out)
 	}
 	if report.failures != 0 {
-		t.Fatalf("expected category/family pressure filters to work across top tabs, got %d failures\n%s", report.failures, report.detail)
+		t.Fatalf("expected category/family priority filters to work across top tabs, got %d failures\n%s", report.failures, report.detail)
 	}
 }
 
@@ -207,7 +211,7 @@ func filtersRegressionHarness() string {
     var got = Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) {
       return (th.textContent || '').trim();
     }).filter(Boolean);
-    var expected = ['Path', 'Method', 'Primary issue', 'Severity', 'Instance count', 'Actions'];
+    var expected = ['Path', 'Method', 'Primary issue', 'Severity', 'Deviations', 'Actions'];
     if (JSON.stringify(got) !== JSON.stringify(expected)) {
       failures.push({ kind: 'nested-headers', tab: tab, step: step, family: family, expected: expected, got: got });
     }
@@ -229,7 +233,30 @@ func filtersRegressionHarness() string {
     }
   }
 
+  function assertSummaryAddsMeaning(tab, step, failures) {
+    var bar = document.getElementById('lensControlHint');
+    var text = bar ? (bar.textContent || '') : '';
+    var lower = text.toLowerCase();
+    if (!text.trim()) {
+      failures.push({ kind: 'filter-summary-empty', tab: tab, step: step });
+      return;
+    }
+    // Guard against mechanical "serialization" of current control values.
+    if (lower.indexOf('current filters') !== -1
+      || lower.indexOf('search ') !== -1
+      || lower.indexOf('category ') !== -1
+      || lower.indexOf('family priority ') !== -1
+      || lower.indexOf('no-issue rows') !== -1) {
+      failures.push({ kind: 'filter-summary-mechanical', tab: tab, step: step, got: text.trim() });
+    }
+  }
+
   function inspectEndpoint(endpointId) {
+    var selector = 'button.nested-endpoint-path-toggle[data-focus-endpoint="' + endpointId + '"]';
+    if (document.querySelector(selector)) {
+      click(selector);
+      return;
+    }
     click('button.endpoint-inspect-action[data-focus-endpoint="' + endpointId + '"]');
   }
 
@@ -302,12 +329,7 @@ func filtersRegressionHarness() string {
                       assertScrollTargetsAllowed(tabId, 'after-inspect-tax-1', failures);
                       assertInspectorEndpointIncludes('/tax-provider', tabId, 'inspect-tax-1', failures);
                       assertScopeExcludes('Burden', tabId, 'scope-no-burden', failures);
-                      assertScopeIncludes('Category', tabId, 'scope-has-category', failures);
-                      if (tabId === 'spec-rule') {
-                        assertScopeIncludes('spec rule', tabId, 'scope-category-spec-rule', failures);
-                      } else {
-                        assertScopeIncludes('all', tabId, 'scope-category-all', failures);
-                      }
+                      assertSummaryAddsMeaning(tabId, 'scope-summary', failures);
 
                       // 2) Same lens, pressure = medium => only /order
                       setSelect('familyPriorityFilter', 'medium');
@@ -342,8 +364,7 @@ func filtersRegressionHarness() string {
                               assertNestedCount(2, '/customer-wishlist', tabId, 'expand-wishlist', failures);
                               assertNestedHeaders(tabId, '/customer-wishlist', 'headers-wishlist', failures);
                               assertScopeExcludes('Burden', tabId, 'scope-no-burden-2', failures);
-                              assertScopeIncludes('Family pressure', tabId, 'scope-pressure', failures);
-                              assertScopeIncludes('low', tabId, 'scope-low', failures);
+                              assertSummaryAddsMeaning(tabId, 'scope-summary-2', failures);
                               resolve(failures);
                             }, 120);
                           }, 120);

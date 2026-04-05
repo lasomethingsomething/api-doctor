@@ -138,6 +138,24 @@ func fullExactEvidenceHarness() string {
     return drawer.querySelectorAll('.issue-group').length;
   }
 
+  function locationCuesHeadingPresent() {
+    var drawer = document.querySelectorAll('.detail-evidence-drawer')[0];
+    if (!drawer || !drawer.open) return false;
+    var h = drawer.querySelector('.issue-group .location-cues-heading');
+    return !!(h && (h.textContent || '').toLowerCase().indexOf('openapi location cues') !== -1);
+  }
+
+  function locationCuesFallbackPresentWhenNoPills() {
+    var drawer = document.querySelectorAll('.detail-evidence-drawer')[0];
+    if (!drawer || !drawer.open) return false;
+    var group = drawer.querySelector('.issue-group');
+    if (!group) return false;
+    var hasPills = group.querySelectorAll('.openapi-pill').length > 0;
+    if (hasPills) return true;
+    var empty = group.querySelector('.location-cues-empty');
+    return !!(empty && (empty.textContent || '').toLowerCase().indexOf('no location cues available') !== -1);
+  }
+
   function drawerOpen() {
     var drawer = document.querySelectorAll('.detail-evidence-drawer')[0];
     return !!(drawer && drawer.open);
@@ -159,7 +177,7 @@ func fullExactEvidenceHarness() string {
       click('button.endpoints-expand[data-expand-endpoints="/tax-rule"]');
 
       window.setTimeout(function () {
-        click('tr.nested-endpoint-row[data-endpoint-id="tax-rule-detail"] button.endpoint-inspect-action');
+        click('tr.nested-endpoint-row[data-endpoint-id="tax-rule-detail"] button.nested-endpoint-path-toggle');
 
         window.setTimeout(function () {
           var before = inspectorEndpointCode();
@@ -168,11 +186,8 @@ func fullExactEvidenceHarness() string {
           }
 
           var title = summaryLabel();
-          if (title.toLowerCase().indexOf('exact contract evidence') === -1) {
-            failures.push({ kind: 'summary-title', expected_includes: 'Exact contract evidence', got: title });
-          }
-          if (title.toLowerCase().indexOf('by schema field and issue type') === -1) {
-            failures.push({ kind: 'summary-grouping-basis', expected_includes: 'by schema field and issue type', got: title });
+          if (title.toLowerCase().indexOf('grouped deviations') === -1) {
+            failures.push({ kind: 'summary-title', expected_includes: 'Grouped deviations', got: title });
           }
 
           // Open the accordion.
@@ -188,6 +203,12 @@ func fullExactEvidenceHarness() string {
             }
             if (groupCountVisible() < 2) {
               failures.push({ kind: 'groups-not-visible', got: groupCountVisible() });
+            }
+            if (!locationCuesHeadingPresent()) {
+              failures.push({ kind: 'location-cues-heading-missing' });
+            }
+            if (!locationCuesFallbackPresentWhenNoPills()) {
+              failures.push({ kind: 'location-cues-fallback-missing' });
             }
 
             // Close using the explicit in-panel close action (Hide evidence).

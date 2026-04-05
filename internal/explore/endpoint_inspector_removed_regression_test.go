@@ -148,9 +148,9 @@ func endpointInspectorRemovedHarness() string {
   }
 
   function inspectFirstEndpoint(failures) {
-    var btn = document.querySelector('.nested-endpoint-actions-cell button.endpoint-inspect-action');
+    var btn = document.querySelector('button.nested-endpoint-path-toggle[data-focus-endpoint]');
     if (!btn) {
-      failures.push({ kind: 'missing-endpoint-inspect-action' });
+      failures.push({ kind: 'missing-endpoint-select-control' });
       return false;
     }
     btn.click();

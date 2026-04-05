@@ -13,7 +13,7 @@
       <h1>api-doctor explore</h1>
       <p id="runContext" class="subtle"></p>
     </div>
-    <a href="/api/payload" class="button" target="_blank" rel="noopener" title="Inspect the raw analyzer output backing this view.">View payload</a>
+    <a href="/api/payload" class="button button--payload" target="_blank" rel="noopener" title="Inspect the raw analyzer output backing this view.">View payload</a>
   </header>
 
 	  <main class="layout">
@@ -28,13 +28,14 @@
         <label class="field">Category
           <select id="categoryFilter"></select>
         </label>
-        <label class="field">Family pressure
+        <label class="field" title="High/Medium/Low summarizes how many endpoints in the family carry in-scope findings at each severity.">Family priority
           <select id="familyPriorityFilter">
             <option value="all">all families</option>
             <option value="high">high</option>
             <option value="medium">medium</option>
             <option value="low">low</option>
           </select>
+          <span class="field-helper">High = 3+ high-severity endpoints · Medium = any high, or 3+ medium · Low = otherwise</span>
         </label>
         <label class="field toggle-field">
           <span>Include endpoints without issues</span>

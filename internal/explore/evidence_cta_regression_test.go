@@ -146,7 +146,7 @@ func evidenceCTAHarness() string {
       click('button.endpoints-expand[data-expand-endpoints="/tax-rule"]');
 
       window.setTimeout(function () {
-        // Click instance-count chip inside the nested endpoint table (must open exact evidence).
+        // Click occurrences-count chip inside the nested endpoint table (must open exact evidence).
         click('tr.nested-endpoint-row[data-endpoint-id="tax-rule-detail"] button.instance-count-chip.is-interactive');
 
         window.setTimeout(function () {

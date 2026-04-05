@@ -120,25 +120,25 @@ func responseShapeLastColVisibleHarness() string {
     if (el) el.click();
   }
 
-  function assertLastColumnVisible(step, failures) {
-    var surface = document.getElementById('familySurface');
-    var table = document.querySelector('.family-table');
-    var th = document.querySelector('.family-table thead th.family-col-next-click');
-    var td = document.querySelector('tr.family-row[data-family-row="true"] td.family-col-next-click');
-    var copy = td ? td.querySelector('.family-next-click-copy') : null;
+	  function assertLastColumnVisible(step, failures) {
+	    var surface = document.getElementById('familySurface');
+	    var table = document.querySelector('.family-table');
+	    var th = document.querySelector('.family-table thead th.family-col-client-effect');
+	    var td = document.querySelector('tr.family-row[data-family-row="true"] td.family-col-client-effect');
+	    var content = td ? (td.querySelector('.caller-burden-cell') || td.querySelector('.family-table-clamp-effect') || td) : null;
 
-    if (!surface || !table || !th || !td || !copy) {
-      failures.push({
-        kind: 'missing-nodes',
-        step: step,
-        hasSurface: !!surface,
-        hasTable: !!table,
-        hasTh: !!th,
-        hasTd: !!td,
-        hasCopy: !!copy
-      });
-      return;
-    }
+	    if (!surface || !table || !th || !td || !content) {
+	      failures.push({
+	        kind: 'missing-nodes',
+	        step: step,
+	        hasSurface: !!surface,
+	        hasTable: !!table,
+	        hasTh: !!th,
+	        hasTd: !!td,
+	        hasContent: !!content
+	      });
+	      return;
+	    }
 
     var tol = 1.5;
     var sRect = surface.getBoundingClientRect();
@@ -149,32 +149,32 @@ func responseShapeLastColVisibleHarness() string {
       failures.push({ kind: 'surface-scroll-left', step: step, scrollLeft: surface.scrollLeft });
     }
 
-    if (thRect.right > sRect.right + tol || tdRect.right > sRect.right + tol) {
-      failures.push({
-        kind: 'last-col-outside-surface',
-        step: step,
-        surfaceRight: sRect.right,
-        headerRight: thRect.right,
-        cellRight: tdRect.right
-      });
-    }
+	    if (thRect.right > sRect.right + tol || tdRect.right > sRect.right + tol) {
+	      failures.push({
+	        kind: 'last-col-outside-surface',
+	        step: step,
+	        surfaceRight: sRect.right,
+	        headerRight: thRect.right,
+	        cellRight: tdRect.right
+	      });
+	    }
 
-    // Prevent the last column from turning into a microscopic sliver.
-    var minWidth = 180;
-    if (thRect.width < minWidth) {
-      failures.push({ kind: 'header-too-narrow', step: step, width: thRect.width, minWidth: minWidth });
-    }
-    if (tdRect.width < minWidth) {
-      failures.push({ kind: 'cell-too-narrow', step: step, width: tdRect.width, minWidth: minWidth });
-    }
+	    // Prevent the last column from turning into a microscopic sliver.
+	    var minWidth = 200;
+	    if (thRect.width < minWidth) {
+	      failures.push({ kind: 'header-too-narrow', step: step, width: thRect.width, minWidth: minWidth });
+	    }
+	    if (tdRect.width < minWidth) {
+	      failures.push({ kind: 'cell-too-narrow', step: step, width: tdRect.width, minWidth: minWidth });
+	    }
 
     // Ensure the copy wraps within the cell and does not horizontally clip.
-    var sw = td.scrollWidth || 0;
-    var cw = td.clientWidth || 0;
-    if (sw > cw + tol) {
-      failures.push({ kind: 'cell-horizontal-overflow', step: step, scrollWidth: sw, clientWidth: cw });
-    }
-  }
+	    var sw = td.scrollWidth || 0;
+	    var cw = td.clientWidth || 0;
+	    if (sw > cw + tol) {
+	      failures.push({ kind: 'cell-horizontal-overflow', step: step, scrollWidth: sw, clientWidth: cw });
+	    }
+	  }
 
   function waitForUI() {
     if (!document.querySelector('button.quick-action[data-id="shape"]')) {
@@ -228,4 +228,3 @@ func responseShapeLastColVisibleReport(dom string) responseShapeLastColVisible {
 
 	return responseShapeLastColVisible{ready: ready, failures: failures, detail: detail}
 }
-
