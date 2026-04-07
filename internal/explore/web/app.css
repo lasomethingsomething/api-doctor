@@ -1044,13 +1044,6 @@ select:focus {
 .family-table-head th {
   background: #f5f8fb;
   border-bottom: 2px solid #d0dce5;
-  position: sticky;
-  top: calc(var(--topbar-height) + var(--action-bar-height));
-  z-index: 18;
-}
-
-.family-table-shell-scoped .family-table-head th {
-  top: calc(var(--topbar-height) + var(--action-bar-height) + var(--family-contextbar-height));
 }
 
 .family-row.row-focused td {

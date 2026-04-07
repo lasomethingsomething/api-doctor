@@ -4767,6 +4767,13 @@
 	      return '';
 	    }
 
+    function familyHeaderLabelHtml(col) {
+      if (!col) return '';
+      if (col.thHtml) return col.thHtml;
+      if (col.th) return '<span class="th-title">' + escapeHtml(col.th) + '</span>';
+      return '';
+    }
+
 	    function focusedFamilyNameFromSummaries(items) {
 	      // Prefer explicit expansions, then an exact family-name match from search.
 	      if (state.expandedFamily) return state.expandedFamily;
@@ -4833,7 +4840,7 @@
 		      + cols.map(function (col) {
 		          var klass = col.thClass ? (' class="' + col.thClass + '"') : '';
 		          var attrs = col.thAttrs || '';
-		          var label = col.thHtml ? col.thHtml : escapeHtml(col.th || '');
+		          var label = familyHeaderLabelHtml(col);
 		          return '<th' + klass + attrs + '>' + label + '</th>';
 		        }).join('')
 	      + '</tr>'
