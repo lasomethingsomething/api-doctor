@@ -18,7 +18,7 @@ import (
 	"github.com/lasomethingsomething/api-doctor/internal/workflow"
 )
 
-func TestAdminPayloadTopLevelInteractionsRemainResponsive(t *testing.T) {
+func TestAdminPayloadOpenInsightStillAllowsSwitchingTopTabs(t *testing.T) {
 	chromePath := findChromeForResetRegression()
 	if chromePath == "" {
 		t.Skip("skipping browser regression: Google Chrome not available")
@@ -57,7 +57,7 @@ func TestAdminPayloadTopLevelInteractionsRemainResponsive(t *testing.T) {
 		t.Fatalf("admin payload interaction regression script did not finish\n%s", out)
 	}
 	if report.failures != 0 {
-		t.Fatalf("expected top-level explorer interactions to stay responsive for adminapi payload, got %d failures\n%s", report.failures, report.detail)
+		t.Fatalf("expected adminapi payload to keep Workflow Guidance and Response Shape clickable with an open insight row, got %d failures\n%s", report.failures, report.detail)
 	}
 }
 
@@ -167,14 +167,56 @@ func adminPayloadInteractionsHarness() string {
     })();
   }
 
-  function click(selector, failures, step) {
-    var el = document.querySelector(selector);
-    if (!el) {
-      failures.push({ kind: 'missing-target', step: step, selector: selector });
+  function hitInfo(btn) {
+    if (!btn) return null;
+    var rect = btn.getBoundingClientRect();
+    return {
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height,
+      x: rect.left + Math.max(12, Math.min(rect.width / 2, rect.width - 12)),
+      y: rect.top + Math.max(12, Math.min(rect.height / 2, rect.height - 12))
+    };
+  }
+
+  function assertTabClickable(tabId, failures, step) {
+    var btn = document.querySelector('button.quick-action[data-id="' + tabId + '"]');
+    if (!btn) {
+      failures.push({ kind: 'missing-tab-button', step: step, tab: tabId });
       return null;
     }
-    el.click();
-    return el;
+    var info = hitInfo(btn);
+    if (!info || info.width < 40 || info.height < 20 || info.top < 0) {
+      failures.push({ kind: 'tab-not-visible', step: step, tab: tabId, info: info });
+      return null;
+    }
+    var hit = document.elementFromPoint(info.x, info.y);
+    if (!hit || (hit !== btn && !btn.contains(hit))) {
+      failures.push({
+        kind: 'tab-hit-target-blocked',
+        step: step,
+        tab: tabId,
+        info: info,
+        hitTag: hit ? hit.tagName : '',
+        hitClass: hit ? (hit.className || '') : '',
+        hitDataId: hit && hit.getAttribute ? (hit.getAttribute('data-id') || '') : ''
+      });
+      return null;
+    }
+    return btn;
+  }
+
+  function clickTab(tabId, failures, step, done) {
+    var btn = assertTabClickable(tabId, failures, step);
+    if (!btn) return done(new Error('tab-not-clickable'));
+    btn.click();
+    var bodyClass = tabId === 'spec-rule' ? 'lens-spec-rule' : (tabId === 'workflow' ? 'lens-workflow' : 'lens-shape');
+    waitFor(function () {
+      return document.body.classList.contains(bodyClass);
+    }, done);
   }
 
   function run() {
@@ -188,40 +230,36 @@ func adminPayloadInteractionsHarness() string {
         return finish(failures);
       }
 
-      click('button.quick-action[data-id="spec-rule"]', failures, 'open-spec-rule');
-      waitFor(function () {
-        return document.body.classList.contains('lens-spec-rule');
-      }, function (err) {
+      clickTab('spec-rule', failures, 'enter-spec-rule', function (err) {
         if (err) failures.push({ kind: 'spec-rule-tab-timeout' });
 
-        click('button.quick-action[data-id="workflow"]', failures, 'open-workflow');
+        var familyBtn = document.querySelector('td.family-col-name button.family-name-toggle[data-insight-toggle]');
+        if (!familyBtn) {
+          failures.push({ kind: 'missing-family-toggle' });
+          return finish(failures);
+        }
+        var family = familyBtn.getAttribute('data-insight-toggle') || '';
+        familyBtn.click();
         waitFor(function () {
-          return document.body.classList.contains('lens-workflow');
+          return !!family && !!document.querySelector('tr.family-inline-insight-row[data-family="' + family + '"]');
         }, function (err) {
-          if (err) failures.push({ kind: 'workflow-tab-timeout' });
+          if (err) failures.push({ kind: 'family-insight-timeout', family: family });
 
-          click('button.quick-action[data-id="shape"]', failures, 'open-shape');
-          waitFor(function () {
-            return document.body.classList.contains('lens-shape');
-          }, function (err) {
-            if (err) failures.push({ kind: 'shape-tab-timeout' });
+          var anchorRow = document.querySelector('tr.family-inline-insight-row[data-family="' + family + '"]') || document.querySelector('tr.family-row[data-family-row="true"]');
+          if (anchorRow && anchorRow.scrollIntoView) {
+            anchorRow.scrollIntoView({ block: 'start' });
+          }
+          window.scrollBy(0, 240);
+          window.setTimeout(function () {
+            clickTab('workflow', failures, 'spec-rule-to-workflow-with-open-insight', function (err) {
+              if (err) failures.push({ kind: 'workflow-tab-timeout' });
 
-            click('button.quick-action[data-id="spec-rule"]', failures, 'return-spec-rule');
-            waitFor(function () {
-              return document.body.classList.contains('lens-spec-rule');
-            }, function (err) {
-              if (err) failures.push({ kind: 'return-spec-rule-timeout' });
-
-              var familyBtn = click('td.family-col-name button.family-name-toggle[data-insight-toggle]', failures, 'open-family-insight');
-              waitFor(function () {
-                var family = familyBtn ? (familyBtn.getAttribute('data-insight-toggle') || '') : '';
-                return !!family && !!document.querySelector('tr.family-inline-insight-row[data-family="' + family + '"]');
-              }, function (err) {
-                if (err) failures.push({ kind: 'family-insight-timeout' });
+              clickTab('shape', failures, 'workflow-to-shape-with-open-insight', function (err) {
+                if (err) failures.push({ kind: 'shape-tab-timeout' });
                 finish(failures);
               });
             });
-          });
+          }, 180);
         });
       });
     });

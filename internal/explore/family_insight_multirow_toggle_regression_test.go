@@ -148,6 +148,28 @@ func familyInsightMultiRowToggleHarness() string {
     return document.querySelectorAll('tr.family-inline-insight-row').length === 1;
   }
 
+  function expandEndpointsFor(btn, failures, step, done) {
+    var row = btn ? btn.closest('tr.family-row[data-family-row="true"]') : null;
+    if (!row) {
+      failures.push({ kind: 'missing-family-row-for-expand', step: step });
+      return done();
+    }
+    var family = familyName(btn);
+    var expandBtn = row.querySelector('button[data-expand-endpoints]');
+    if (!expandBtn) {
+      failures.push({ kind: 'missing-endpoints-expand', step: step, family: family });
+      return done();
+    }
+    expandBtn.click();
+    window.setTimeout(function () {
+      var expanded = document.querySelector('tr.family-endpoint-table-row[data-family="' + family + '"]');
+      if (!expanded) {
+        failures.push({ kind: 'endpoints-did-not-expand', step: step, family: family });
+      }
+      done();
+    }, 220);
+  }
+
   function clickAndCheck(btn, expectedLabel, failures, step, done) {
     var before = window.scrollY || 0;
     var family = familyName(btn);
@@ -192,22 +214,24 @@ func familyInsightMultiRowToggleHarness() string {
         var firstFamily = familyName(firstBtn);
         if (!insightRowFor(firstFamily)) failures.push({ kind: 'first-not-open', family: firstFamily });
 
-        clickAndCheck(firstBtn, 'Show insight', failures, 'close-first', function () {
-          if (insightRowFor(firstFamily)) failures.push({ kind: 'first-not-closed', family: firstFamily });
+        expandEndpointsFor(firstBtn, failures, 'expand-first-family', function () {
+          clickAndCheck(firstBtn, 'Show insight', failures, 'close-first', function () {
+            if (insightRowFor(firstFamily)) failures.push({ kind: 'first-not-closed', family: firstFamily });
 
-          clickAndCheck(firstBtn, 'Hide insight', failures, 'reopen-first', function () {
-            if (!insightRowFor(firstFamily)) failures.push({ kind: 'first-not-reopened', family: firstFamily });
+            clickAndCheck(firstBtn, 'Hide insight', failures, 'reopen-first', function () {
+              if (!insightRowFor(firstFamily)) failures.push({ kind: 'first-not-reopened', family: firstFamily });
 
-            clickAndCheck(secondBtn, 'Hide insight', failures, 'switch-to-second', function () {
-              var secondFamily = familyName(secondBtn);
-              if (!insightRowFor(secondFamily)) failures.push({ kind: 'second-not-open', family: secondFamily });
-              if (insightRowFor(firstFamily)) failures.push({ kind: 'first-still-open-after-second', family: firstFamily });
-              if (!onlyOneInsightRowOpen()) failures.push({ kind: 'multiple-insight-rows-open' });
-              if (labelOf(firstBtn) !== 'Show insight') failures.push({ kind: 'first-label-not-reset', got: labelOf(firstBtn) });
+              clickAndCheck(secondBtn, 'Hide insight', failures, 'switch-to-second', function () {
+                var secondFamily = familyName(secondBtn);
+                if (!insightRowFor(secondFamily)) failures.push({ kind: 'second-not-open', family: secondFamily });
+                if (insightRowFor(firstFamily)) failures.push({ kind: 'first-still-open-after-second', family: firstFamily });
+                if (!onlyOneInsightRowOpen()) failures.push({ kind: 'multiple-insight-rows-open' });
+                if (labelOf(firstBtn) !== 'Show insight') failures.push({ kind: 'first-label-not-reset', got: labelOf(firstBtn) });
 
-              clickAndCheck(secondBtn, 'Show insight', failures, 'close-second', function () {
-                if (insightRowFor(secondFamily)) failures.push({ kind: 'second-not-closed', family: secondFamily });
-                finish(failures);
+                clickAndCheck(secondBtn, 'Show insight', failures, 'close-second', function () {
+                  if (insightRowFor(secondFamily)) failures.push({ kind: 'second-not-closed', family: secondFamily });
+                  finish(failures);
+                });
               });
             });
           });

@@ -201,13 +201,34 @@ func responseShapeCallerBurdenHarness() string {
     if (el) el.click();
   }
 
+  function assertHeader(step, failures) {
+    var headers = Array.prototype.slice.call(document.querySelectorAll('.family-table thead th'));
+    if (!headers.length) {
+      failures.push({ kind: 'missing-header-row', step: step });
+      return;
+    }
+    if (document.querySelectorAll('.family-table thead').length !== 1) {
+      failures.push({ kind: 'header-rendered-more-than-once', step: step, count: document.querySelectorAll('.family-table thead').length });
+    }
+    var callerHeaders = headers.filter(function (th) {
+      return ((th.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase().indexOf('CALLER BURDEN') !== -1);
+    });
+    if (callerHeaders.length !== 1) {
+      failures.push({ kind: 'caller-burden-header-count', step: step, count: callerHeaders.length, texts: headers.map(function (th) { return (th.textContent || '').trim(); }) });
+      return;
+    }
+    if (!callerHeaders[0].classList.contains('family-col-caller-burden')) {
+      failures.push({ kind: 'wrong-caller-burden-header-class', step: step, className: callerHeaders[0].className || '' });
+    }
+  }
+
   function assertCallerBurden(family, expectedChips, expectedMoreText, failures) {
     var row = document.querySelector('tr.family-row[data-family="' + family + '"][data-family-row="true"]');
     if (!row) {
       failures.push({ kind: 'missing-family-row', family: family });
       return;
     }
-    var cell = row.querySelector('td.family-col-client-effect');
+    var cell = row.querySelector('td.family-col-caller-burden');
     if (!cell) {
       failures.push({ kind: 'missing-caller-burden-cell', family: family });
       return;
@@ -229,22 +250,47 @@ func responseShapeCallerBurdenHarness() string {
     }
   }
 
+  function assertCallerBurdenSurface(step, failures) {
+    assertHeader(step + '-header', failures);
+    assertCallerBurden('/caller-burden-1', 1, '', failures);
+    assertCallerBurden('/caller-burden-2', 2, '', failures);
+    assertCallerBurden('/caller-burden-3', 2, '+3 more', failures);
+  }
+
   function waitForUI() {
     if (!document.querySelector('button.quick-action[data-id="shape"]')) {
       return window.setTimeout(waitForUI, 50);
     }
     click('button.quick-action[data-id="shape"]');
     (function waitForShapeTable() {
-      if (!document.querySelector('.family-table')) {
+      if (!document.querySelector('.family-table') || !document.body.classList.contains('lens-shape')) {
         return window.setTimeout(waitForShapeTable, 50);
       }
       window.setTimeout(function () {
         var failures = [];
-        assertCallerBurden('/caller-burden-1', 1, '', failures);
-        assertCallerBurden('/caller-burden-2', 2, '', failures);
-        // 3+ reasons collapses behind "+N more" where N >= 2.
-        assertCallerBurden('/caller-burden-3', 2, '+3 more', failures);
-        finish(failures);
+        assertCallerBurdenSurface('initial-shape', failures);
+
+        click('tr.family-row[data-family-row="true"] td.family-col-endpoints button.endpoints-expand');
+        window.setTimeout(function () {
+          assertCallerBurdenSurface('after-expand', failures);
+
+          click('button.quick-action[data-id="workflow"]');
+          (function waitForWorkflow() {
+            if (!document.body.classList.contains('lens-workflow')) {
+              return window.setTimeout(waitForWorkflow, 50);
+            }
+            click('button.quick-action[data-id="shape"]');
+            (function waitForShapeReturn() {
+              if (!document.body.classList.contains('lens-shape') || !document.querySelector('.family-table')) {
+                return window.setTimeout(waitForShapeReturn, 50);
+              }
+              window.setTimeout(function () {
+                assertCallerBurdenSurface('after-tab-switch', failures);
+                finish(failures);
+              }, 180);
+            })();
+          })();
+        }, 180);
       }, 180);
     })();
   }

@@ -123,8 +123,8 @@ func responseShapeLastColVisibleHarness() string {
 	  function assertLastColumnVisible(step, failures) {
 	    var surface = document.getElementById('familySurface');
 	    var table = document.querySelector('.family-table');
-	    var th = document.querySelector('.family-table thead th.family-col-client-effect');
-	    var td = document.querySelector('tr.family-row[data-family-row="true"] td.family-col-client-effect');
+	    var th = document.querySelector('.family-table thead th.family-col-caller-burden');
+	    var td = document.querySelector('tr.family-row[data-family-row="true"] td.family-col-caller-burden');
 	    var content = td ? (td.querySelector('.caller-burden-cell') || td.querySelector('.family-table-clamp-effect') || td) : null;
 
 	    if (!surface || !table || !th || !td || !content) {

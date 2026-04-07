@@ -25,6 +25,8 @@
   /* Selection highlight for inspected endpoints (tab-safe). */
   --selection: var(--accent);
   --selection-rgb: var(--accent-rgb);
+  --topbar-height: 0px;
+  --action-bar-height: 0px;
 }
 
 * { box-sizing: border-box; }
@@ -65,7 +67,7 @@ body {
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 50;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -73,6 +75,7 @@ body {
   padding: 0.95rem 1.2rem;
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.97);
+  isolation: isolate;
 }
 
 .eyebrow {
@@ -273,12 +276,17 @@ body.has-endpoint-selection #familySurfaceSection::before {
 }
 
 .action-bar {
+  position: sticky;
+  top: var(--topbar-height);
+  z-index: 40;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0.46rem 0.62rem;
   display: grid;
   gap: 0.34rem;
+  isolation: isolate;
+  box-shadow: 0 6px 16px rgba(23, 33, 47, 0.05);
 }
 
 .quick-actions {
@@ -984,8 +992,8 @@ select:focus {
 
 .family-table-contextbar {
   position: sticky;
-  top: 0;
-  z-index: 12;
+  top: calc(var(--topbar-height) + var(--action-bar-height));
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1037,12 +1045,12 @@ select:focus {
   background: #f5f8fb;
   border-bottom: 2px solid #d0dce5;
   position: sticky;
-  top: 0;
-  z-index: 10;
+  top: calc(var(--topbar-height) + var(--action-bar-height));
+  z-index: 18;
 }
 
 .family-table-shell-scoped .family-table-head th {
-  top: var(--family-contextbar-height);
+  top: calc(var(--topbar-height) + var(--action-bar-height) + var(--family-contextbar-height));
 }
 
 .family-row.row-focused td {
@@ -1179,9 +1187,9 @@ select:focus {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: flex-start;
-  gap: 0.22rem;
+  gap: 0.24rem;
   width: 100%;
-  padding: 0.18rem 0.2rem;
+  padding: 0.24rem 0.28rem;
   margin: 0;
   border: none;
   background: transparent;
@@ -1194,9 +1202,9 @@ select:focus {
 }
 
 .family-name-main {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 0.5rem;
   width: 100%;
   min-width: 0;
@@ -1207,7 +1215,8 @@ select:focus {
   align-items: center;
   justify-content: flex-end;
   flex: 0 0 auto;
-  min-width: fit-content;
+  min-width: max-content;
+  padding-top: 0.04rem;
 }
 
 .family-name-toggle:hover strong {
@@ -1224,14 +1233,20 @@ select:focus {
 .family-name-toggle[aria-expanded="true"] {
   background: rgba(31, 79, 103, 0.08);
   border-radius: 10px;
+  box-shadow: inset 0 0 0 1px rgba(31, 79, 103, 0.1);
 }
 
 .family-name-action {
+  display: block;
   font-size: 0.76rem;
   font-weight: 750;
   color: #2a556c;
   opacity: 0.9;
   line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .family-name-toggle[aria-expanded="true"] .family-name-action {
@@ -1259,17 +1274,19 @@ select:focus {
   overflow: hidden;
   overflow-wrap: anywhere;
   word-break: break-word;
-  line-height: 1.32;
+  line-height: 1.28;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  max-height: 2.64em;
+  max-height: 2.56em;
 }
 
 .family-col-name .pressure-badge {
   margin-left: 0;
   white-space: nowrap;
-  align-self: flex-start;
+  align-self: start;
+  justify-self: end;
+  max-width: 100%;
 }
 
 .family-col-priority {
@@ -1649,6 +1666,11 @@ select:focus {
   color: #223a4a;
 }
 
+.family-col-caller-burden {
+  min-width: 220px;
+  color: #223a4a;
+}
+
 .family-table col.family-col-priority {
   width: 120px;
 }
@@ -1674,15 +1696,21 @@ select:focus {
   width: clamp(260px, 22vw, 320px);
 }
 
+.family-table col.family-col-caller-burden {
+  width: clamp(250px, 20vw, 300px);
+}
+
 /* Never allow the rightmost columns to collapse into letter-by-letter wrapping. */
 .family-table-head th.family-col-top-signal,
 .family-table-head th.family-col-driver,
 .family-table-head th.family-col-primary-risk,
 .family-table-head th.family-col-client-effect,
+.family-table-head th.family-col-caller-burden,
 .family-row td.family-col-top-signal,
 .family-row td.family-col-driver,
 .family-row td.family-col-primary-risk,
-.family-row td.family-col-client-effect {
+.family-row td.family-col-client-effect,
+.family-row td.family-col-caller-burden {
   writing-mode: horizontal-tb;
   text-orientation: mixed;
   white-space: normal;
@@ -1699,6 +1727,10 @@ select:focus {
   min-width: 260px;
 }
 
+.family-table-head th.family-col-caller-burden {
+  min-width: 250px;
+}
+
 .family-row td.family-col-top-signal {
   min-width: 240px;
 }
@@ -1706,6 +1738,10 @@ select:focus {
 .family-row td.family-col-primary-risk,
 .family-row td.family-col-client-effect {
   min-width: 260px;
+}
+
+.family-row td.family-col-caller-burden {
+  min-width: 250px;
 }
 
 .family-table-clamp {
@@ -1731,6 +1767,12 @@ select:focus {
 }
 
 .family-row td.family-col-client-effect .family-table-clamp-effect {
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: #223a4a;
+}
+
+.family-row td.family-col-caller-burden .family-table-clamp-effect {
   font-size: 0.76rem;
   font-weight: 650;
   color: #223a4a;
@@ -2744,7 +2786,8 @@ body.lens-shape .caller-burden-more {
   }
 
   .family-col-primary-risk,
-  .family-col-client-effect {
+  .family-col-client-effect,
+  .family-col-caller-burden {
     min-width: 220px;
   }
 }
@@ -2774,7 +2817,8 @@ body.lens-shape .caller-burden-more {
   }
 
   .family-col-primary-risk,
-  .family-col-client-effect {
+  .family-col-client-effect,
+  .family-col-caller-burden {
     min-width: 220px;
   }
 
@@ -3643,7 +3687,7 @@ body.lens-shape .endpoints-expand {
 body.lens-shape .family-row td.family-col-endpoints .endpoints-expand,
 body.lens-shape .family-row td.family-col-priority .pressure-mix-inline,
 body.lens-shape .family-row td.family-col-top-signal .family-signal-cell,
-body.lens-shape .family-row td.family-col-client-effect .caller-burden-cell {
+body.lens-shape .family-row td.family-col-caller-burden .caller-burden-cell {
   margin-top: 0.06rem;
 }
 
@@ -3661,7 +3705,7 @@ body.lens-shape .chip-secondary.caller-burden-chip {
    Key surfaces: Family, Shape signals, Main shape burden, Caller burden.
    Supporting numeric columns: Pressure mix, Endpoints. */
 body.lens-shape .family-table col.family-col-name {
-  width: 20%;
+  width: 19%;
 }
 
 body.lens-shape .family-table col.family-col-priority {
@@ -3673,14 +3717,14 @@ body.lens-shape .family-table col.family-col-endpoints {
 }
 
 body.lens-shape .family-table col.family-col-top-signal {
-  width: 26%;
+  width: 25%;
 }
 
 body.lens-shape .family-table col.family-col-primary-risk {
-  width: 20%;
+  width: 22%;
 }
 
-body.lens-shape .family-table col.family-col-client-effect {
+body.lens-shape .family-table col.family-col-caller-burden {
   width: 20%;
 }
 

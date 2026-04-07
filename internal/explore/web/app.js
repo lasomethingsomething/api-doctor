@@ -56,6 +56,8 @@
     endpointDetail: document.getElementById("endpointDetail")
   };
 
+  var stickyMetricsQueued = false;
+
   el.familySurfaceSection = el.familySurface ? el.familySurface.closest('.section') : null;
   el.endpointListSection = el.endpointRows ? el.endpointRows.closest('.section') : null;
 
@@ -73,6 +75,7 @@
 		    });
 
 			  function bindControls() {
+			    window.addEventListener("resize", queueStickyLayoutMetrics);
 			    el.searchInput.addEventListener("input", function (e) {
 			      var prevSearch = state.filters.search || "";
 			      var nextSearch = e.target.value.trim().toLowerCase();
@@ -179,7 +182,28 @@
 	    renderEndpointDiagnostics();
 	    renderEndpointRows();
 	    renderEndpointDetail();
+      queueStickyLayoutMetrics();
 	  }
+
+  function syncStickyLayoutMetrics() {
+    var doc = document.documentElement;
+    if (!doc) return;
+    var topbar = document.querySelector(".topbar");
+    var actionBar = document.querySelector(".action-bar");
+    var topbarHeight = topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 0;
+    var actionBarHeight = actionBar ? Math.ceil(actionBar.getBoundingClientRect().height) : 0;
+    doc.style.setProperty("--topbar-height", topbarHeight + "px");
+    doc.style.setProperty("--action-bar-height", actionBarHeight + "px");
+  }
+
+  function queueStickyLayoutMetrics() {
+    if (stickyMetricsQueued) return;
+    stickyMetricsQueued = true;
+    window.requestAnimationFrame(function () {
+      stickyMetricsQueued = false;
+      syncStickyLayoutMetrics();
+    });
+  }
 
   function enforceSpecRuleTabFilterModel() {
     if (state.activeTopTab !== 'spec-rule') return;
@@ -2249,18 +2273,24 @@
               });
             }
 
+            function inlineFamilyInsightRowForFamily(family) {
+              if (!family) return null;
+              var match = null;
+              Array.prototype.forEach.call(el.familySurface.querySelectorAll('tr.family-inline-insight-row'), function (insightRow) {
+                if (match) return;
+                if ((insightRow.getAttribute('data-family') || '') === family) {
+                  match = insightRow;
+                }
+              });
+              return match;
+            }
+
             function toggleFamilyInsightInline(btn, family) {
               if (!btn || !family) return;
               var row = btn.closest('tr.family-row[data-family-row="true"]');
               if (!row) return;
 
-              var next = row.nextElementSibling;
-              var openInlineRow = next
-                && next.classList
-                && next.classList.contains('family-inline-insight-row')
-                && (next.getAttribute('data-family') || '') === family
-                ? next
-                : null;
+              var openInlineRow = inlineFamilyInsightRowForFamily(family);
               var alreadyOpen = state.expandedFamilyInsight === family && !!openInlineRow;
 
               if (alreadyOpen) {
@@ -2286,6 +2316,9 @@
 
               state.expandedFamilyInsight = family;
               syncFamilyInsightToggleButtons();
+              if (openInlineRow && openInlineRow.parentNode) {
+                openInlineRow.parentNode.removeChild(openInlineRow);
+              }
               row.insertAdjacentHTML('afterend', familyInsightRowHtml(match));
 
               var inserted = row.nextElementSibling;
@@ -4672,18 +4705,29 @@
 		      }
 		    });
 
-		    cols.push({
-		        key: 'impact',
-		        thClass: 'family-col-client-effect',
-		        th: workflow ? 'Client impact in flow' : (shape ? 'Caller burden' : 'Client effect'),
-		        tdClass: 'family-col-client-effect',
-	        render: function (family, ctx) {
-	          var ranked = ctx.ranked || {};
-	          var repeatCount = (ctx.dxCounts && ranked.dxConsequence) ? (ctx.dxCounts[ranked.dxConsequence] || 0) : 0;
-	        var val = shape ? renderCallerBurdenCellValue(ranked) : renderDxConsequenceCellValue(ranked, repeatCount);
-		        return renderFamilyClientEffectCell(val);
+		    cols.push(shape
+		      ? {
+		          key: 'caller-burden',
+		          thClass: 'family-col-caller-burden',
+		          thHtml: '<span class="th-title">Caller burden</span><span class="th-helper" title="Primary caller-side costs created by the response shape in this family.">shape-driven costs</span>',
+		          th: '',
+		          tdClass: 'family-col-caller-burden',
+		          render: function (family, ctx) {
+		            var ranked = ctx.ranked || {};
+		            return renderFamilyClientEffectCell(renderCallerBurdenCellValue(ranked));
+		          }
 		        }
-		      });
+		      : {
+		          key: 'impact',
+		          thClass: 'family-col-client-effect',
+		          th: workflow ? 'Client impact in flow' : 'Client effect',
+		          tdClass: 'family-col-client-effect',
+		          render: function (family, ctx) {
+		            var ranked = ctx.ranked || {};
+		            var repeatCount = (ctx.dxCounts && ranked.dxConsequence) ? (ctx.dxCounts[ranked.dxConsequence] || 0) : 0;
+		            return renderFamilyClientEffectCell(renderDxConsequenceCellValue(ranked, repeatCount));
+		          }
+		        });
 
 		    // Keep the "what dominates" driver as supporting context (right side), not the core scan path.
 		    cols.push({

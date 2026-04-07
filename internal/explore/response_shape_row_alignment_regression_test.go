@@ -147,7 +147,7 @@ func responseShapeRowAlignmentHarness() string {
 	      { key: 'endpoints', sel: 'td.family-col-endpoints button.endpoints-expand' },
 	      { key: 'signals', sel: 'td.family-col-top-signal .family-signal-cell' },
 	      { key: 'risk', sel: 'td.family-col-primary-risk .family-table-clamp-risk' },
-	      { key: 'caller', sel: 'td.family-col-client-effect .caller-burden-cell' }
+	      { key: 'caller', sel: 'td.family-col-caller-burden .caller-burden-cell' }
 	    ];
 
     var tops = [];
