@@ -25,8 +25,6 @@
   /* Selection highlight for inspected endpoints (tab-safe). */
   --selection: var(--accent);
   --selection-rgb: var(--accent-rgb);
-  --topbar-height: 0px;
-  --action-bar-height: 0px;
 }
 
 * { box-sizing: border-box; }
@@ -67,7 +65,7 @@ body {
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 40;
+  z-index: 10;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -75,7 +73,6 @@ body {
   padding: 0.95rem 1.2rem;
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.97);
-  isolation: isolate;
 }
 
 .eyebrow {
@@ -276,17 +273,12 @@ body.has-endpoint-selection #familySurfaceSection::before {
 }
 
 .action-bar {
-  position: sticky;
-  top: var(--topbar-height);
-  z-index: 34;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0.46rem 0.62rem;
   display: grid;
   gap: 0.34rem;
-  isolation: isolate;
-  box-shadow: 0 6px 16px rgba(23, 33, 47, 0.05);
 }
 
 .quick-actions {
@@ -992,8 +984,8 @@ select:focus {
 
 .family-table-contextbar {
   position: sticky;
-  top: calc(var(--topbar-height) + var(--action-bar-height));
-  z-index: 20;
+  top: 0;
+  z-index: 12;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1045,12 +1037,12 @@ select:focus {
   background: #f5f8fb;
   border-bottom: 2px solid #d0dce5;
   position: sticky;
-  top: calc(var(--topbar-height) + var(--action-bar-height));
-  z-index: 18;
+  top: 0;
+  z-index: 10;
 }
 
 .family-table-shell-scoped .family-table-head th {
-  top: calc(var(--topbar-height) + var(--action-bar-height) + var(--family-contextbar-height));
+  top: var(--family-contextbar-height);
 }
 
 .family-row.row-focused td {

@@ -56,8 +56,6 @@
     endpointDetail: document.getElementById("endpointDetail")
   };
 
-  var stickyMetricsQueued = false;
-
   el.familySurfaceSection = el.familySurface ? el.familySurface.closest('.section') : null;
   el.endpointListSection = el.endpointRows ? el.endpointRows.closest('.section') : null;
 
@@ -75,7 +73,6 @@
 		    });
 
 			  function bindControls() {
-			    window.addEventListener("resize", queueStickyLayoutMetrics);
 			    el.searchInput.addEventListener("input", function (e) {
 			      var prevSearch = state.filters.search || "";
 			      var nextSearch = e.target.value.trim().toLowerCase();
@@ -182,28 +179,7 @@
 	    renderEndpointDiagnostics();
 	    renderEndpointRows();
 	    renderEndpointDetail();
-      queueStickyLayoutMetrics();
 	  }
-
-  function syncStickyLayoutMetrics() {
-    var doc = document.documentElement;
-    if (!doc) return;
-    var topbar = document.querySelector(".topbar");
-    var actionBar = document.querySelector(".action-bar");
-    var topbarHeight = topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 0;
-    var actionBarHeight = actionBar ? Math.ceil(actionBar.getBoundingClientRect().height) : 0;
-    doc.style.setProperty("--topbar-height", topbarHeight + "px");
-    doc.style.setProperty("--action-bar-height", actionBarHeight + "px");
-  }
-
-  function queueStickyLayoutMetrics() {
-    if (stickyMetricsQueued) return;
-    stickyMetricsQueued = true;
-    window.requestAnimationFrame(function () {
-      stickyMetricsQueued = false;
-      syncStickyLayoutMetrics();
-    });
-  }
 
   function enforceSpecRuleTabFilterModel() {
     if (state.activeTopTab !== 'spec-rule') return;
