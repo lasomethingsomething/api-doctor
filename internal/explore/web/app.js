@@ -56,6 +56,8 @@
     endpointDetail: document.getElementById("endpointDetail")
   };
 
+  var stickyMetricsQueued = false;
+
   el.familySurfaceSection = el.familySurface ? el.familySurface.closest('.section') : null;
   el.endpointListSection = el.endpointRows ? el.endpointRows.closest('.section') : null;
 
@@ -73,6 +75,7 @@
 		    });
 
 			  function bindControls() {
+			    window.addEventListener("resize", queueStickyLayoutMetrics);
 			    el.searchInput.addEventListener("input", function (e) {
 			      var prevSearch = state.filters.search || "";
 			      var nextSearch = e.target.value.trim().toLowerCase();
@@ -160,7 +163,7 @@
     }).join("");
   }
 
-	  function render() {
+		  function render() {
 	    if (state.activeTopTab !== 'spec-rule' && state.activeTopTab !== 'workflow' && state.activeTopTab !== 'shape') {
 	      state.activeTopTab = 'spec-rule';
 	    }
@@ -179,7 +182,28 @@
 	    renderEndpointDiagnostics();
 	    renderEndpointRows();
 	    renderEndpointDetail();
+      queueStickyLayoutMetrics();
 	  }
+
+  function syncStickyLayoutMetrics() {
+    var doc = document.documentElement;
+    if (!doc) return;
+    var topbar = document.querySelector(".topbar");
+    var actionBar = document.querySelector(".action-bar");
+    var topbarHeight = topbar ? Math.ceil(topbar.getBoundingClientRect().height) : 0;
+    var actionBarHeight = actionBar ? Math.ceil(actionBar.getBoundingClientRect().height) : 0;
+    doc.style.setProperty("--topbar-height", topbarHeight + "px");
+    doc.style.setProperty("--action-bar-height", actionBarHeight + "px");
+  }
+
+  function queueStickyLayoutMetrics() {
+    if (stickyMetricsQueued) return;
+    stickyMetricsQueued = true;
+    window.requestAnimationFrame(function () {
+      stickyMetricsQueued = false;
+      syncStickyLayoutMetrics();
+    });
+  }
 
   function enforceSpecRuleTabFilterModel() {
     if (state.activeTopTab !== 'spec-rule') return;
@@ -2234,6 +2258,66 @@
 				      if (action) action.textContent = label;
 				    }
 
+            function syncFamilyInsightToggleButtons() {
+              Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-insight-toggle]"), function (toggleBtn) {
+                var isExpanded = state.expandedFamilyInsight === (toggleBtn.getAttribute("data-insight-toggle") || "");
+                setFamilyInsightToggleButton(toggleBtn, isExpanded);
+              });
+            }
+
+            function removeInlineFamilyInsightRows(exceptFamily) {
+              Array.prototype.forEach.call(el.familySurface.querySelectorAll('tr.family-inline-insight-row'), function (insightRow) {
+                var rowFamily = insightRow.getAttribute('data-family') || '';
+                if (exceptFamily && rowFamily === exceptFamily) return;
+                if (insightRow.parentNode) insightRow.parentNode.removeChild(insightRow);
+              });
+            }
+
+            function toggleFamilyInsightInline(btn, family) {
+              if (!btn || !family) return;
+              var row = btn.closest('tr.family-row[data-family-row="true"]');
+              if (!row) return;
+
+              var next = row.nextElementSibling;
+              var openInlineRow = next
+                && next.classList
+                && next.classList.contains('family-inline-insight-row')
+                && (next.getAttribute('data-family') || '') === family
+                ? next
+                : null;
+              var alreadyOpen = state.expandedFamilyInsight === family && !!openInlineRow;
+
+              if (alreadyOpen) {
+                state.expandedFamilyInsight = '';
+                if (openInlineRow && openInlineRow.parentNode) openInlineRow.parentNode.removeChild(openInlineRow);
+                removeInlineFamilyInsightRows();
+                syncFamilyInsightToggleButtons();
+                return;
+              }
+
+              captureFamilyTableBackStateIfNeeded();
+              removeInlineFamilyInsightRows();
+
+              var summaries = familySummaries();
+              var match = summaries.find(function (f) {
+                return (f && (f.family || 'unlabeled family')) === family;
+              });
+              if (!match) {
+                state.expandedFamilyInsight = '';
+                syncFamilyInsightToggleButtons();
+                return;
+              }
+
+              state.expandedFamilyInsight = family;
+              syncFamilyInsightToggleButtons();
+              row.insertAdjacentHTML('afterend', familyInsightRowHtml(match));
+
+              var inserted = row.nextElementSibling;
+              if (inserted && inserted.classList && inserted.classList.contains('family-inline-insight-row')) {
+                bindInsightPanelActions(inserted);
+              }
+            }
+
 				    function bindInsightPanelActions(row) {
 				      if (!row) return;
 				      Array.prototype.forEach.call(row.querySelectorAll("button[data-focus-family]"), function (btn) {
@@ -2266,61 +2350,10 @@
 				        event.stopPropagation();
 				        var family = btn.getAttribute("data-insight-toggle") || "";
 				        if (!family) return;
-
-				        var row = btn.closest('tr.family-row[data-family-row="true"]');
-				        if (!row) return;
-
-				        var openRow = el.familySurface.querySelector('tr.family-inline-insight-row');
-				        if (openRow) {
-				          var openFamily = openRow.getAttribute('data-family') || '';
-				          if (openFamily && openFamily !== family) {
-				            var openBtn = el.familySurface.querySelector('tr.family-row[data-family="' + openFamily + '"] td.family-col-name button.family-name-toggle[data-insight-toggle]');
-				            setFamilyInsightToggleButton(openBtn, false);
-				            if (state.expandedFamilyInsight === openFamily) state.expandedFamilyInsight = '';
-				            openRow.parentNode.removeChild(openRow);
-				          }
-				        }
-
-				        var next = row.nextElementSibling;
-				        var alreadyOpen = (state.expandedFamilyInsight === family)
-				          && next
-				          && next.classList
-				          && next.classList.contains('family-inline-insight-row')
-				          && (next.getAttribute('data-family') || '') === family;
-
-				        if (alreadyOpen) {
-				          state.expandedFamilyInsight = '';
-				          setFamilyInsightToggleButton(btn, false);
-				          next.parentNode.removeChild(next);
-				          return;
-				        }
-
-				        // Open in-place directly under the clicked row. Avoid full table re-render and
-				        // do not change scroll position.
-				        var summaries = familySummaries();
-				        var match = summaries.find(function (f) {
-				          return (f && (f.family || 'unlabeled family')) === family;
-				        });
-				        if (!match) return;
-
-				        // Remove an existing insight row for the same family (if it exists in a stale state).
-				        if (openRow && (openRow.getAttribute('data-family') || '') === family) {
-				          openRow.parentNode.removeChild(openRow);
-				        }
-
-				        state.expandedFamilyInsight = family;
-				        setFamilyInsightToggleButton(btn, true);
-				        row.insertAdjacentHTML('afterend', familyInsightRowHtml(match));
-
-				        var inserted = row.nextElementSibling;
-				        if (inserted && inserted.classList && inserted.classList.contains('family-inline-insight-row')) {
-				          bindInsightPanelActions(inserted);
-				        }
+                toggleFamilyInsightInline(btn, family);
 				      });
-
-				      var isExpanded = state.expandedFamilyInsight === (btn.getAttribute("data-insight-toggle") || "");
-				      setFamilyInsightToggleButton(btn, isExpanded);
 				    });
+            syncFamilyInsightToggleButtons();
 
 			    // Endpoints expand button handling
 			    Array.prototype.forEach.call(el.familySurface.querySelectorAll("button[data-expand-endpoints]"), function (btn) {
@@ -4591,9 +4624,11 @@
 				          return '<button type="button" class="family-name-toggle" data-insight-toggle="' + escapeHtml(familyName) + '"'
 				              + ' aria-expanded="' + (insightExpanded ? 'true' : 'false') + '"'
 				              + ' title="' + escapeHtml(insightExpanded ? 'Hide insight' : 'Show insight') + '">'
+				              + '<span class="family-name-main">'
 				              + '<strong title="' + escapeHtml(humanFamilyLabel(familyName)) + '">' + escapeHtml(humanFamilyLabel(familyName)) + '</strong>'
+				              + '<span class="family-name-badgewrap">' + pressureBadge(family.pressure, 'pressure-badge') + '</span>'
+				              + '</span>'
 				              + '<span class="family-name-action" aria-hidden="true">' + escapeHtml(insightExpanded ? 'Hide insight' : 'Show insight') + '</span>'
-				              + pressureBadge(family.pressure, 'pressure-badge')
 				            + '</button>'
 				        }
 			      },

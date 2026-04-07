@@ -25,6 +25,8 @@
   /* Selection highlight for inspected endpoints (tab-safe). */
   --selection: var(--accent);
   --selection-rgb: var(--accent-rgb);
+  --topbar-height: 0px;
+  --action-bar-height: 0px;
 }
 
 * { box-sizing: border-box; }
@@ -65,7 +67,7 @@ body {
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 40;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -73,6 +75,7 @@ body {
   padding: 0.95rem 1.2rem;
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.97);
+  isolation: isolate;
 }
 
 .eyebrow {
@@ -273,12 +276,17 @@ body.has-endpoint-selection #familySurfaceSection::before {
 }
 
 .action-bar {
+  position: sticky;
+  top: var(--topbar-height);
+  z-index: 34;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0.46rem 0.62rem;
   display: grid;
   gap: 0.34rem;
+  isolation: isolate;
+  box-shadow: 0 6px 16px rgba(23, 33, 47, 0.05);
 }
 
 .quick-actions {
@@ -984,8 +992,8 @@ select:focus {
 
 .family-table-contextbar {
   position: sticky;
-  top: 0;
-  z-index: 12;
+  top: calc(var(--topbar-height) + var(--action-bar-height));
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1037,12 +1045,12 @@ select:focus {
   background: #f5f8fb;
   border-bottom: 2px solid #d0dce5;
   position: sticky;
-  top: 0;
-  z-index: 10;
+  top: calc(var(--topbar-height) + var(--action-bar-height));
+  z-index: 18;
 }
 
 .family-table-shell-scoped .family-table-head th {
-  top: var(--family-contextbar-height);
+  top: calc(var(--topbar-height) + var(--action-bar-height) + var(--family-contextbar-height));
 }
 
 .family-row.row-focused td {
@@ -1176,11 +1184,12 @@ select:focus {
 }
 
 .family-name-toggle {
-  display: inline-flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-items: flex-start;
-  gap: 0;
-  padding: 0;
+  gap: 0.22rem;
+  width: 100%;
+  padding: 0.18rem 0.2rem;
   margin: 0;
   border: none;
   background: transparent;
@@ -1190,6 +1199,23 @@ select:focus {
   cursor: pointer;
   min-width: 0;
   max-width: 100%;
+}
+
+.family-name-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.family-name-badgewrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  min-width: fit-content;
 }
 
 .family-name-toggle:hover strong {
@@ -1209,11 +1235,11 @@ select:focus {
 }
 
 .family-name-action {
-  margin-top: 0.12rem;
   font-size: 0.76rem;
   font-weight: 750;
   color: #2a556c;
   opacity: 0.9;
+  line-height: 1.2;
 }
 
 .family-name-toggle[aria-expanded="true"] .family-name-action {
@@ -1232,12 +1258,12 @@ select:focus {
 
 .family-col-name strong {
   display: block;
-  margin-bottom: 0.12rem;
   font-size: 0.94rem;
   font-weight: 850;
   color: var(--text);
   min-width: 0;
-  max-width: 100%;
+  flex: 1 1 auto;
+  max-width: none;
   overflow: hidden;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -1249,7 +1275,9 @@ select:focus {
 }
 
 .family-col-name .pressure-badge {
-  margin-left: 0.12rem;
+  margin-left: 0;
+  white-space: nowrap;
+  align-self: flex-start;
 }
 
 .family-col-priority {
