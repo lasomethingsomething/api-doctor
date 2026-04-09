@@ -57,6 +57,60 @@
   };
 
   var stickyMetricsQueued = false;
+  var TOP_TABS = [
+    {
+      id: "spec-rule",
+      label: "Contract Issues",
+      copy: "OpenAPI rule violations (REQUIRED vs SHOULD) and consistency drift",
+      color: "spec-rule",
+      bodyClass: "lens-spec-rule",
+      defaultCategory: "spec-rule",
+      defaultSubTab: "exact",
+      familyEyebrow: "Contract surface",
+      familyHeading: "Family investigation clusters",
+      familyHelp: "Families cluster contract-rule and consistency problems so you can expand evidence inline without leaving the main table.",
+      emptyHelp: "",
+      signalHeader: "Top signal",
+      riskHeader: "Primary risk",
+      clientEffectHeader: "Client effect"
+    },
+    {
+      id: "workflow",
+      label: "Workflow Guidance",
+      copy: "Inferred call chains, continuity burden, hidden dependencies, and sequencing traps",
+      color: "workflow",
+      bodyClass: "lens-workflow",
+      defaultCategory: "all",
+      defaultSubTab: "summary",
+      familyEyebrow: "Workflow surface",
+      familyHeading: "Workflow continuity clusters",
+      familyHelp: "Families stay in one shared table, but this tab ranks them by continuity burden, traps, and hidden handoff costs.",
+      emptyHelp: "",
+      signalHeader: "Continuity signals",
+      riskHeader: "Main continuity risk",
+      clientEffectHeader: "Client impact in flow"
+    },
+    {
+      id: "shape",
+      label: "Response Shape",
+      copy: "Storage-shaped responses, duplicated state, internal fields, and workflow-first redesign guidance",
+      color: "shape",
+      bodyClass: "lens-shape",
+      defaultCategory: "all",
+      defaultSubTab: "summary",
+      familyEyebrow: "Response Shape surface",
+      familyHeading: "Response-shape investigation clusters",
+      familyHelp: "Families stay in the same shared table pattern while this tab swaps in shape-specific burden, caller cost, and redesign guidance.",
+      emptyHelp: "Response Shape: no families currently expose shape-heavy evidence in this slice.",
+      signalHeader: "Shape signals",
+      riskHeader: "Main response-shape risk",
+      clientEffectHeader: "Client effect"
+    }
+  ];
+  var TOP_TAB_INDEX = TOP_TABS.reduce(function (acc, tab) {
+    acc[tab.id] = tab;
+    return acc;
+  }, {});
 
   el.familySurfaceSection = el.familySurface ? el.familySurface.closest('.section') : null;
   el.endpointListSection = el.endpointRows ? el.endpointRows.closest('.section') : null;
@@ -163,9 +217,46 @@
     }).join("");
   }
 
+  function activeTopTabConfig() {
+    return TOP_TAB_INDEX[state.activeTopTab] || TOP_TAB_INDEX["spec-rule"];
+  }
+
+  function isKnownTopTab(id) {
+    return !!TOP_TAB_INDEX[id];
+  }
+
+  function resetInlineUiState() {
+    state.expandedFamily = "";
+    state.expandedFamilyInsight = "";
+    state.expandedFamilySignals = {};
+    state.expandedEndpointInsightIds = {};
+    state.expandedEndpointRowFindings = {};
+    state.inspectingEndpointId = "";
+    state.inspectPlacementHint = "";
+    state.selectedEndpointId = "";
+    state.userSelectedEndpoint = false;
+    state.detailEvidenceOpenForId = "";
+    state.workflowChainFocusChainId = "";
+    state.workflowChainFocusEndpointIds = [];
+    state.familyTableBackState = null;
+  }
+
+  function applyTabDefaults(tabId, options) {
+    var cfg = TOP_TAB_INDEX[tabId] || TOP_TAB_INDEX["spec-rule"];
+    var opts = options || {};
+    state.activeTopTab = cfg.id;
+    state.endpointDiagnosticsSubTab = cfg.defaultSubTab;
+    if (opts.resetFilters !== false) {
+      state.filters.search = "";
+      state.filters.category = cfg.defaultCategory;
+      state.filters.familyPressure = "all";
+      state.filters.includeNoIssueRows = false;
+    }
+  }
+
 		  function render() {
-	    if (state.activeTopTab !== 'spec-rule' && state.activeTopTab !== 'workflow' && state.activeTopTab !== 'shape') {
-	      state.activeTopTab = 'spec-rule';
+	    if (!isKnownTopTab(state.activeTopTab)) {
+	      applyTabDefaults('spec-rule');
 	    }
 	    enforceSpecRuleTabFilterModel();
 	    enforceWorkflowTabFilterModel();
@@ -285,18 +376,16 @@
 
 	  function syncLensVisualIdentity() {
 	    if (!document || !document.body) return;
-	    var shapeActive = state.activeTopTab === 'shape';
-	    var workflowActive = state.activeTopTab === 'workflow';
-	    var specActive = state.activeTopTab === 'spec-rule';
-	    document.body.classList.toggle('lens-shape', shapeActive);
-	    document.body.classList.toggle('lens-workflow', workflowActive);
-	    document.body.classList.toggle('lens-spec-rule', specActive);
+	    var active = activeTopTabConfig();
+	    TOP_TABS.forEach(function (tab) {
+	      document.body.classList.toggle(tab.bodyClass, tab.id === active.id);
+	    });
 
 		    if (el.familySurfaceSection) {
-		      el.familySurfaceSection.classList.toggle('shape-primary-surface', shapeActive);
+		      el.familySurfaceSection.classList.toggle('shape-primary-surface', active.id === 'shape');
 		    }
 	    if (el.endpointListSection) {
-	      el.endpointListSection.classList.toggle('shape-secondary-surface', shapeActive);
+	      el.endpointListSection.classList.toggle('shape-secondary-surface', active.id === 'shape');
 	    }
 	  }
 
@@ -321,13 +410,7 @@
   }
 
 	  function renderQuickActions() {
-	    var actions = [
-	      { id: "spec-rule", label: "Contract Issues", copy: "OpenAPI rule violations (REQUIRED vs SHOULD) and consistency drift", color: 'spec-rule' },
-	      { id: "workflow", label: "Workflow Guidance", copy: "Inferred call chains, continuity burden, hidden dependencies, and sequencing traps", color: 'workflow' },
-	      { id: "shape", label: "Response Shape", copy: "Storage-shaped responses, duplicated state, internal fields, and workflow-first redesign guidance", color: 'shape' }
-	    ];
-
-    el.quickActions.innerHTML = actions.map(function (action) {
+    el.quickActions.innerHTML = TOP_TABS.map(function (action) {
       var activeClass = state.activeTopTab === action.id ? ' active' : '';
       var workflowActiveClass = (action.id === 'workflow' && state.activeTopTab === 'workflow') ? ' workflow-active' : '';
       var titleAttr = action.id === 'spec-rule' ? '' : ' title="' + escapeHtml(action.label) + '"';
@@ -359,6 +442,7 @@
       clearCurrentLens();
       return;
     }
+    if (!isKnownTopTab(id)) return;
 
     // Switching tabs should never inherit horizontal scroll from a previous (wider) table.
     // This prevents the FAMILY column from rendering partially off-screen (left-clipped).
@@ -368,34 +452,9 @@
       if (endpointSurface) endpointSurface.scrollLeft = 0;
     }
 
-    state.activeTopTab = id;
-    state.expandedFamily = "";
-    state.expandedFamilyInsight = "";
-    state.expandedEndpointInsightIds = {};
-    state.expandedEndpointRowFindings = {};
-    state.detailEvidenceOpenForId = '';
-    state.workflowChainFocusChainId = '';
-    state.workflowChainFocusEndpointIds = [];
-    // Switching tabs should never keep a stale selected-row highlight from the prior tab.
-    state.selectedEndpointId = '';
-    state.userSelectedEndpoint = false;
-
-    state.filters.includeNoIssueRows = false;
-    state.filters.familyPressure = "all";
-
-    if (id === "spec-rule") {
-      state.filters.search = "";
-      state.filters.category = "spec-rule";
-      state.endpointDiagnosticsSubTab = "exact";
-    } else if (id === "workflow") {
-      state.filters.search = "";
-      state.filters.category = "all";
-      state.endpointDiagnosticsSubTab = "summary";
-    } else if (id === "shape") {
-      state.filters.search = "";
-      state.filters.category = "all";
-      state.endpointDiagnosticsSubTab = "summary";
-    }
+    resetInlineUiState();
+    state.familyTableShowAll = false;
+    applyTabDefaults(id, { resetFilters: true });
 
     render();
 
@@ -1964,36 +2023,11 @@
 	  }
 
   function clearCurrentLens() {
-    var tab = state.activeTopTab;
-    if (tab !== 'spec-rule' && tab !== 'workflow' && tab !== 'shape') tab = 'spec-rule';
+    var tab = isKnownTopTab(state.activeTopTab) ? state.activeTopTab : 'spec-rule';
 
-    state.expandedFamily = "";
-    state.expandedFamilyInsight = "";
-    state.expandedEndpointInsightIds = {};
-    state.expandedEndpointRowFindings = {};
-    state.inspectingEndpointId = "";
+    resetInlineUiState();
     state.familyTableShowAll = false;
-    state.detailEvidenceOpenForId = "";
-    state.filters.search = "";
-    state.filters.familyPressure = "all";
-    state.filters.includeNoIssueRows = false;
-
-	    // Reset filters within the currently active top-level tab only.
-	    // Never change the active tab as a side effect of reset.
-    if (tab === 'spec-rule') {
-      state.filters.category = 'spec-rule';
-      state.endpointDiagnosticsSubTab = 'exact';
-    } else if (tab === 'workflow') {
-      state.filters.category = 'all';
-      state.endpointDiagnosticsSubTab = 'summary';
-    } else if (tab === 'shape') {
-      state.filters.category = 'all';
-      state.endpointDiagnosticsSubTab = 'summary';
-    }
-
-		    // Reset should not silently pick a selected endpoint. Let users choose via "Inspect endpoint".
-		    state.selectedEndpointId = '';
-		    state.userSelectedEndpoint = false;
+    applyTabDefaults(tab, { resetFilters: true });
 
 		    render();
 		    pulseLensUpdate();
@@ -2146,22 +2180,15 @@
 	  }
 
 		  function renderFamilySurface() {
-		    // Keep the family surface framing aligned with the active lens so the Workflow
-		    // tab does not read like a generic contract-clustering table.
+		    var tab = activeTopTabConfig();
+		    // Keep the family surface framing aligned with the active lens while using one
+		    // shared family table/expansion pattern across all top-level tabs.
 		    var familySection = el.familySurface ? el.familySurface.closest('.section') : null;
 		    if (familySection) {
 		      var heading = familySection.querySelector('.section-heading h2');
 		      var eyebrow = familySection.querySelector('.section-heading .eyebrow');
-		      if (state.activeTopTab === 'workflow') {
-		        if (eyebrow) eyebrow.textContent = 'Workflow surface';
-		        if (heading) heading.textContent = 'Workflow continuity clusters';
-		      } else if (state.activeTopTab === 'shape') {
-		        if (eyebrow) eyebrow.textContent = 'Response Shape surface';
-		        if (heading) heading.textContent = 'Response-shape investigation clusters';
-		      } else {
-		        if (eyebrow) eyebrow.textContent = 'Contract surface';
-		        if (heading) heading.textContent = 'Family investigation clusters';
-		      }
+		      if (eyebrow) eyebrow.textContent = tab.familyEyebrow;
+		      if (heading) heading.textContent = tab.familyHeading;
 		    }
 
 		    var summaries = familySummaries();
@@ -2185,9 +2212,7 @@
     }
 
     if (!summaries.length) {
-      el.familySurfaceHelp.textContent = state.activeTopTab === 'shape'
-        ? 'Response Shape: no families currently expose shape-heavy evidence in this slice.'
-        : '';
+      el.familySurfaceHelp.textContent = tab.emptyHelp || '';
       // Avoid duplicating the Contract Issues empty-state story: that lives under the filter bar.
       if (state.activeTopTab === 'spec-rule') {
         el.familySurfaceContext.innerHTML = '';
@@ -2216,7 +2241,7 @@
       return;
     }
 
-    el.familySurfaceHelp.textContent = familySurfaceHelpCopy();
+    el.familySurfaceHelp.textContent = tab.familyHelp || familySurfaceHelpCopy();
     el.familySurfaceContext.innerHTML = lensContext;
     bindRecoveryButtons(el.familySurfaceContext);
     var tableHtml = renderFamilyTableView(summaries);
@@ -4614,10 +4639,10 @@
 			  }
 
 		  function familyTableColumnsForActiveTab() {
-		    // Each top tab has its own primary surface framing. Preserve shared mechanics
-		    // (filters, expansions, Inspect), but do not reuse Contract Issues framing unchanged.
-		    var workflow = state.activeTopTab === 'workflow';
-		    var shape = state.activeTopTab === 'shape';
+		    // One shared family table component, configured by the active tab mode.
+		    var tab = activeTopTabConfig();
+		    var workflow = tab.id === 'workflow';
+		    var shape = tab.id === 'shape';
 
 	    function severityMixHeaderHtml() {
 	      return '<span class="th-title">Severity mix</span>'
@@ -4677,7 +4702,7 @@
 	      {
 	        key: 'signals',
 	        thClass: 'family-col-top-signal',
-	        th: workflow ? 'Continuity signals' : (shape ? 'Shape signals' : 'Top signal'),
+	        th: tab.signalHeader,
 	        tdClass: 'family-col-top-signal',
 	        render: function (family, ctx) {
 	          return renderFamilyTopSignalCell(family, ctx.ranked);
@@ -4697,7 +4722,7 @@
 		    cols.push({
 		      key: 'risk',
 		      thClass: 'family-col-primary-risk',
-		      th: workflow ? 'Main continuity risk' : (shape ? 'Main response-shape risk' : 'Primary risk'),
+		      th: tab.riskHeader,
 		      tdClass: 'family-col-primary-risk',
 		      render: function (family, ctx) {
 	        var ranked = ctx.ranked || {};
@@ -4717,7 +4742,7 @@
 	      thHtml: shape
 	        ? '<span class="th-title">Client effect</span><span class="th-helper" title="Primary caller-side costs created by the response shape in this family.">shape-driven costs</span>'
 	        : '',
-	      th: workflow ? 'Client impact in flow' : 'Client effect',
+	      th: tab.clientEffectHeader,
 	      tdClass: 'family-col-client-effect',
 	      render: function (family, ctx) {
 	        var ranked = ctx.ranked || {};
@@ -4775,9 +4800,8 @@
     }
 
 	    function focusedFamilyNameFromSummaries(items) {
-	      // Prefer explicit expansions, then an exact family-name match from search.
-	      if (state.expandedFamily) return state.expandedFamily;
-	      if (state.expandedFamilyInsight) return state.expandedFamilyInsight;
+	      // Only treat an explicit exact-family search as a "Focused family" context.
+	      // Plain row expansion should not manufacture a second floating context bar.
 	      var search = (state.filters.search || '').trim().toLowerCase();
 	      if (!search) return '';
 	      // Avoid misleading "focus" labels for searches like "GET" or "order".
@@ -4788,14 +4812,14 @@
 	      return match ? (match.family || '') : '';
 	    }
 
-			    var scoped = hasFamilyScopeActive();
 			    var drilled = hasFamilyDrillActive();
 			    var focusedFamily = focusedFamilyNameFromSummaries(summaries);
-		    var hasContextBar = drilled || !!focusedFamily;
+		    var expansionOwnsContext = !!state.expandedFamily;
+		    var hasContextBar = !expansionOwnsContext && (drilled || !!focusedFamily);
 		    var contextLabel = focusedFamily
 		      ? ('<strong>Focused family:</strong> ' + escapeHtml(focusedFamily))
 		      : '<strong>All families</strong>';
-		    var backControl = drilled
+		    var backControl = drilled && !expansionOwnsContext
 		      ? '<button type="button" class="secondary-action family-table-back" data-recovery-action="back-to-all-families">Back to all families</button>'
 		      : '';
 		    var contextBar = hasContextBar
@@ -5032,22 +5056,19 @@
 
 	    var familyLabel = humanFamilyLabel(familyName);
 	    var familyHeader = '<p class="family-endpoint-table-title">Endpoints in <code>' + escapeHtml(familyLabel) + '</code> family</p>';
-	    var backToTableControl = '';
-		    if (hasFamilyDrillActive()) {
-		      // Back navigation lives in the family table context bar. Avoid duplicating it here.
-		      backToTableControl = '';
-		    }
-		    var collapseControl = '<button type="button" class="tertiary-action family-endpoint-toggle" data-expand-endpoints="' + escapeHtml(familyName) + '" aria-label="Hide endpoints" title="Hide endpoints">'
-		      + '<span class="family-endpoint-toggle-label">Hide endpoints</span>'
-		      + '<span class="family-endpoint-toggle-chevron" aria-hidden="true"></span>'
-		      + '</button>';
-	    var headerActions = '<div class="family-endpoint-table-actions">'
-	      + backToTableControl
-	      + collapseControl
-	      + '</div>';
 	    var headerRow = '<div class="family-endpoint-table-header-row">'
 	      + familyHeader
-	      + headerActions
+	      + '</div>';
+	    var backToTableControl = state.familyTableBackState
+	      ? '<button type="button" class="secondary-action family-endpoint-footer-action" data-recovery-action="back-to-all-families">Back to all families</button>'
+	      : '';
+	    var collapseControl = '<button type="button" class="tertiary-action family-endpoint-toggle family-endpoint-footer-action" data-expand-endpoints="' + escapeHtml(familyName) + '" aria-label="Hide endpoints" title="Hide endpoints">'
+	      + '<span class="family-endpoint-toggle-label">Hide endpoints</span>'
+	      + '<span class="family-endpoint-toggle-chevron" aria-hidden="true"></span>'
+	      + '</button>';
+	    var footerActions = '<div class="family-endpoint-table-actions family-endpoint-table-footer-actions">'
+	      + backToTableControl
+	      + collapseControl
 	      + '</div>';
     var endpointsInFamily = filteredRows().filter(function (ep) {
       return (ep.family || 'unlabeled family') === familyName;
@@ -5062,6 +5083,7 @@
 	        + headerRow
 	        + '<strong>No endpoint rows match this family in the current lens.</strong>'
 	        + '<p class="subtle">Widen the current filters or include endpoints without issues to repopulate this family-owned endpoint table.</p>'
+	        + '<div class="family-endpoint-table-footer">' + footerActions + '</div>'
 	        + '</section>'
 	        + '</div>'
 	        + '</div>'
@@ -5165,7 +5187,10 @@
       + '</tbody>'
       + '</table>'
       + '</div>'
-	      + '<div class="family-endpoint-table-footer"><span class="subtle">End of endpoints in <code>' + escapeHtml(familyLabel) + '</code> family.</span></div>'
+	      + '<div class="family-endpoint-table-footer">'
+	      + '<span class="subtle">End of endpoints in <code>' + escapeHtml(familyLabel) + '</code> family.</span>'
+	      + footerActions
+	      + '</div>'
 	      + '</section>'
 	      + '</div>'
 	      + '</td>'

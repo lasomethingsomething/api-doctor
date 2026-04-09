@@ -996,9 +996,9 @@ select:focus {
 }
 
 .family-table-contextbar {
-  position: sticky;
-  top: calc(var(--topbar-height) + var(--action-bar-height));
-  z-index: 20;
+  position: relative;
+  top: auto;
+  z-index: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2180,6 +2180,7 @@ body.lens-shape .caller-burden-more {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .family-endpoint-table-title {
@@ -2208,6 +2209,11 @@ body.lens-shape .caller-burden-more {
   margin-top: 0.4rem;
   padding-top: 0.32rem;
   border-top: 1px solid #e7edf4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
 }
 
 .family-endpoint-table-footer code {
@@ -2221,6 +2227,15 @@ body.lens-shape .caller-burden-more {
   align-items: center;
   gap: 0.42rem;
   white-space: nowrap;
+}
+
+.family-endpoint-table-footer-actions {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.family-endpoint-footer-action {
+  flex: 0 0 auto;
 }
 
 .family-endpoint-toggle-chevron {

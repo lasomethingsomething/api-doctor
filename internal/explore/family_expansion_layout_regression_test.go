@@ -193,8 +193,9 @@ func familyExpansionLayoutHarness() string {
       var heading = expansion.querySelector('.family-endpoint-table-title');
       var footer = expansion.querySelector('.family-endpoint-table-footer');
       var hideBtn = expansion.querySelector('button.family-endpoint-toggle[data-expand-endpoints="/aggregate"]');
+      var backBtn = expansion.querySelector('button[data-recovery-action="back-to-all-families"]');
       var nestedRows = expansion.querySelectorAll('tr.nested-endpoint-row[data-family="/aggregate"]');
-      if (!cell || !shell || !scroll || !heading || !footer || !hideBtn) {
+      if (!cell || !shell || !scroll || !heading || !footer || !hideBtn || !backBtn) {
         failures.push({
           kind: 'missing-expansion-structure',
           tab: tabId,
@@ -203,7 +204,8 @@ func familyExpansionLayoutHarness() string {
           scroll: !!scroll,
           heading: !!heading,
           footer: !!footer,
-          hideBtn: !!hideBtn
+          hideBtn: !!hideBtn,
+          backBtn: !!backBtn
         });
         return done();
       }
@@ -216,6 +218,10 @@ func familyExpansionLayoutHarness() string {
       var footerRect = footer.getBoundingClientRect();
       var nextRect = nextRow.getBoundingClientRect();
       var lastRowRect = nestedRows.length ? nestedRows[nestedRows.length - 1].getBoundingClientRect() : null;
+      var contextBar = document.querySelector('.family-table-contextbar');
+      var cellStyle = window.getComputedStyle(cell);
+      var shellStyle = window.getComputedStyle(shell);
+      var scrollStyle = window.getComputedStyle(scroll);
 
       if (shellRect.bottom > expansionRect.bottom + 1) {
         failures.push({ kind: 'shell-overflows-expansion-row', tab: tabId, shellBottom: shellRect.bottom, expansionBottom: expansionRect.bottom });
@@ -226,11 +232,31 @@ func familyExpansionLayoutHarness() string {
       if (lastRowRect && lastRowRect.bottom > shellRect.bottom + 1) {
         failures.push({ kind: 'last-endpoint-row-clipped', tab: tabId, lastRowBottom: lastRowRect.bottom, shellBottom: shellRect.bottom });
       }
+      if (lastRowRect && footerRect.top < lastRowRect.bottom - 1) {
+        failures.push({ kind: 'footer-overlaps-last-endpoint-row', tab: tabId, footerTop: footerRect.top, lastRowBottom: lastRowRect.bottom });
+      }
       if (nextRect.top < expansionRect.bottom - 1) {
         failures.push({ kind: 'next-family-row-overlaps-expansion', tab: tabId, nextTop: nextRect.top, expansionBottom: expansionRect.bottom });
       }
       if ((nextRect.top - initialNextTop) < 120) {
         failures.push({ kind: 'expansion-did-not-push-layout', tab: tabId, initialNextTop: initialNextTop, expandedNextTop: nextRect.top });
+      }
+      if (contextBar) {
+        failures.push({
+          kind: 'floating-family-contextbar-still-rendered',
+          tab: tabId,
+          text: (contextBar.textContent || '').trim(),
+          position: window.getComputedStyle(contextBar).position
+        });
+      }
+      if (cellStyle.overflow === 'hidden' || cellStyle.overflowY === 'hidden') {
+        failures.push({ kind: 'expansion-cell-overflow-hidden', tab: tabId, overflow: cellStyle.overflow, overflowY: cellStyle.overflowY });
+      }
+      if (shellStyle.overflow === 'hidden' || shellStyle.overflowY === 'hidden') {
+        failures.push({ kind: 'expansion-shell-overflow-hidden', tab: tabId, overflow: shellStyle.overflow, overflowY: shellStyle.overflowY });
+      }
+      if (scrollStyle.overflowY === 'hidden') {
+        failures.push({ kind: 'scroll-wrapper-clips-vertical-growth', tab: tabId, overflowY: scrollStyle.overflowY });
       }
 
       var probeX = Math.max(shellRect.left + 16, 8);
