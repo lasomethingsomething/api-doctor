@@ -61,6 +61,49 @@ func TestAdminPayloadOpenInsightStillAllowsSwitchingTopTabs(t *testing.T) {
 	}
 }
 
+func TestAdminPayloadResponseShapeKeepsCallerBurdenColumnVisible(t *testing.T) {
+	chromePath := findChromeForResetRegression()
+	if chromePath == "" {
+		t.Skip("skipping browser regression: Google Chrome not available")
+	}
+
+	payload := adminPayloadRegressionPayload(t)
+	outDir := t.TempDir()
+	htmlPath := filepath.Join(outDir, "admin-payload-caller-burden-regression.html")
+	if err := os.WriteFile(htmlPath, []byte(inlineAdminPayloadInteractionsDocument(t, payload)), 0o600); err != nil {
+		t.Fatalf("write regression fixture: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(
+		ctx,
+		chromePath,
+		"--headless",
+		"--disable-gpu",
+		"--no-sandbox",
+		"--hide-scrollbars",
+		"--run-all-compositor-stages-before-draw",
+		"--virtual-time-budget=15000",
+		"--window-size=1440,1800",
+		"--dump-dom",
+		"file://"+htmlPath,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("chrome regression run failed: %v\n%s", err, out)
+	}
+
+	report := adminPayloadCallerBurdenReport(string(out))
+	if !report.ready {
+		t.Fatalf("admin payload caller burden regression script did not finish\n%s", out)
+	}
+	if report.failures != 0 {
+		t.Fatalf("expected adminapi payload to keep the Caller burden column visible in Response Shape, got %d failures\n%s", report.failures, report.detail)
+	}
+}
+
 func adminPayloadRegressionPayload(t *testing.T) *Payload {
 	t.Helper()
 
@@ -128,9 +171,10 @@ window.fetch = function (url) {
 };
 </script>
 <div id="admin-payload-interactions-regression" hidden data-ready="false" data-failures="-1"></div>
+<div id="admin-payload-caller-burden-regression" hidden data-ready="false" data-failures="-1"></div>
 <script>
 `+string(jsBytes)+`
-</script>`+adminPayloadInteractionsHarness(),
+</script>`+adminPayloadInteractionsHarness()+adminPayloadCallerBurdenHarness(),
 		1,
 	)
 	return doc
@@ -277,6 +321,12 @@ type adminPayloadInteractions struct {
 	detail   string
 }
 
+type adminPayloadCallerBurden struct {
+	ready    bool
+	failures int
+	detail   string
+}
+
 func adminPayloadInteractionsReport(dom string) adminPayloadInteractions {
 	readyRe := regexp.MustCompile(`id="admin-payload-interactions-regression"[^>]*data-ready="([^"]+)"`)
 	failRe := regexp.MustCompile(`id="admin-payload-interactions-regression"[^>]*data-failures="([^"]+)"`)
@@ -298,4 +348,98 @@ func adminPayloadInteractionsReport(dom string) adminPayloadInteractions {
 	}
 
 	return adminPayloadInteractions{ready: ready, failures: failures, detail: detail}
+}
+
+func adminPayloadCallerBurdenHarness() string {
+	return `
+<script>
+(function () {
+  function node() { return document.getElementById('admin-payload-caller-burden-regression'); }
+  var finished = false;
+  var watchdog = window.setTimeout(function () {
+    if (finished) return;
+    finish([{ kind: 'timeout' }]);
+  }, 12000);
+
+  function finish(failures) {
+    if (finished) return;
+    finished = true;
+    if (watchdog) window.clearTimeout(watchdog);
+    var n = node();
+    if (!n) return;
+    n.setAttribute('data-ready', 'true');
+    n.setAttribute('data-failures', String(failures.length));
+    n.textContent = JSON.stringify(failures);
+  }
+
+  function waitFor(condition, done) {
+    var start = Date.now();
+    (function poll() {
+      if (condition()) return done();
+      if (Date.now() - start > 5000) return done(new Error('wait-timeout'));
+      window.setTimeout(poll, 60);
+    })();
+  }
+
+  function run() {
+    waitFor(function () {
+      return document.querySelector('button.quick-action[data-id="shape"]');
+    }, function (err) {
+      if (err) return finish([{ kind: 'missing-shape-tab' }]);
+
+      document.querySelector('button.quick-action[data-id="shape"]').click();
+      waitFor(function () {
+        return document.body.classList.contains('lens-shape') && document.querySelector('.family-table thead th');
+      }, function (err) {
+        if (err) return finish([{ kind: 'shape-table-timeout' }]);
+
+        window.setTimeout(function () {
+          var failures = [];
+          var headers = Array.prototype.slice.call(document.querySelectorAll('.family-table thead th'));
+          var callerHeader = headers.find(function (th) {
+            return ((th.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase().indexOf('CLIENT EFFECT') !== -1);
+          });
+          if (!callerHeader) {
+            failures.push({ kind: 'missing-client-effect-header', headers: headers.map(function (th) { return (th.textContent || '').trim(); }) });
+          }
+          var cell = document.querySelector('tr.family-row[data-family-row="true"] td.family-col-client-effect');
+          if (!cell) {
+            failures.push({ kind: 'missing-client-effect-cell' });
+          } else {
+            var text = (cell.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!text) failures.push({ kind: 'empty-client-effect-cell' });
+          }
+          finish(failures);
+        }, 220);
+      });
+    });
+  }
+
+  run();
+})();
+</script>
+`
+}
+
+func adminPayloadCallerBurdenReport(dom string) adminPayloadCallerBurden {
+	readyRe := regexp.MustCompile(`id="admin-payload-caller-burden-regression"[^>]*data-ready="([^"]+)"`)
+	failRe := regexp.MustCompile(`id="admin-payload-caller-burden-regression"[^>]*data-failures="([^"]+)"`)
+	textRe := regexp.MustCompile(`id="admin-payload-caller-burden-regression"[^>]*>([^<]*)</div>`)
+
+	ready := false
+	if m := readyRe.FindStringSubmatch(dom); len(m) == 2 {
+		ready = m[1] == "true"
+	}
+	failures := -1
+	if m := failRe.FindStringSubmatch(dom); len(m) == 2 {
+		if n, err := strconv.Atoi(m[1]); err == nil {
+			failures = n
+		}
+	}
+	detail := ""
+	if m := textRe.FindStringSubmatch(dom); len(m) == 2 {
+		detail = strings.TrimSpace(m[1])
+	}
+
+	return adminPayloadCallerBurden{ready: ready, failures: failures, detail: detail}
 }

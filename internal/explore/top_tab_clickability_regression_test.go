@@ -178,8 +178,21 @@ func topTabClickabilityHarness() string {
       if ((btn.getAttribute('aria-expanded') || '') !== 'true') {
         failures.push({ kind: 'toggle-state-not-expanded', step: step, family: family, ariaExpanded: btn.getAttribute('aria-expanded') || '' });
       }
-      window.scrollTo(0, 980);
-      window.setTimeout(done, 120);
+      var expandBtn = row.querySelector('button[data-expand-endpoints]');
+      if (!expandBtn) {
+        failures.push({ kind: 'missing-endpoints-expand', step: step, family: family });
+        window.scrollTo(0, 980);
+        return window.setTimeout(done, 120);
+      }
+      expandBtn.click();
+      window.setTimeout(function () {
+        var expanded = document.querySelector('tr.family-endpoint-table-row[data-family="' + family + '"]');
+        if (!expanded) {
+          failures.push({ kind: 'endpoints-did-not-expand', step: step, family: family });
+        }
+        window.scrollTo(0, 980);
+        window.setTimeout(done, 120);
+      }, 180);
     }, 180);
   }
 

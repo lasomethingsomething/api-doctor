@@ -212,16 +212,20 @@ func responseShapeSignalInlineMoreHarness() string {
     if (el) el.click();
   }
 
+  function scrollStable(before, after) {
+    return Math.abs((after || 0) - (before || 0)) <= 1;
+  }
+
   function assertFamilySignals(family, expectedChips, expectToggle, failures) {
     var row = document.querySelector('tr.family-row[data-family="' + family + '"][data-family-row="true"]');
     if (!row) {
       failures.push({ kind: 'missing-family-row', family: family });
-      return;
+      return null;
     }
     var cell = row.querySelector('td.family-col-top-signal');
     if (!cell) {
       failures.push({ kind: 'missing-signal-cell', family: family });
-      return;
+      return null;
     }
 
     var chips = cell.querySelectorAll('.family-signal-chips .family-signal-chip');
@@ -233,6 +237,64 @@ func responseShapeSignalInlineMoreHarness() string {
     if (!!toggle !== !!expectToggle) {
       failures.push({ kind: 'toggle-presence-mismatch', family: family, expectedToggle: !!expectToggle, gotToggle: !!toggle });
     }
+    return toggle;
+  }
+
+  function revealedSignalCount(family) {
+    var row = document.querySelector('tr.family-row[data-family="' + family + '"][data-family-row="true"]');
+    var cell = row ? row.querySelector('td.family-col-top-signal') : null;
+    return cell ? cell.querySelectorAll('.family-signal-reveal .family-signal-chip').length : 0;
+  }
+
+  function assertToggleExpandsAndCollapsesInPlace(family, failures, done) {
+    var toggle = assertFamilySignals(family, 2, true, failures);
+    if (!toggle) return done();
+
+    window.scrollTo(0, 520);
+    var beforeOpen = window.scrollY || 0;
+    toggle.click();
+
+    window.setTimeout(function () {
+      var afterOpen = window.scrollY || 0;
+      if (!scrollStable(beforeOpen, afterOpen)) {
+        failures.push({ kind: 'scroll-jump-open', family: family, before: beforeOpen, after: afterOpen });
+      }
+
+      var openToggle = document.querySelector('button.family-signal-expand[data-expand-signals="' + family + '"]');
+      if (!openToggle) {
+        failures.push({ kind: 'toggle-missing-after-open', family: family });
+        return done();
+      }
+      if ((openToggle.getAttribute('aria-expanded') || '') !== 'true') {
+        failures.push({ kind: 'toggle-not-expanded', family: family, expanded: openToggle.getAttribute('aria-expanded') || '' });
+      }
+      if (revealedSignalCount(family) < 1) {
+        failures.push({ kind: 'hidden-signals-not-revealed', family: family, revealed: revealedSignalCount(family) });
+      }
+
+      var beforeClose = window.scrollY || 0;
+      openToggle.click();
+
+      window.setTimeout(function () {
+        var afterClose = window.scrollY || 0;
+        if (!scrollStable(beforeClose, afterClose)) {
+          failures.push({ kind: 'scroll-jump-close', family: family, before: beforeClose, after: afterClose });
+        }
+
+        var closedToggle = document.querySelector('button.family-signal-expand[data-expand-signals="' + family + '"]');
+        if (!closedToggle) {
+          failures.push({ kind: 'toggle-missing-after-close', family: family });
+          return done();
+        }
+        if ((closedToggle.getAttribute('aria-expanded') || '') !== 'false') {
+          failures.push({ kind: 'toggle-not-collapsed', family: family, expanded: closedToggle.getAttribute('aria-expanded') || '' });
+        }
+        if (revealedSignalCount(family) !== 0) {
+          failures.push({ kind: 'hidden-signals-still-visible-after-close', family: family, revealed: revealedSignalCount(family) });
+        }
+        done();
+      }, 180);
+    }, 180);
   }
 
   function waitForUI() {
@@ -256,7 +318,9 @@ func responseShapeSignalInlineMoreHarness() string {
         } catch (e) {
           failures.push({ kind: 'exception', message: (e && e.message) ? e.message : String(e) });
         }
-        finish(failures);
+        assertToggleExpandsAndCollapsesInPlace('/shape-inline-5', failures, function () {
+          finish(failures);
+        });
       }, 140);
     })();
   }

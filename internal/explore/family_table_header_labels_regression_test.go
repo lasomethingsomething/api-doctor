@@ -133,10 +133,13 @@ func familyTableHeaderLabelsHarness() string {
       window.setTimeout(function () {
         var failures = [];
         var texts = headerTexts();
-        ['FAMILY', 'SEVERITY MIX', 'ENDPOINTS', 'TOP SIGNAL', 'PRIMARY RISK', 'CLIENT EFFECT', 'WHAT DOMINATES'].forEach(function (label) {
+        ['FAMILY', 'SEVERITY MIX', 'ENDPOINTS', 'FINDINGS', 'TOP SIGNAL', 'PRIMARY RISK', 'CLIENT EFFECT', 'WHAT DOMINATES'].forEach(function (label) {
           var found = texts.some(function (text) { return text.indexOf(label) !== -1; });
           if (!found) failures.push({ kind: 'missing-header-label', label: label, texts: texts });
         });
+        if (document.querySelectorAll('.family-table thead').length !== 1) {
+          failures.push({ kind: 'header-rendered-more-than-once', count: document.querySelectorAll('.family-table thead').length });
+        }
         var titleSpans = document.querySelectorAll('.family-table thead th .th-title');
         if (!titleSpans.length) failures.push({ kind: 'missing-th-title-spans' });
         finish(failures);

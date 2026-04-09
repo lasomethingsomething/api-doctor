@@ -124,6 +124,19 @@ func endpointInspectorRemovedHarness() string {
     if (document.getElementById('endpointDiagnosticsSection')) {
       failures.push({ kind: 'detached-inspector-still-present', tab: tabId, step: step });
     }
+    var endpointListSection = document.getElementById('endpointListSection');
+    if (endpointListSection) {
+      var style = window.getComputedStyle(endpointListSection);
+      if (style.display !== 'none' || endpointListSection.getAttribute('aria-hidden') !== 'true') {
+        failures.push({
+          kind: 'detached-endpoint-evidence-still-visible',
+          tab: tabId,
+          step: step,
+          display: style.display,
+          ariaHidden: endpointListSection.getAttribute('aria-hidden') || ''
+        });
+      }
+    }
     var heading = Array.prototype.find.call(document.querySelectorAll('h2,h3'), function (h) {
       return /endpoint inspector/i.test(h.textContent || '');
     });
@@ -175,6 +188,14 @@ func endpointInspectorRemovedHarness() string {
     }
     if (!tabs.querySelector('button.endpoint-diag-tab[data-endpoint-subtab="exact"]')) {
       failures.push({ kind: 'missing-exact-evidence-tab', tab: tabId, step: step });
+    }
+    click('.inline-inspector-row-nested [data-inline-inspector-mount="1"] button.endpoint-diag-tab[data-endpoint-subtab="exact"]');
+    var groupedText = (mount.textContent || '').replace(/\s+/g, ' ').trim();
+    if (groupedText.indexOf('Grouped deviations') === -1) {
+      failures.push({ kind: 'missing-grouped-deviations-content', tab: tabId, step: step, text: groupedText.slice(0, 240) });
+    }
+    if (groupedText.indexOf('Schema grounding') === -1) {
+      failures.push({ kind: 'missing-schema-grounding-content', tab: tabId, step: step, text: groupedText.slice(0, 240) });
     }
   }
 

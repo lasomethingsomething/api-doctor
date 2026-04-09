@@ -1341,7 +1341,7 @@
 
     // Comparison is always visible — not hidden in a details element
     var comparisonHtml = renderInspectorContractShapeComparison(detail, findings, {
-      title: 'Current contract shape vs workflow-first contract shape',
+      title: 'Current response shape vs better workflow-first response shape',
       context: 'shape'
     });
 
@@ -1357,10 +1357,10 @@
     var profileItems = [
       { key: 'deep', label: 'deep nesting', val: shapeTotals.deep },
       { key: 'dup',  label: 'duplicated state', val: shapeTotals.dup },
-      { key: 'internal-fields', label: 'internal fields', val: shapeTotals.internal },
-      { key: 'snapshot-heavy', label: 'snapshot-heavy', val: shapeTotals.snapshot },
-      { key: 'missing-outcome', label: 'missing outcome', val: shapeTotals.outcome },
-      { key: 'missing-next-action', label: 'missing next action', val: shapeTotals.nextAction }
+      { key: 'internal-fields', label: 'incidental/internal fields', val: shapeTotals.internal },
+      { key: 'snapshot-heavy', label: 'snapshot-heavy response', val: shapeTotals.snapshot },
+      { key: 'missing-outcome', label: 'missing outcome framing', val: shapeTotals.outcome },
+      { key: 'missing-next-action', label: 'missing next-action cues', val: shapeTotals.nextAction }
     ].filter(function (item) { return item.val > 0; });
 
     var profileHtml = profileItems.length
@@ -2406,14 +2406,7 @@
 			        } else {
 			          state.expandedFamilySignals[family] = true;
 			        }
-			        var x = window.scrollX || 0;
-			        var y = window.scrollY || 0;
 			        renderFamilySurface();
-			        requestAnimationFrame(function () {
-			          requestAnimationFrame(function () {
-			            window.scrollTo(x, y);
-			          });
-			        });
 			      });
 			      var expanded = !!(state.expandedFamilySignals && state.expandedFamilySignals[(btn.getAttribute("data-expand-signals") || "")]);
 			      btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
@@ -2458,14 +2451,7 @@
 	        } else {
 	          state.expandedEndpointRowFindings[endpointId] = true;
 	        }
-	        var x = window.scrollX || 0;
-	        var y = window.scrollY || 0;
 	        renderFamilySurface();
-	        requestAnimationFrame(function () {
-	          requestAnimationFrame(function () {
-	            window.scrollTo(x, y);
-	          });
-	        });
 	        syncSelectedEndpointHighlight();
 	      });
 	    });
@@ -2483,15 +2469,8 @@
 			          state.userSelectedEndpoint = false;
 			          state.inspectingEndpointId = '';
 			          state.detailEvidenceOpenForId = '';
-			          var x = window.scrollX || 0;
-			          var y = window.scrollY || 0;
 			          renderFamilySurface();
 			          renderEndpointDiagnostics();
-			          requestAnimationFrame(function () {
-			            requestAnimationFrame(function () {
-			              window.scrollTo(x, y);
-			            });
-			          });
 			          return;
 			        }
 			        state.inspectPlacementHint = 'nested';
@@ -2532,15 +2511,8 @@
 			          state.userSelectedEndpoint = false;
 			          state.inspectingEndpointId = '';
 			          state.detailEvidenceOpenForId = '';
-			          var x = window.scrollX || 0;
-			          var y = window.scrollY || 0;
 			          renderFamilySurface();
 			          renderEndpointDiagnostics();
-			          requestAnimationFrame(function () {
-			            requestAnimationFrame(function () {
-			              window.scrollTo(x, y);
-			            });
-			          });
 			          return;
 			        }
 			        state.inspectPlacementHint = 'nested';
@@ -2823,14 +2795,25 @@
 
     el.workflowSection.style.display = 'block';
 
-    var chainSource = filteredChains.length ? filteredChains : scopedChains;
-    var workflowGuideHtml = renderWorkflowGuideSection(chainSource);
-    var journeyGuidanceHtml = renderCommonWorkflowJourneys(chainSource);
+	    var chainSource = filteredChains.length ? filteredChains : scopedChains;
+	    var workflowGuideHtml = renderWorkflowGuideSection(chainSource);
+	    var journeyGuidanceHtml = renderCommonWorkflowJourneys(chainSource);
 
 	    if (filteredChains.length) {
-	      el.workflowHelp.textContent = 'Docs-style inferred flow guide for the current lens. Selecting a step scopes the family and endpoint evidence below to the matching API surface.';
+	      el.workflowHelp.textContent = 'Inferred multi-call flow for the current workflow slice. Selecting a step scopes the family and inline endpoint detail below to the matching API surface.';
 	      var groups = groupChainsByKind(filteredChains, { focusChainId: state.workflowChainFocusChainId || '' });
-	      el.workflowChains.innerHTML = renderWorkflowChainsDrawer(workflowGuideHtml + journeyGuidanceHtml + groups.map(renderWorkflowKindGroup).join(''), filteredChains.length);
+	      el.workflowChains.innerHTML = renderWorkflowChainsDrawer(
+	        '<section class="workflow-chain-surface-primary">'
+	          + '<div class="workflow-chain-surface-header">'
+	          + '<h3 class="workflow-guide-title">Step-by-step workflow chains and hidden traps</h3>'
+	          + '<p class="workflow-guide-copy">Each step stays tied to detected continuity burden: required state, hidden trap, authoritative state after success, and likely next action. Click a step to scope the family surface below.</p>'
+	          + '</div>'
+	          + groups.map(renderWorkflowKindGroup).join('')
+	        + '</section>'
+	        + workflowGuideHtml
+	        + journeyGuidanceHtml,
+	        filteredChains.length
+	      );
 	      bindWorkflowStepInteractions();
 	      syncWorkflowStepSelectionHighlight();
 	      bindWorkflowChainsDrawerToggle();
@@ -2838,14 +2821,25 @@
 	    }
 
 	    if (scopedChains.length) {
-	      el.workflowHelp.textContent = 'No chains overlap the current evidence-only slice. Showing inferred call chains from scoped endpoints so the sequence remains visible.';
+	      el.workflowHelp.textContent = 'No chains overlap the current evidence-only slice. Showing inferred call chains from scoped endpoints so the sequence and hidden traps remain visible.';
 	      var scopedGroups = groupChainsByKind(scopedChains, { focusChainId: state.workflowChainFocusChainId || '' });
-	      el.workflowChains.innerHTML = renderWorkflowChainsDrawer(workflowGuideHtml + journeyGuidanceHtml + '<div class="workflow-no-match">'
-	        + '<p class="workflow-empty-title"><strong>Call chain surface restored for this lens</strong></p>'
-	        + '<p class="workflow-empty-copy">Visible issue rows are currently too narrow for direct chain overlap, so this section keeps the inferred sequence visible from the scoped endpoint set.</p>'
-	        + renderRecoveryActions(['show-all-workflows'])
-	        + '</div>'
-	        + scopedGroups.map(renderWorkflowKindGroup).join(''), scopedChains.length);
+	      el.workflowChains.innerHTML = renderWorkflowChainsDrawer(
+	        '<section class="workflow-chain-surface-primary">'
+	          + '<div class="workflow-chain-surface-header">'
+	          + '<h3 class="workflow-guide-title">Step-by-step workflow chains and hidden traps</h3>'
+	          + '<p class="workflow-guide-copy">Chains are still shown from the scoped endpoint set so the multi-call sequence and weak handoffs stay visible.</p>'
+	          + '</div>'
+	          + '<div class="workflow-no-match">'
+	          + '<p class="workflow-empty-title"><strong>Call chain surface restored for this lens</strong></p>'
+	          + '<p class="workflow-empty-copy">Visible issue rows are currently too narrow for direct chain overlap, so this section keeps the inferred sequence visible from the scoped endpoint set.</p>'
+	          + renderRecoveryActions(['show-all-workflows'])
+	          + '</div>'
+	          + scopedGroups.map(renderWorkflowKindGroup).join('')
+	        + '</section>'
+	        + workflowGuideHtml
+	        + journeyGuidanceHtml,
+	        scopedChains.length
+	      );
 	      bindRecoveryButtons(el.workflowChains);
 	      bindWorkflowStepInteractions();
 	      syncWorkflowStepSelectionHighlight();
@@ -2911,8 +2905,8 @@
 
 	    return '<section class="workflow-guide-section">'
 	      + '<div class="workflow-guide-header">'
-	      + '<h3 class="workflow-guide-title">Common API call paths and where they break</h3>'
-	      + '<p class="workflow-guide-copy">Follow the inferred steps in order. Each step shows the endpoint, purpose, required state or context, hidden dependency or trap, and likely next action so the contract burden is visible like a flow guide, not a flat endpoint list.</p>'
+	      + '<h3 class="workflow-guide-title">High-signal workflow paths</h3>'
+	      + '<p class="workflow-guide-copy">Secondary workflow summaries for the heaviest inferred paths. The primary chain surface above remains the main step-by-step view.</p>'
 	      + '</div>'
 	      + '<div class="workflow-guide-cards">'
 	      + featured.map(function (chain, index) {
@@ -2955,9 +2949,17 @@
         var detail = state.payload.endpointDetails[endpointId];
         var family = detail && detail.endpoint ? (detail.endpoint.family || '') : '';
         state.selectedEndpointId = endpointId;
+        state.userSelectedEndpoint = true;
         state.endpointDiagnosticsSubTab = 'summary';
         if (family) {
-          focusFamilySurface(family);
+          captureFamilyTableBackStateIfNeeded();
+          state.filters.search = family.trim().toLowerCase();
+          state.familyTableShowAll = false;
+          state.expandedFamilyInsight = '';
+          state.detailEvidenceOpenForId = '';
+          state.inspectPlacementHint = 'nested';
+          selectEndpointForInspector(endpointId, 'summary');
+          syncWorkflowStepSelectionHighlight();
           return;
         }
         renderEndpointRows();
@@ -2976,12 +2978,18 @@
         var detail = state.payload.endpointDetails[endpointId];
         var family = detail && detail.endpoint ? (detail.endpoint.family || '') : '';
         state.selectedEndpointId = endpointId;
+        state.userSelectedEndpoint = true;
         state.endpointDiagnosticsSubTab = 'exact';
         state.detailEvidenceOpenForId = endpointId;
         if (family) {
-          focusFamilySurface(family);
-          state.endpointDiagnosticsSubTab = 'exact';
+          captureFamilyTableBackStateIfNeeded();
+          state.filters.search = family.trim().toLowerCase();
+          state.familyTableShowAll = false;
+          state.expandedFamilyInsight = '';
+          state.inspectPlacementHint = 'nested';
+          selectEndpointForInspector(endpointId, 'exact');
           state.detailEvidenceOpenForId = endpointId;
+          syncWorkflowStepSelectionHighlight();
           return;
         }
         renderEndpointRows();
@@ -3740,7 +3748,7 @@
 	    var narrativeHtml = '<div class="step-narrative">'
 	      + '<div class="step-narrative-row"><span class="step-narrative-label">What this call does</span><span class="step-narrative-value">' + escapeHtml(narrative.callDoes) + '</span></div>'
 	      + '<div class="step-narrative-row"><span class="step-narrative-label">What you need before calling it</span><span class="step-narrative-value">' + escapeHtml(narrative.requiredState) + '</span></div>'
-	      + '<div class="step-narrative-row"><span class="step-narrative-label">What changes after it succeeds</span><span class="step-narrative-value">' + escapeHtml(narrative.changesAfter || '') + '</span></div>'
+	      + '<div class="step-narrative-row"><span class="step-narrative-label">Authoritative state after success</span><span class="step-narrative-value">' + escapeHtml(narrative.changesAfter || '') + '</span></div>'
 	      + '<div class="step-narrative-row"><span class="step-narrative-label">What to call next</span><span class="step-narrative-value">' + escapeHtml(narrative.nextAction) + '</span></div>'
 	      + '</div>';
 	    var trapHtml = renderTrapGuidanceList(trapGuidance, {
@@ -3965,13 +3973,13 @@
       var dominant = topSignals[0] || '';
       var secondary = topSignals[1] ? ' Also: ' + humanizeSignalLabel(topSignals[1]) + '.' : '';
       var shapeSentences = {
-        'response appears snapshot-heavy': 'Snapshot-heavy payload hides the golden-path outcome under backend graph detail.',
-        'deep nesting appears likely': 'Deeply nested objects hide the primary outcome and next-action meaning.',
-        'duplicated state appears likely': 'Repeated state creates reading noise and weakens source-of-truth clarity.',
-        'incidental/internal fields appear to dominate': 'Internal/audit fields crowd the response and distract from task completion.',
+        'response appears snapshot-heavy': 'Snapshot-heavy response makes callers read backend graph detail before they can see the real task outcome.',
+        'deep nesting appears likely': 'Deep nesting buries the outcome, authoritative state, and handoff fields under incidental structure.',
+        'duplicated state appears likely': 'Duplicated state forces callers to guess which field is authoritative.',
+        'incidental/internal fields appear to dominate': 'Incidental/internal fields crowd the payload and invite coupling to storage concerns.',
         'source-of-truth fields are unclear': 'Multiple state representations make the authoritative source-of-truth unclear.',
-        'outcome framing is easy to miss': 'Outcome framing is weak, so callers cannot confirm what changed quickly.',
-        'next action is weakly exposed': 'Next valid action is weakly exposed in the response contract.'
+        'outcome framing is easy to miss': 'Missing outcome framing makes callers infer what changed from raw payload structure.',
+        'next action is weakly exposed': 'Missing next-action cues make the follow-up call sequence hard to discover from the response.'
       };
       var lead = shapeSentences[dominant] || 'Response schema appears storage-shaped rather than task-oriented.';
       return lead + secondary;
@@ -4677,16 +4685,14 @@
 	      }
 	    ];
 
-		    if (!workflow && !shape) {
-		      cols.splice(3, 0, {
-		        key: 'issues',
-		        thClass: 'family-col-issues',
-		        thHtml: '<span class="th-title">Findings</span><span class="th-helper" title="Total in-scope finding count across endpoints in this family.">in-scope</span>',
-		        th: '',
-		        tdClass: 'family-col-issues',
-		        render: function (family) { return String(family.findings || 0); }
-		      });
-		    }
+	    cols.splice(3, 0, {
+	      key: 'issues',
+	      thClass: 'family-col-issues',
+	      thHtml: '<span class="th-title">Findings</span><span class="th-helper" title="Total in-scope finding count across endpoints in this family.">in-scope</span>',
+	      th: '',
+	      tdClass: 'family-col-issues',
+	      render: function (family) { return String(family.findings || 0); }
+	    });
 
 		    cols.push({
 		      key: 'risk',
@@ -4701,33 +4707,27 @@
 	          ? 'response-shape risk'
 	          : 'contract drift risk');
 	        var clampClass = (shape ? 'family-table-clamp family-table-clamp-risk' : 'family-table-clamp family-table-clamp-3 family-table-clamp-risk');
-	        return renderFamilyTableClamp(primaryRisk, clampClass);
+		        return renderFamilyTableClamp(primaryRisk, clampClass);
 		      }
 		    });
 
-		    cols.push(shape
-		      ? {
-		          key: 'caller-burden',
-		          thClass: 'family-col-caller-burden',
-		          thHtml: '<span class="th-title">Caller burden</span><span class="th-helper" title="Primary caller-side costs created by the response shape in this family.">shape-driven costs</span>',
-		          th: '',
-		          tdClass: 'family-col-caller-burden',
-		          render: function (family, ctx) {
-		            var ranked = ctx.ranked || {};
-		            return renderFamilyClientEffectCell(renderCallerBurdenCellValue(ranked));
-		          }
-		        }
-		      : {
-		          key: 'impact',
-		          thClass: 'family-col-client-effect',
-		          th: workflow ? 'Client impact in flow' : 'Client effect',
-		          tdClass: 'family-col-client-effect',
-		          render: function (family, ctx) {
-		            var ranked = ctx.ranked || {};
-		            var repeatCount = (ctx.dxCounts && ranked.dxConsequence) ? (ctx.dxCounts[ranked.dxConsequence] || 0) : 0;
-		            return renderFamilyClientEffectCell(renderDxConsequenceCellValue(ranked, repeatCount));
-		          }
-		        });
+	    cols.push({
+	      key: 'impact',
+	      thClass: 'family-col-client-effect',
+	      thHtml: shape
+	        ? '<span class="th-title">Client effect</span><span class="th-helper" title="Primary caller-side costs created by the response shape in this family.">shape-driven costs</span>'
+	        : '',
+	      th: workflow ? 'Client impact in flow' : 'Client effect',
+	      tdClass: 'family-col-client-effect',
+	      render: function (family, ctx) {
+	        var ranked = ctx.ranked || {};
+	        if (shape) {
+	          return renderFamilyClientEffectCell(renderCallerBurdenCellValue(ranked));
+	        }
+	        var repeatCount = (ctx.dxCounts && ranked.dxConsequence) ? (ctx.dxCounts[ranked.dxConsequence] || 0) : 0;
+	        return renderFamilyClientEffectCell(renderDxConsequenceCellValue(ranked, repeatCount));
+	      }
+	    });
 
 		    // Keep the "what dominates" driver as supporting context (right side), not the core scan path.
 		    cols.push({
@@ -5140,6 +5140,7 @@
 	      + '<p class="eyebrow">' + escapeHtml(evidenceSectionTitleForActiveLens()) + '</p>'
 	      + '<p class="subtle">Endpoint rows stay attached to this family so the ownership and investigation flow stay together.</p>'
 	      + '</div>'
+      + '<div class="family-endpoint-table-scroll" data-family-endpoint-table-scroll="1">'
       + '<table class="nested-endpoint-table">'
       + '<colgroup>'
       + '<col class="nested-col-path">'
@@ -5163,6 +5164,7 @@
       + nestedRows
       + '</tbody>'
       + '</table>'
+      + '</div>'
 	      + '<div class="family-endpoint-table-footer"><span class="subtle">End of endpoints in <code>' + escapeHtml(familyLabel) + '</code> family.</span></div>'
 	      + '</section>'
 	      + '</div>'
@@ -5475,11 +5477,15 @@
 			      return;
 			    }
 		    // The investigation flow is now: filters -> family table -> inline endpoints -> inline inspector.
-		    // Avoid a detached "endpoint evidence" module far below the family table.
+		    // Avoid detached endpoint evidence below the family table. All useful endpoint
+		    // detail now opens inline beneath the family or endpoint row that triggered it.
 		    var listSection = el.endpointRows ? el.endpointRows.closest('.section') : null;
 		    if (listSection) {
 		      listSection.style.display = 'none';
+		      listSection.setAttribute('aria-hidden', 'true');
 		    }
+		    el.listContext.innerHTML = '';
+		    el.endpointRows.innerHTML = '';
 		    return;
 
 		    var rows = filteredRows();
@@ -5586,14 +5592,7 @@
 	        } else {
 	          state.expandedEndpointRowFindings[endpointId] = true;
 	        }
-	        var x = window.scrollX || 0;
-	        var y = window.scrollY || 0;
 	        renderEndpointRows();
-	        requestAnimationFrame(function () {
-	          requestAnimationFrame(function () {
-	            window.scrollTo(x, y);
-	          });
-	        });
 	      });
 	    });
   }
@@ -6251,7 +6250,7 @@
     var endpoint = (detail && detail.endpoint) || {};
     var findings = findingsOverride || findingsForActiveLens((detail && detail.findings) || []);
     var points = collectInspectorContractComparisonPoints(endpoint, findings);
-    var title = opts.title || 'Current contract shape vs workflow-first contract shape';
+    var title = opts.title || 'Current response shape vs better workflow-first response shape';
     var themeLine = points.themes.length ? points.themes.join(' | ') : 'storage-shaped vs task-shaped';
 
     return '<section class="inspector-contract-compare">'
@@ -6259,11 +6258,11 @@
       + '<p class="inspector-contract-compare-note"><strong>Themes:</strong> ' + escapeHtml(themeLine) + '</p>'
       + '<div class="inspector-contract-compare-grid">'
       + '  <div class="inspector-contract-compare-col">'
-      + '    <h4>Current contract shape</h4>'
+      + '    <h4>Current response shape</h4>'
       + '    <ul>' + points.current.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul>'
       + '  </div>'
       + '  <div class="inspector-contract-compare-col">'
-      + '    <h4>Workflow-first contract shape</h4>'
+      + '    <h4>Better workflow-first response shape</h4>'
       + '    <ul>' + points.improved.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul>'
       + '  </div>'
       + '</div>'

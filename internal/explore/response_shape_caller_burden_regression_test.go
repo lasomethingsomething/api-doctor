@@ -211,14 +211,14 @@ func responseShapeCallerBurdenHarness() string {
       failures.push({ kind: 'header-rendered-more-than-once', step: step, count: document.querySelectorAll('.family-table thead').length });
     }
     var callerHeaders = headers.filter(function (th) {
-      return ((th.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase().indexOf('CALLER BURDEN') !== -1);
+      return ((th.textContent || '').replace(/\s+/g, ' ').trim().toUpperCase().indexOf('CLIENT EFFECT') !== -1);
     });
     if (callerHeaders.length !== 1) {
-      failures.push({ kind: 'caller-burden-header-count', step: step, count: callerHeaders.length, texts: headers.map(function (th) { return (th.textContent || '').trim(); }) });
+      failures.push({ kind: 'client-effect-header-count', step: step, count: callerHeaders.length, texts: headers.map(function (th) { return (th.textContent || '').trim(); }) });
       return;
     }
-    if (!callerHeaders[0].classList.contains('family-col-caller-burden')) {
-      failures.push({ kind: 'wrong-caller-burden-header-class', step: step, className: callerHeaders[0].className || '' });
+    if (!callerHeaders[0].classList.contains('family-col-client-effect')) {
+      failures.push({ kind: 'wrong-client-effect-header-class', step: step, className: callerHeaders[0].className || '' });
     }
   }
 
@@ -228,9 +228,9 @@ func responseShapeCallerBurdenHarness() string {
       failures.push({ kind: 'missing-family-row', family: family });
       return;
     }
-    var cell = row.querySelector('td.family-col-caller-burden');
+    var cell = row.querySelector('td.family-col-client-effect');
     if (!cell) {
-      failures.push({ kind: 'missing-caller-burden-cell', family: family });
+      failures.push({ kind: 'missing-client-effect-cell', family: family });
       return;
     }
     var chips = cell.querySelectorAll('.caller-burden-cell .caller-burden-chip');

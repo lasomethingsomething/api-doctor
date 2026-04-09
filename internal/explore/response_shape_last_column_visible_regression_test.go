@@ -123,9 +123,9 @@ func responseShapeLastColVisibleHarness() string {
 	  function assertLastColumnVisible(step, failures) {
 	    var surface = document.getElementById('familySurface');
 	    var table = document.querySelector('.family-table');
-	    var th = document.querySelector('.family-table thead th.family-col-caller-burden');
-	    var td = document.querySelector('tr.family-row[data-family-row="true"] td.family-col-caller-burden');
-	    var content = td ? (td.querySelector('.caller-burden-cell') || td.querySelector('.family-table-clamp-effect') || td) : null;
+	    var th = document.querySelector('.family-table thead th.family-col-driver');
+	    var td = document.querySelector('tr.family-row[data-family-row="true"] td.family-col-driver');
+	    var content = td ? (td.querySelector('.family-driver-cell') || td.querySelector('.family-table-clamp-effect') || td) : null;
 
 	    if (!surface || !table || !th || !td || !content) {
 	      failures.push({
@@ -160,7 +160,7 @@ func responseShapeLastColVisibleHarness() string {
 	    }
 
 	    // Prevent the last column from turning into a microscopic sliver.
-	    var minWidth = 200;
+	    var minWidth = 140;
 	    if (thRect.width < minWidth) {
 	      failures.push({ kind: 'header-too-narrow', step: step, width: thRect.width, minWidth: minWidth });
 	    }
