@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "module": "none",
+    "lib": ["DOM", "ES2021"],
+    "strict": false,
+    "noEmitOnError": true,
+    "outFile": "internal/explore/web/app.js",
+    "skipLibCheck": true,
+    "removeComments": false
+  },
+  "files": [
+    "internal/explore/web/types.ts",
+    "internal/explore/web/state.ts",
+    "internal/explore/web/tab-config.ts",
+    "internal/explore/web/state-actions.ts",
+    "internal/explore/web/family-surface-actions.ts",
+    "internal/explore/web/family-insight-bindings.ts",
+    "internal/explore/web/family-endpoint-bindings.ts",
+    "internal/explore/web/endpoint-list-bindings.ts",
+    "internal/explore/web/app.ts"
+  ]
+}
