@@ -1735,9 +1735,22 @@ function isExactFamilyName(value) {
 function renderFilterOptions() {
     if (!state.payload)
         return;
-    var categoryValues = uniq(flatMap(state.payload.endpoints, function (row) {
-        return Object.keys(row.categoryCounts || {});
+    var endpointDetails = state.payload.endpointDetails || {};
+    var categoryValues = uniq(flatMap(Object.keys(endpointDetails), function (endpointId) {
+        var detail = endpointDetails[endpointId];
+        return findingsForActiveLens((detail && detail.findings) || []).map(function (finding) {
+            return finding && finding.category ? finding.category : "";
+        }).filter(Boolean);
     })).sort();
+    var cfg = activeTopTabConfig();
+    if (categoryValues.indexOf(cfg.defaultCategory) !== -1) {
+        categoryValues = [cfg.defaultCategory].concat(categoryValues.filter(function (category) {
+            return category !== cfg.defaultCategory;
+        }));
+    }
+    if (state.filters.category !== "all" && categoryValues.indexOf(state.filters.category) === -1) {
+        state.filters.category = categoryValues.indexOf(cfg.defaultCategory) !== -1 ? cfg.defaultCategory : "all";
+    }
     setOptions(el.categoryFilter, [{ value: "all", label: "all categories" }].concat(categoryValues.map(function (category) {
         return {
             value: category,
@@ -1769,6 +1782,7 @@ function render() {
     if (!isKnownTopTab(state.activeTopTab)) {
         applyTabDefaults(state, "spec-rule", TOP_TAB_INDEX);
     }
+    renderFilterOptions();
     enforceSpecRuleTabFilterModel();
     enforceWorkflowTabFilterModel();
     enforceShapeTabFilterModel();
@@ -1887,12 +1901,20 @@ function appRuntimeSyncControls() {
     el.categoryFilter.value = state.filters.category;
     el.familyPriorityFilter.value = state.filters.familyPressure;
     el.includeNoIssueRows.checked = state.filters.includeNoIssueRows;
-    el.categoryFilter.disabled = false;
-    el.categoryFilter.removeAttribute('title');
     var categoryField = el.categoryFilter ? el.categoryFilter.closest('.field') : null;
+    var categoryFilterVisible = state.activeTopTab === 'spec-rule';
+    if (el.categoryFilter) {
+        el.categoryFilter.disabled = !categoryFilterVisible;
+        if (categoryFilterVisible) {
+            el.categoryFilter.removeAttribute('title');
+        }
+        else {
+            el.categoryFilter.setAttribute('title', 'Category filtering is only available on Contract Issues.');
+        }
+    }
     if (categoryField) {
-        categoryField.classList.remove('field-hidden-by-lens');
-        categoryField.setAttribute('aria-hidden', 'false');
+        categoryField.classList.toggle('field-hidden-by-lens', !categoryFilterVisible);
+        categoryField.setAttribute('aria-hidden', categoryFilterVisible ? 'false' : 'true');
     }
     if (el.lensControlHint) {
         el.lensControlHint.innerHTML = formatFilterSummaryHtml();

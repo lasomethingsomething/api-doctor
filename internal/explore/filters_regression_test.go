@@ -172,6 +172,20 @@ func filtersRegressionHarness() string {
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
+  function selectValues(id) {
+    var el = document.getElementById(id);
+    if (!el) return [];
+    return Array.prototype.map.call(el.querySelectorAll('option'), function (opt) {
+      return opt.value || '';
+    }).filter(Boolean);
+  }
+
+  function categoryFieldHidden() {
+    var el = document.getElementById('categoryFilter');
+    var field = el ? el.closest('.field') : null;
+    return !!(field && field.classList.contains('field-hidden-by-lens'));
+  }
+
   function familyNames() {
     return Array.prototype.map.call(
       document.querySelectorAll('tr.family-row[data-family-row="true"]'),
@@ -274,6 +288,19 @@ func filtersRegressionHarness() string {
       click('button.quick-action[data-id="' + tabId + '"]');
       window.setTimeout(function () {
         assertNoHash(tabId, 'post-tab-select', failures);
+        var categoryOptions = selectValues('categoryFilter');
+        if (tabId === 'spec-rule') {
+          if (categoryFieldHidden()) {
+            failures.push({ kind: 'category-field-hidden', tab: tabId, step: 'post-tab-select' });
+          }
+          if (categoryOptions.indexOf('workflow-burden') !== -1) failures.push({ kind: 'category-options', tab: tabId, step: 'post-tab-select', unexpected: 'workflow-burden', got: categoryOptions });
+          if (categoryOptions.indexOf('contract-shape') !== -1) failures.push({ kind: 'category-options', tab: tabId, step: 'post-tab-select', unexpected: 'contract-shape', got: categoryOptions });
+        }
+        if (tabId === 'workflow' || tabId === 'shape') {
+          if (!categoryFieldHidden()) {
+            failures.push({ kind: 'category-field-visible', tab: tabId, step: 'post-tab-select' });
+          }
+        }
 
         // 0) Expansion behavior should be single-open: expanding a new family collapses the previous family's expansions.
         setSelect('categoryFilter', 'all');

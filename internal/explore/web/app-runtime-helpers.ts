@@ -26,13 +26,21 @@ function appRuntimeSyncControls(): void {
   el.familyPriorityFilter.value = state.filters.familyPressure;
   el.includeNoIssueRows.checked = state.filters.includeNoIssueRows;
 
-  el.categoryFilter.disabled = false;
-  el.categoryFilter.removeAttribute('title');
-
   var categoryField = el.categoryFilter ? el.categoryFilter.closest('.field') : null;
+  var categoryFilterVisible = state.activeTopTab === 'spec-rule';
+
+  if (el.categoryFilter) {
+    el.categoryFilter.disabled = !categoryFilterVisible;
+    if (categoryFilterVisible) {
+      el.categoryFilter.removeAttribute('title');
+    } else {
+      el.categoryFilter.setAttribute('title', 'Category filtering is only available on Contract Issues.');
+    }
+  }
+
   if (categoryField) {
-    categoryField.classList.remove('field-hidden-by-lens');
-    categoryField.setAttribute('aria-hidden', 'false');
+    categoryField.classList.toggle('field-hidden-by-lens', !categoryFilterVisible);
+    categoryField.setAttribute('aria-hidden', categoryFilterVisible ? 'false' : 'true');
   }
 
   if (el.lensControlHint) {

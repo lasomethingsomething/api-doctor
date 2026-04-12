@@ -36,6 +36,7 @@ declare function escapeHtml(value: unknown): string;
 declare function uniq<T>(items: T[]): T[];
 declare function flatMap<T, U>(items: T[], fn: (item: T) => U[]): U[];
 declare function pulseLensUpdate(): void;
+declare function findingsForActiveLens(findings: ExplorerFinding[]): ExplorerFinding[];
 
 var appShellStickyMetricsQueued = false;
 
@@ -94,9 +95,22 @@ function isExactFamilyName(value: string): boolean {
 
 function renderFilterOptions(): void {
   if (!state.payload) return;
-  var categoryValues = uniq(flatMap(state.payload.endpoints, function (row: ExplorerEndpointRow) {
-    return Object.keys(row.categoryCounts || {});
+  var endpointDetails = state.payload.endpointDetails || {};
+  var categoryValues = uniq(flatMap(Object.keys(endpointDetails), function (endpointId: string) {
+    var detail = endpointDetails[endpointId];
+    return findingsForActiveLens((detail && detail.findings) || []).map(function (finding: ExplorerFinding) {
+      return finding && finding.category ? finding.category : "";
+    }).filter(Boolean);
   })).sort();
+  var cfg = activeTopTabConfig();
+  if (categoryValues.indexOf(cfg.defaultCategory) !== -1) {
+    categoryValues = [cfg.defaultCategory].concat(categoryValues.filter(function (category: string) {
+      return category !== cfg.defaultCategory;
+    }));
+  }
+  if (state.filters.category !== "all" && categoryValues.indexOf(state.filters.category) === -1) {
+    state.filters.category = categoryValues.indexOf(cfg.defaultCategory) !== -1 ? cfg.defaultCategory : "all";
+  }
   setOptions(el.categoryFilter, [{ value: "all", label: "all categories" }].concat(
     categoryValues.map(function (category: string) {
       return {
@@ -137,6 +151,7 @@ function render(): void {
   if (!isKnownTopTab(state.activeTopTab)) {
     applyTabDefaults(state, "spec-rule", TOP_TAB_INDEX);
   }
+  renderFilterOptions();
   enforceSpecRuleTabFilterModel();
   enforceWorkflowTabFilterModel();
   enforceShapeTabFilterModel();
