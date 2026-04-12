@@ -3078,6 +3078,21 @@ body.lens-workflow .nested-endpoint-table .instance-count-chip {
   border-radius: 8px;
 }
 
+body.lens-workflow .family-insight-panel-workflow .expansion-section {
+  background: linear-gradient(180deg, #fdfcff 0%, #f8f5ff 100%);
+  border-color: #ddd3f3;
+}
+
+body.lens-workflow .family-insight-panel-workflow .expansion-section.expansion-open-evidence {
+  background: linear-gradient(180deg, #fbfcff 0%, #f3f7ff 100%);
+  border-color: #d4dfef;
+}
+
+body.lens-workflow .family-insight-panel-workflow .expansion-section.expansion-workflow-path {
+  background: linear-gradient(180deg, #fcfbff 0%, #f5f1ff 100%);
+  border-color: #d7c8f0;
+}
+
 .expansion-section-title {
   margin: 0;
   font-size: 0.71rem;
@@ -3096,6 +3111,72 @@ body.lens-workflow .nested-endpoint-table .instance-count-chip {
   font-size: 0.78rem;
   line-height: 1.42;
   color: #243a4a;
+}
+
+.workflow-summary-chips {
+  margin-top: 0;
+}
+
+.workflow-family-flow-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 0.38rem;
+  flex-wrap: wrap;
+  margin-top: 0.12rem;
+}
+
+.workflow-family-flow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  min-width: 0;
+  padding: 0.34rem 0.44rem;
+  border: 1px solid #d7c8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 0 rgba(23, 33, 47, 0.04);
+}
+
+.workflow-family-flow-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 999px;
+  background: #efe6fb;
+  color: #44207c;
+  font-size: 0.72rem;
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+
+.workflow-family-flow-step-body {
+  display: grid;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.workflow-family-flow-step-role {
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5a4692;
+}
+
+.workflow-family-flow-step-endpoint {
+  font-size: 0.77rem;
+  font-weight: 700;
+  color: #1f3344;
+  line-height: 1.28;
+}
+
+.workflow-family-flow-arrow {
+  align-self: center;
+  color: #7a62b3;
+  font-size: 1rem;
+  font-weight: 900;
 }
 
 .expansion-grounding {

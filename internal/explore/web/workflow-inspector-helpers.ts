@@ -425,18 +425,11 @@ function renderEndpointDiagnosticsWorkflowSummary(detail: ExplorerEndpointDetail
   });
   var chainContextHtml = renderWorkflowChainContextForEndpoint(detail);
   var whyCopy = signalSummary.replace(/^main workflow clues:\s*/i, "");
-  var whyList = [
-    "Developers have to infer what state or identifier must be carried forward between calls.",
-    "The next valid call is not obvious from the response, so sequencing is learned at runtime."
-  ];
-  if (whyCopy && whyCopy !== signalSummary) {
-    whyList.unshift("Primary workflow problems: " + whyCopy + ".");
-  }
-  var whyHtml = whyList.map(function (line: string) {
-    return "<li>" + escapeHtml(line) + "</li>";
-  }).join("");
+  var whyText = whyCopy && whyCopy !== signalSummary
+    ? ("Primary workflow problems: " + whyCopy + ".")
+    : "Developers have to infer carry-forward state and the next valid call from runtime behavior instead of the contract.";
   var nextBlock = renderWhatToDoNextBlock(endpoint, findings, {
-    maxItems: 2,
+    maxItems: 1,
     leadCopy: "Choose the smallest contract change that makes the next step obvious and the handoff explicit.",
     showEndpointLabel: false
   });
@@ -447,9 +440,7 @@ function renderEndpointDiagnosticsWorkflowSummary(detail: ExplorerEndpointDetail
     + '<p class="subtle"><strong>' + escapeHtml(endpoint.method + " " + endpoint.path) + '</strong> '
     + (chainCount ? ("sits inside " + chainCount + " likely workflow path" + (chainCount === 1 ? "" : "s")) : "shows workflow friction even without a full inferred path")
     + '.</p>'
-    + '<ul class="family-top-evidence">'
-    + whyHtml
-    + "</ul>"
+    + '<p class="expansion-text">' + escapeHtml(whyText) + '</p>'
     + "</div>"
     + chainContextHtml
     + nextBlock

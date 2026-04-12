@@ -14,6 +14,7 @@ declare function pickFamilyDominantDriver(family: ExplorerFamilySummary): { key:
 declare function familyDominantSignalsForDriver(family: ExplorerFamilySummary, driverKey: string): string[];
 declare function sortedSignalLabels(map: StringMap<number>, limit?: number): string[];
 declare function familyDxSignalFragment(signal: string): string;
+declare function humanizeSignalLabel(value: string): string;
 declare function uniq<T>(values: T[]): T[];
 declare function toSentenceCase(text: string): string;
 declare function familyDriverFocus(driverKey: string, dominantSignals: string[]): string;
@@ -271,17 +272,13 @@ function familyInsightRenderPanel(family: ExplorerFamilySummary, preferredEndpoi
     var primaryChain = (model.detail && model.detail.relatedChains && model.detail.relatedChains.length)
       ? model.detail.relatedChains[0]
       : null;
-    var workflowSummaryItems: string[] = [];
-    workflowSummaryItems.push('<li><strong>Lead issue:</strong> ' + escapeHtml(primaryProblemText) + '</li>');
-    workflowSummaryItems.push('<li><strong>Why this is hard:</strong> ' + escapeHtml(whyMattersText) + '</li>');
-    if (workflowTrapGuidance.length) {
-      workflowSummaryItems.push('<li><strong>Main trap:</strong> ' + escapeHtml(workflowTrapGuidance[0].title || workflowTrapGuidance[0].happened || "Hidden prerequisites or handoffs are likely.") + '</li>');
-    }
-    if (model.workflowLines.length) {
-      workflowSummaryItems.push('<li><strong>Most likely path:</strong> ' + escapeHtml(model.workflowLines[0]) + '</li>');
-    }
+    var blockerChips = (rankedFamily && rankedFamily.dominantSignals ? rankedFamily.dominantSignals.slice(0, 3) : []).map(function (signal: string, idx: number) {
+      var label = humanizeSignalLabel(signal || "");
+      var cls = idx === 0 ? "chip chip-primary family-signal-chip" : "chip chip-secondary family-signal-chip";
+      return '<span class="' + cls + '">' + escapeHtml(label) + '</span>';
+    }).join("");
 
-    var workflowChangeList = (improvementItems || []).slice(0, 2).map(function (item: ContractImprovementItem) {
+    var workflowChangeList = (improvementItems || []).slice(0, 1).map(function (item: ContractImprovementItem) {
       return '<li>' + escapeHtml(item.change || "Clarify the next step and required handoff state.") + '</li>';
     }).join("");
     if (!workflowChangeList) {
@@ -305,7 +302,11 @@ function familyInsightRenderPanel(family: ExplorerFamilySummary, preferredEndpoi
       + '<div class="expansion-sections expansion-sections-ordered">'
       + '<div class="expansion-section expansion-problem">'
       + '<p class="expansion-section-title">Why developers get stuck here</p>'
-      + '<ul class="expansion-evidence-list">' + workflowSummaryItems.join("") + '</ul>'
+      + (blockerChips ? ('<div class="chips workflow-summary-chips">' + blockerChips + '</div>') : '')
+      + '<p class="expansion-text">' + escapeHtml(whyMattersText) + '</p>'
+      + (workflowTrapGuidance.length
+          ? ('<p class="expansion-text"><strong>Main trap:</strong> ' + escapeHtml(workflowTrapGuidance[0].title || workflowTrapGuidance[0].happened || "Hidden prerequisites or handoffs are likely.") + '</p>')
+          : '')
       + "</div>"
       + '<div class="expansion-section expansion-contract-change">'
       + '<p class="expansion-section-title">What should change next</p>'
@@ -435,6 +436,20 @@ function familyInsightRenderMostLikelyPath(chain: ExplorerWorkflowChain | null):
   var steps = chain.endpointIds || [];
   var roles = parseChainRoles(chain.summary, steps.length);
   var taskLabel = chainTaskLabel(chain);
+  var stripItems = steps.slice(0, 4).map(function (endpointId: string, idx: number) {
+    var detail = endpointDetails[endpointId];
+    var endpoint = detail && detail.endpoint ? detail.endpoint : createEmptyEndpointRow();
+    var roleLabel = roles[idx] || "";
+    var stepName = roleLabel ? humanizeStepRole(roleLabel) : ('Step ' + String(idx + 1));
+    return '<div class="workflow-family-flow-step">'
+      + '<span class="workflow-family-flow-step-num">' + String(idx + 1) + '</span>'
+      + '<div class="workflow-family-flow-step-body">'
+      + '<div class="workflow-family-flow-step-role">' + escapeHtml(stepName) + '</div>'
+      + '<div class="workflow-family-flow-step-endpoint">' + escapeHtml(endpoint.method + ' ' + endpoint.path) + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('<span class="workflow-family-flow-arrow" aria-hidden="true">→</span>');
+
   var stepItems = steps.slice(0, 4).map(function (endpointId: string, idx: number) {
     var detail = endpointDetails[endpointId];
     var endpoint = detail && detail.endpoint ? detail.endpoint : createEmptyEndpointRow();
@@ -489,6 +504,7 @@ function familyInsightRenderMostLikelyPath(chain: ExplorerWorkflowChain | null):
   return '<div class="expansion-section expansion-workflow-path">'
     + '<p class="expansion-section-title">Most likely path</p>'
     + '<p class="expansion-text"><strong>' + escapeHtml(taskLabel) + '</strong> across ' + escapeHtml(String(steps.length)) + ' step' + (steps.length === 1 ? '' : 's') + '.</p>'
+    + '<div class="workflow-family-flow-strip" aria-label="Most likely workflow path">' + stripItems + '</div>'
     + '<ol class="expansion-workflow-list expansion-workflow-path-list">' + stepItems + '</ol>'
     + '</div>';
 }

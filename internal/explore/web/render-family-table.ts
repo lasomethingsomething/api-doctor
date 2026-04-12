@@ -155,7 +155,7 @@ function renderFamilyTopSignalCell(
   var inlineExpand = state.activeTopTab === "shape";
   var expanded = inlineExpand && !!(state.expandedFamilySignals && state.expandedFamilySignals[familyName]);
   var visibleCount = state.activeTopTab === "workflow"
-    ? 1
+    ? Math.min(items.length, 2)
     : inlineExpand
     ? (expanded ? items.length : (items.length <= 4 ? items.length : 2))
     : (items.length <= 3 ? items.length : 2);
@@ -662,9 +662,7 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
         + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Why this is hard</p><div class="nested-endpoint-preview-value">'
         + (findings.length ? severityBadge(severity) : "")
         + '<span class="nested-endpoint-preview-text" title="' + escapeHtml(topMsg) + '">' + escapeHtml(topMsg) + "</span>"
-        + '</div><p class="nested-endpoint-preview-why">'
-        + escapeHtml(why)
-        + "</div></div>"
+        + '</div></div>'
         + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Exact evidence</p>'
         + evidenceSummary
         + "</div>"

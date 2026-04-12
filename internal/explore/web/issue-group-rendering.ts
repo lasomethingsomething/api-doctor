@@ -54,9 +54,34 @@ function issueGroupFormatTitle(
 
 function issueGroupFormatCountLabel(group: IssueGroup | null | undefined): string {
   if (!group) return 'No grouped issue label available';
+  var title = (group.title || '').trim();
+  var dimension = (group.dimension || '').trim();
+  var target = '';
+  var ctx = group.context || createEmptyOpenAPIContext();
+  if (ctx.primaryValue) target = String(ctx.primaryValue);
   var baseTitle = group.title || 'Grouped issue';
   var count = group.count || 0;
   var unit = count === 1 ? 'occurrence' : 'occurrences';
+  if (!group.isSpecRule) {
+    if (dimension === 'hidden dependency / linkage burden') {
+      return (target
+        ? ('Required handoff or follow-up field is unclear: ' + target)
+        : 'Required handoff or follow-up field is unclear')
+        + ' - ' + count + ' ' + unit + ' on this endpoint';
+    }
+    if (dimension === 'workflow outcome weakness') {
+      return (target
+        ? ('Response does not clearly say what changed or what to do next: ' + target)
+        : 'Response does not clearly say what changed or what to do next')
+        + ' - ' + count + ' ' + unit + ' on this endpoint';
+    }
+    if (dimension === 'shape / storage-style response weakness') {
+      return (target
+        ? ('Response shape is too storage-oriented for the next step: ' + target)
+        : 'Response shape is too storage-oriented for the next step')
+        + ' - ' + count + ' ' + unit + ' on this endpoint';
+    }
+  }
   return baseTitle + ' - ' + count + ' ' + unit + ' on this endpoint';
 }
 

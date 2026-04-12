@@ -426,6 +426,8 @@ function workflowSurfaceKindGroupLabel(kind: string): string {
 }
 
 function workflowSurfaceChainTaskLabel(chain: ExplorerWorkflowChain): string {
+  var kindLabel = workflowSurfaceKindGroupLabelMap[(chain && chain.kind) ? String(chain.kind) : ""] || "";
+  if (kindLabel) return kindLabel;
   var roles = workflowSurfaceParseChainRoles(chain.summary);
   if (roles.length >= 2) {
     var first = workflowSurfaceHumanizeStepRole(roles[0]);

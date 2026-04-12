@@ -802,9 +802,35 @@ function issueGroupFormatTitle(finding, context, issueDimensionForFinding) {
 function issueGroupFormatCountLabel(group) {
     if (!group)
         return 'No grouped issue label available';
+    var title = (group.title || '').trim();
+    var dimension = (group.dimension || '').trim();
+    var target = '';
+    var ctx = group.context || createEmptyOpenAPIContext();
+    if (ctx.primaryValue)
+        target = String(ctx.primaryValue);
     var baseTitle = group.title || 'Grouped issue';
     var count = group.count || 0;
     var unit = count === 1 ? 'occurrence' : 'occurrences';
+    if (!group.isSpecRule) {
+        if (dimension === 'hidden dependency / linkage burden') {
+            return (target
+                ? ('Required handoff or follow-up field is unclear: ' + target)
+                : 'Required handoff or follow-up field is unclear')
+                + ' - ' + count + ' ' + unit + ' on this endpoint';
+        }
+        if (dimension === 'workflow outcome weakness') {
+            return (target
+                ? ('Response does not clearly say what changed or what to do next: ' + target)
+                : 'Response does not clearly say what changed or what to do next')
+                + ' - ' + count + ' ' + unit + ' on this endpoint';
+        }
+        if (dimension === 'shape / storage-style response weakness') {
+            return (target
+                ? ('Response shape is too storage-oriented for the next step: ' + target)
+                : 'Response shape is too storage-oriented for the next step')
+                + ' - ' + count + ' ' + unit + ' on this endpoint';
+        }
+    }
     return baseTitle + ' - ' + count + ' ' + unit + ' on this endpoint';
 }
 function issueGroupTopFieldPaths(groups, uniq) {
@@ -3376,16 +3402,12 @@ function familyInsightRenderPanel(family, preferredEndpointId) {
         var primaryChain = (model.detail && model.detail.relatedChains && model.detail.relatedChains.length)
             ? model.detail.relatedChains[0]
             : null;
-        var workflowSummaryItems = [];
-        workflowSummaryItems.push('<li><strong>Lead issue:</strong> ' + escapeHtml(primaryProblemText) + '</li>');
-        workflowSummaryItems.push('<li><strong>Why this is hard:</strong> ' + escapeHtml(whyMattersText) + '</li>');
-        if (workflowTrapGuidance.length) {
-            workflowSummaryItems.push('<li><strong>Main trap:</strong> ' + escapeHtml(workflowTrapGuidance[0].title || workflowTrapGuidance[0].happened || "Hidden prerequisites or handoffs are likely.") + '</li>');
-        }
-        if (model.workflowLines.length) {
-            workflowSummaryItems.push('<li><strong>Most likely path:</strong> ' + escapeHtml(model.workflowLines[0]) + '</li>');
-        }
-        var workflowChangeList = (improvementItems || []).slice(0, 2).map(function (item) {
+        var blockerChips = (rankedFamily && rankedFamily.dominantSignals ? rankedFamily.dominantSignals.slice(0, 3) : []).map(function (signal, idx) {
+            var label = humanizeSignalLabel(signal || "");
+            var cls = idx === 0 ? "chip chip-primary family-signal-chip" : "chip chip-secondary family-signal-chip";
+            return '<span class="' + cls + '">' + escapeHtml(label) + '</span>';
+        }).join("");
+        var workflowChangeList = (improvementItems || []).slice(0, 1).map(function (item) {
             return '<li>' + escapeHtml(item.change || "Clarify the next step and required handoff state.") + '</li>';
         }).join("");
         if (!workflowChangeList) {
@@ -3407,7 +3429,11 @@ function familyInsightRenderPanel(family, preferredEndpointId) {
             + '<div class="expansion-sections expansion-sections-ordered">'
             + '<div class="expansion-section expansion-problem">'
             + '<p class="expansion-section-title">Why developers get stuck here</p>'
-            + '<ul class="expansion-evidence-list">' + workflowSummaryItems.join("") + '</ul>'
+            + (blockerChips ? ('<div class="chips workflow-summary-chips">' + blockerChips + '</div>') : '')
+            + '<p class="expansion-text">' + escapeHtml(whyMattersText) + '</p>'
+            + (workflowTrapGuidance.length
+                ? ('<p class="expansion-text"><strong>Main trap:</strong> ' + escapeHtml(workflowTrapGuidance[0].title || workflowTrapGuidance[0].happened || "Hidden prerequisites or handoffs are likely.") + '</p>')
+                : '')
             + "</div>"
             + '<div class="expansion-section expansion-contract-change">'
             + '<p class="expansion-section-title">What should change next</p>'
@@ -3523,6 +3549,19 @@ function familyInsightRenderMostLikelyPath(chain) {
     var steps = chain.endpointIds || [];
     var roles = parseChainRoles(chain.summary, steps.length);
     var taskLabel = chainTaskLabel(chain);
+    var stripItems = steps.slice(0, 4).map(function (endpointId, idx) {
+        var detail = endpointDetails[endpointId];
+        var endpoint = detail && detail.endpoint ? detail.endpoint : createEmptyEndpointRow();
+        var roleLabel = roles[idx] || "";
+        var stepName = roleLabel ? humanizeStepRole(roleLabel) : ('Step ' + String(idx + 1));
+        return '<div class="workflow-family-flow-step">'
+            + '<span class="workflow-family-flow-step-num">' + String(idx + 1) + '</span>'
+            + '<div class="workflow-family-flow-step-body">'
+            + '<div class="workflow-family-flow-step-role">' + escapeHtml(stepName) + '</div>'
+            + '<div class="workflow-family-flow-step-endpoint">' + escapeHtml(endpoint.method + ' ' + endpoint.path) + '</div>'
+            + '</div>'
+            + '</div>';
+    }).join('<span class="workflow-family-flow-arrow" aria-hidden="true">→</span>');
     var stepItems = steps.slice(0, 4).map(function (endpointId, idx) {
         var detail = endpointDetails[endpointId];
         var endpoint = detail && detail.endpoint ? detail.endpoint : createEmptyEndpointRow();
@@ -3556,6 +3595,7 @@ function familyInsightRenderMostLikelyPath(chain) {
     return '<div class="expansion-section expansion-workflow-path">'
         + '<p class="expansion-section-title">Most likely path</p>'
         + '<p class="expansion-text"><strong>' + escapeHtml(taskLabel) + '</strong> across ' + escapeHtml(String(steps.length)) + ' step' + (steps.length === 1 ? '' : 's') + '.</p>'
+        + '<div class="workflow-family-flow-strip" aria-label="Most likely workflow path">' + stripItems + '</div>'
         + '<ol class="expansion-workflow-list expansion-workflow-path-list">' + stepItems + '</ol>'
         + '</div>';
 }
@@ -4892,7 +4932,7 @@ function renderFamilyTopSignalCell(family, ranked) {
     var inlineExpand = state.activeTopTab === "shape";
     var expanded = inlineExpand && !!(state.expandedFamilySignals && state.expandedFamilySignals[familyName]);
     var visibleCount = state.activeTopTab === "workflow"
-        ? 1
+        ? Math.min(items.length, 2)
         : inlineExpand
             ? (expanded ? items.length : (items.length <= 4 ? items.length : 2))
             : (items.length <= 3 ? items.length : 2);
@@ -5357,9 +5397,7 @@ function renderFamilyEndpointExpansion(family) {
                 + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Why this is hard</p><div class="nested-endpoint-preview-value">'
                 + (findings.length ? severityBadge(severity) : "")
                 + '<span class="nested-endpoint-preview-text" title="' + escapeHtml(topMsg) + '">' + escapeHtml(topMsg) + "</span>"
-                + '</div><p class="nested-endpoint-preview-why">'
-                + escapeHtml(why)
-                + "</div></div>"
+                + '</div></div>'
                 + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Exact evidence</p>'
                 + evidenceSummary
                 + "</div>"
@@ -6343,6 +6381,9 @@ function workflowSurfaceKindGroupLabel(kind) {
     return workflowSurfaceKindGroupLabelMap[kind] || kind.replace(/-/g, " to ");
 }
 function workflowSurfaceChainTaskLabel(chain) {
+    var kindLabel = workflowSurfaceKindGroupLabelMap[(chain && chain.kind) ? String(chain.kind) : ""] || "";
+    if (kindLabel)
+        return kindLabel;
     var roles = workflowSurfaceParseChainRoles(chain.summary);
     if (roles.length >= 2) {
         var first = workflowSurfaceHumanizeStepRole(roles[0]);
@@ -6903,18 +6944,11 @@ function renderEndpointDiagnosticsWorkflowSummary(detail) {
     });
     var chainContextHtml = renderWorkflowChainContextForEndpoint(detail);
     var whyCopy = signalSummary.replace(/^main workflow clues:\s*/i, "");
-    var whyList = [
-        "Developers have to infer what state or identifier must be carried forward between calls.",
-        "The next valid call is not obvious from the response, so sequencing is learned at runtime."
-    ];
-    if (whyCopy && whyCopy !== signalSummary) {
-        whyList.unshift("Primary workflow problems: " + whyCopy + ".");
-    }
-    var whyHtml = whyList.map(function (line) {
-        return "<li>" + escapeHtml(line) + "</li>";
-    }).join("");
+    var whyText = whyCopy && whyCopy !== signalSummary
+        ? ("Primary workflow problems: " + whyCopy + ".")
+        : "Developers have to infer carry-forward state and the next valid call from runtime behavior instead of the contract.";
     var nextBlock = renderWhatToDoNextBlock(endpoint, findings, {
-        maxItems: 2,
+        maxItems: 1,
         leadCopy: "Choose the smallest contract change that makes the next step obvious and the handoff explicit.",
         showEndpointLabel: false
     });
@@ -6924,9 +6958,7 @@ function renderEndpointDiagnosticsWorkflowSummary(detail) {
         + '<p class="subtle"><strong>' + escapeHtml(endpoint.method + " " + endpoint.path) + '</strong> '
         + (chainCount ? ("sits inside " + chainCount + " likely workflow path" + (chainCount === 1 ? "" : "s")) : "shows workflow friction even without a full inferred path")
         + '.</p>'
-        + '<ul class="family-top-evidence">'
-        + whyHtml
-        + "</ul>"
+        + '<p class="expansion-text">' + escapeHtml(whyText) + '</p>'
         + "</div>"
         + chainContextHtml
         + nextBlock
