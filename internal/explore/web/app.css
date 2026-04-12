@@ -2550,6 +2550,8 @@ body.lens-workflow .nested-endpoint-primary-issue {
   padding: 0.16rem 0.5rem;
   gap: 0.26rem;
   font-size: 0.72rem;
+  white-space: nowrap;
+  flex-wrap: nowrap;
 }
 
 .nested-endpoint-table .severity-icon {
@@ -4205,9 +4207,29 @@ body.lens-shape .severity-warning .severity-icon {
   color: #17212f;
 }
 
+.workflow-supporting-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.8rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid #e2e9f2;
+}
+
+.workflow-supporting-head strong {
+  font-size: 0.92rem;
+  color: #17212f;
+}
+
 .workflow-supporting-copy {
   font-size: 0.78rem;
   color: #587187;
+}
+
+.workflow-supporting-shell {
+  display: grid;
+  gap: 0.78rem;
 }
 
 .workflow-supporting-drawer[open] > .workflow-supporting-summary {
@@ -4226,7 +4248,6 @@ body.lens-shape .severity-warning .severity-icon {
 .workflow-supporting-body {
   display: grid;
   gap: 0.85rem;
-  padding: 0.86rem;
 }
 
 .workflow-guide-section {
@@ -4266,6 +4287,27 @@ body.lens-shape .severity-warning .severity-icon {
 .workflow-guide-cards {
   display: grid;
   gap: 0.8rem;
+}
+
+.workflow-guide-blockers {
+  gap: 0.28rem;
+}
+
+.workflow-guide-flow-strip {
+  margin-top: 0.08rem;
+}
+
+.workflow-guide-flow-strip .workflow-family-flow-step {
+  max-width: 18rem;
+}
+
+.workflow-guide-flow-strip .workflow-family-flow-step-endpoint {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  text-overflow: clip;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .workflow-guide-card {
@@ -5312,12 +5354,14 @@ tbody tr.active .endpoint-row-main strong {
   display: inline-flex;
   align-items: center;
   gap: 0.32rem;
+  flex-wrap: nowrap;
   border-radius: 999px;
   padding: 0.2rem 0.58rem;
   font-size: 0.73rem;
   font-weight: 800;
   border: 1px solid transparent;
   cursor: default;
+  white-space: nowrap;
 }
 
 .severity-badge.is-interactive {

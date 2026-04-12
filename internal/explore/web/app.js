@@ -5207,6 +5207,23 @@ function inspectorRenderContentMap() {
             : 'Contract Issues inspector: OpenAPI rule violations (REQUIRED vs SHOULD) + consistency drift. Grouped deviations = evidence grouped by schema field + issue type.';
     return '<p class="subtle inspector-content-map-inline"><strong>Inspector scope:</strong> ' + escapeHtml(mapping) + '</p>';
 }
+function compactWorkflowIssueSummary(findings, fallback) {
+    var lead = (findings || [])[0] || null;
+    var code = lead ? (lead.code || "") : "";
+    if (code === "prerequisite-task-burden") {
+        return "This step appears to need hidden prerequisite IDs or earlier state before it can succeed.";
+    }
+    if (code === "weak-outcome-next-action-guidance") {
+        return "The response does not clearly say what changed or what the next valid call is.";
+    }
+    if (code === "weak-follow-up-linkage" || code === "weak-action-follow-up-linkage" || code === "weak-accepted-tracking-linkage") {
+        return "The next step depends on a follow-up ID or handoff field that is not exposed clearly.";
+    }
+    if (code === "contract-shape-workflow-guidance-burden") {
+        return "The response shape hides the result and makes the workflow harder to continue safely.";
+    }
+    return fallback || "The workflow still requires guesswork because the contract does not guide the next step clearly.";
+}
 function renderFamilyTableClamp(text, className) {
     var value = text || "—";
     return '<div class="' + className + '" title="' + escapeHtml(value) + '">' + escapeHtml(value) + "</div>";
@@ -5223,10 +5240,16 @@ function familySignalItemsForActiveLens(family, ranked) {
     if (state.activeTopTab === "shape") {
         return sortedSignalLabels(family.shapeSignalCounts || {}, 50);
     }
+    var contractSignals = sortedSignalLabels(family.contractSignalCounts || {}, 50);
+    if (contractSignals.length)
+        return contractSignals;
+    if (ranked && ranked.dominantSignals && ranked.dominantSignals.length) {
+        return ranked.dominantSignals.slice();
+    }
     var dims = (family.topDimensions || []).slice();
     if (dims.length)
         return dims;
-    return (ranked && ranked.dominantSignals) ? ranked.dominantSignals.slice() : [];
+    return [];
 }
 function renderFamilyDominantSignalsCell(family, ranked) {
     var items = familySignalItemsForActiveLens(family, ranked).filter(Boolean);
@@ -5291,9 +5314,11 @@ function renderFamilyTopSignalCell(family, ranked) {
         ? Math.min(items.length, 2)
         : state.activeTopTab === "shape"
             ? 1
-            : inlineExpand
-                ? (expanded ? items.length : (items.length <= 4 ? items.length : 2))
-                : (items.length <= 3 ? items.length : 2);
+            : state.activeTopTab === "spec-rule"
+                ? Math.min(items.length, 2)
+                : inlineExpand
+                    ? (expanded ? items.length : (items.length <= 4 ? items.length : 2))
+                    : (items.length <= 3 ? items.length : 2);
     var visible = items.slice(0, visibleCount).map(function (raw, index) {
         var label = raw ? humanizeSignalLabel(raw) : "—";
         var cls = index === 0 ? "chip chip-primary family-signal-chip" : "chip chip-secondary family-signal-chip";
@@ -5768,6 +5793,9 @@ function renderFamilyEndpointExpansion(family) {
             var topMsg = topGroup && topGroup.messages && topGroup.messages[0]
                 ? topGroup.messages[0]
                 : (findings[0] && findings[0].message ? findings[0].message : "No issue message extracted.");
+            if (state.activeTopTab === "workflow") {
+                topMsg = compactWorkflowIssueSummary(findings, topMsg);
+            }
             var severity = dominantSeverity(findings);
             var why = topGroup && topGroup.impact
                 ? topGroup.impact
@@ -5790,7 +5818,7 @@ function renderFamilyEndpointExpansion(family) {
                 + '<td colspan="7" class="nested-endpoint-preview-cell">'
                 + '<div class="nested-endpoint-preview"><div class="nested-endpoint-preview-grid">'
                 + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Why this is hard</p><div class="nested-endpoint-preview-value">'
-                + (findings.length ? severityBadge(severity) : "")
+                + (state.activeTopTab === "workflow" ? "" : (findings.length ? severityBadge(severity) : ""))
                 + '<span class="nested-endpoint-preview-text" title="' + escapeHtml(topMsg) + '">' + escapeHtml(topMsg) + "</span>"
                 + '</div></div>'
                 + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Exact evidence</p>'
@@ -6125,6 +6153,21 @@ function renderEndpointRow(row, options) {
     var inspectButtonLabel = inspectLoading ? 'Inspecting...' : 'Inspect endpoint';
     var rowClasses = (options.inlineTable ? 'nested-endpoint-row ' : '') + selected + ' row-pressure-' + row.priority + (additionalOpen ? ' findings-expanded' : '');
     if (options.inlineTable) {
+        if (state.activeTopTab === 'workflow' && firstFinding) {
+            var workflowCode = firstFinding.code || '';
+            if (workflowCode === 'prerequisite-task-burden') {
+                topIssueLabel = 'This step appears to need hidden prerequisite IDs or earlier state.';
+            }
+            else if (workflowCode === 'weak-outcome-next-action-guidance') {
+                topIssueLabel = 'The response does not clearly say what changed or what to call next.';
+            }
+            else if (workflowCode === 'weak-follow-up-linkage' || workflowCode === 'weak-action-follow-up-linkage' || workflowCode === 'weak-accepted-tracking-linkage') {
+                topIssueLabel = 'The next step needs a handoff ID or follow-up state that is not exposed clearly.';
+            }
+            else if (workflowCode === 'contract-shape-workflow-guidance-burden') {
+                topIssueLabel = 'The response shape hides the outcome and makes the workflow harder to continue.';
+            }
+        }
         if (state.activeTopTab === 'shape' && firstFinding) {
             var shapeCode = firstFinding.code || '';
             if (shapeCode === 'snapshot-heavy-response' || shapeCode === 'contract-shape-workflow-guidance-burden') {
@@ -6481,43 +6524,22 @@ function workflowSurfaceRenderChains() {
     el.workflowSection.style.display = "block";
     var chainSource = filteredChains.length ? filteredChains : scopedChains;
     var workflowGuideHtml = workflowSurfaceRenderGuideSection(chainSource);
-    var journeyGuidanceHtml = renderCommonWorkflowJourneys(chainSource);
-    var supportingContextHtml = workflowSurfaceRenderSupportingContext(workflowGuideHtml, journeyGuidanceHtml);
+    var supportingContextHtml = workflowSurfaceRenderSupportingContext(workflowGuideHtml, "");
     if (filteredChains.length) {
         el.workflowHelp.textContent = "Optional workflow-path guidance for the current slice. Open this when you need hidden prerequisites, carry-forward state, or the likely next call.";
-        var groups = workflowSurfaceGroupChainsByKind(filteredChains, { focusChainId: state.workflowChainFocusChainId || "" });
-        el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer('<section class="workflow-chain-surface-primary">'
-            + '<div class="workflow-chain-surface-header">'
-            + '<h3 class="workflow-guide-title">Workflow steps and hidden traps</h3>'
-            + '<p class="workflow-guide-copy">Use this only when the sequence itself is the problem. Click a step to scope the family table above to the matching API surface.</p>'
-            + '</div>'
-            + groups.map(workflowSurfaceRenderKindGroup).join("")
-            + "</section>"
-            + supportingContextHtml, filteredChains.length);
-        workflowSurfaceBindStepInteractions();
-        workflowSurfaceSyncStepSelectionHighlight();
+        el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(supportingContextHtml || workflowSurfaceRenderEmptyState("filtered"), filteredChains.length);
         workflowSurfaceBindChainsDrawerToggle();
         return;
     }
     if (scopedChains.length) {
         el.workflowHelp.textContent = "No workflow path lines up with the current evidence-only table view, but related call sequences are still available if you need sequence context.";
-        var scopedGroups = workflowSurfaceGroupChainsByKind(scopedChains, { focusChainId: state.workflowChainFocusChainId || "" });
-        el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer('<section class="workflow-chain-surface-primary">'
-            + '<div class="workflow-chain-surface-header">'
-            + '<h3 class="workflow-guide-title">Workflow steps and hidden traps</h3>'
-            + '<p class="workflow-guide-copy">These paths stay available from the scoped endpoint set so you can still inspect sequence and weak handoffs when needed.</p>'
-            + '</div>'
-            + '<div class="workflow-no-match">'
+        el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer('<div class="workflow-no-match">'
             + '<p class="workflow-empty-title"><strong>Related workflow paths are still available</strong></p>'
-            + '<p class="workflow-empty-copy">The current table view is narrower than the available chain evidence, so this section keeps the related sequence visible from the endpoints still in view.</p>'
+            + '<p class="workflow-empty-copy">The current table view is narrower than the available chain evidence, so this section keeps compact sequence reads available from the endpoints still in view.</p>'
             + renderRecoveryActions(["show-all-workflows"])
             + "</div>"
-            + scopedGroups.map(workflowSurfaceRenderKindGroup).join("")
-            + "</section>"
             + supportingContextHtml, scopedChains.length);
         bindRecoveryButtons(el.workflowChains);
-        workflowSurfaceBindStepInteractions();
-        workflowSurfaceSyncStepSelectionHighlight();
         workflowSurfaceBindChainsDrawerToggle();
         return;
     }
@@ -6554,15 +6576,15 @@ function workflowSurfaceRenderSupportingContext(workflowGuideHtml, journeyGuidan
     var contentHtml = (workflowGuideHtml || "") + (journeyGuidanceHtml || "");
     if (!contentHtml)
         return "";
-    return '<details class="workflow-supporting-drawer">'
-        + '<summary class="workflow-supporting-summary">'
-        + "<strong>Supporting workflow notes</strong>"
-        + '<span class="workflow-supporting-copy">Compact path summaries and redesign guidance</span>'
-        + "</summary>"
+    return '<section class="workflow-supporting-shell">'
+        + '<div class="workflow-supporting-head">'
+        + "<strong>Workflow paths</strong>"
+        + '<span class="workflow-supporting-copy">Compact sequence reads and redesign guidance</span>'
+        + "</div>"
         + '<div class="workflow-supporting-body">'
         + contentHtml
         + "</div>"
-        + "</details>";
+        + "</section>";
 }
 function workflowSurfaceRenderGuideSection(chains) {
     var sourceChains = (chains || []).slice();
@@ -6579,7 +6601,7 @@ function workflowSurfaceRenderGuideSection(chains) {
     return '<section class="workflow-guide-section">'
         + '<div class="workflow-guide-header">'
         + '<h3 class="workflow-guide-title">Path summaries</h3>'
-        + '<p class="workflow-guide-copy">Compact reads on the heaviest workflow paths. Use these as supporting context, not the main investigation surface.</p>'
+        + '<p class="workflow-guide-copy">Use these compact reads when the sequence itself is the problem. The family and endpoint tables remain the main investigation surface.</p>'
         + "</div>"
         + '<div class="workflow-guide-cards">'
         + featured.map(function (chain, index) {
@@ -6590,10 +6612,18 @@ function workflowSurfaceRenderGuideSection(chains) {
 }
 function workflowSurfaceRenderGuideCard(chain, isLead) {
     var roles = workflowSurfaceParseChainRoles(chain.summary, (chain.endpointIds || []).length);
-    var burdenSummary = workflowSurfaceRenderBurdenSummary(chain, roles);
+    var burdenItems = workflowSurfaceCollectBurdenSummary(chain, roles).slice(0, 3);
     var leadClass = isLead ? " workflow-guide-card-lead" : "";
     var reasonHtml = chain.reason
         ? '<p class="workflow-guide-reason"><strong>Why developers get stuck here:</strong> ' + escapeHtml(chain.reason) + "</p>"
+        : "";
+    var blockerHtml = burdenItems.length
+        ? ('<div class="chips workflow-guide-blockers">' + burdenItems.map(function (item, index) {
+            var cls = index === 0 ? "chip chip-primary family-signal-chip" : "chip chip-secondary family-signal-chip";
+            return '<span class="' + cls + '" title="' + escapeHtml(item.why) + '"><span class="family-signal-chip-label">'
+                + escapeHtml(item.label)
+                + "</span></span>";
+        }).join("") + "</div>")
         : "";
     return '<article class="workflow-guide-card' + leadClass + '">'
         + '<div class="workflow-guide-card-head">'
@@ -6605,11 +6635,34 @@ function workflowSurfaceRenderGuideCard(chain, isLead) {
         + "</div>"
         + "</div>"
         + reasonHtml
-        + burdenSummary
+        + blockerHtml
         + '<div class="workflow-guide-chain">'
-        + workflowSurfaceRenderChain(chain, true)
+        + workflowSurfaceRenderCompactChain(chain, roles)
         + "</div>"
         + "</article>";
+}
+function workflowSurfaceRenderCompactChain(chain, roles) {
+    var steps = (chain && chain.endpointIds) ? chain.endpointIds : [];
+    var endpointDetails = payloadEndpointDetails();
+    if (!steps.length)
+        return "";
+    var items = steps.map(function (endpointId, idx) {
+        var detail = endpointDetails[endpointId];
+        if (!detail || !detail.endpoint)
+            return "";
+        var endpoint = detail.endpoint;
+        var role = workflowSurfaceHumanizeStepRole(roles[idx] || "");
+        return '<span class="workflow-family-flow-step">'
+            + '<span class="workflow-family-flow-step-num">' + escapeHtml(String(idx + 1)) + "</span>"
+            + '<span class="workflow-family-flow-step-body">'
+            + '<span class="workflow-family-flow-step-role">' + escapeHtml(role || "step") + "</span>"
+            + '<span class="workflow-family-flow-step-endpoint">' + escapeHtml(endpoint.method + " " + endpoint.path) + "</span>"
+            + "</span>"
+            + "</span>";
+    }).filter(Boolean).join('<span class="workflow-family-flow-arrow" aria-hidden="true">\u2192</span>');
+    return '<div class="workflow-family-flow-strip workflow-guide-flow-strip" aria-label="Workflow path summary">'
+        + items
+        + "</div>";
 }
 function workflowSurfaceBindStepInteractions() {
     var endpointDetails = payloadEndpointDetails();

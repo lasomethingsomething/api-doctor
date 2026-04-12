@@ -88,51 +88,30 @@ function workflowSurfaceRenderChains(): void {
 
   var chainSource = filteredChains.length ? filteredChains : scopedChains;
   var workflowGuideHtml = workflowSurfaceRenderGuideSection(chainSource);
-  var journeyGuidanceHtml = renderCommonWorkflowJourneys(chainSource);
-  var supportingContextHtml = workflowSurfaceRenderSupportingContext(workflowGuideHtml, journeyGuidanceHtml);
+  var supportingContextHtml = workflowSurfaceRenderSupportingContext(workflowGuideHtml, "");
 
   if (filteredChains.length) {
     el.workflowHelp.textContent = "Optional workflow-path guidance for the current slice. Open this when you need hidden prerequisites, carry-forward state, or the likely next call.";
-    var groups = workflowSurfaceGroupChainsByKind(filteredChains, { focusChainId: state.workflowChainFocusChainId || "" });
     el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(
-      '<section class="workflow-chain-surface-primary">'
-        + '<div class="workflow-chain-surface-header">'
-        + '<h3 class="workflow-guide-title">Workflow steps and hidden traps</h3>'
-        + '<p class="workflow-guide-copy">Use this only when the sequence itself is the problem. Click a step to scope the family table above to the matching API surface.</p>'
-        + '</div>'
-        + groups.map(workflowSurfaceRenderKindGroup).join("")
-      + "</section>"
-      + supportingContextHtml,
+      supportingContextHtml || workflowSurfaceRenderEmptyState("filtered"),
       filteredChains.length
     );
-    workflowSurfaceBindStepInteractions();
-    workflowSurfaceSyncStepSelectionHighlight();
     workflowSurfaceBindChainsDrawerToggle();
     return;
   }
 
   if (scopedChains.length) {
     el.workflowHelp.textContent = "No workflow path lines up with the current evidence-only table view, but related call sequences are still available if you need sequence context.";
-    var scopedGroups = workflowSurfaceGroupChainsByKind(scopedChains, { focusChainId: state.workflowChainFocusChainId || "" });
     el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(
-      '<section class="workflow-chain-surface-primary">'
-        + '<div class="workflow-chain-surface-header">'
-        + '<h3 class="workflow-guide-title">Workflow steps and hidden traps</h3>'
-        + '<p class="workflow-guide-copy">These paths stay available from the scoped endpoint set so you can still inspect sequence and weak handoffs when needed.</p>'
-        + '</div>'
-        + '<div class="workflow-no-match">'
+      '<div class="workflow-no-match">'
         + '<p class="workflow-empty-title"><strong>Related workflow paths are still available</strong></p>'
-        + '<p class="workflow-empty-copy">The current table view is narrower than the available chain evidence, so this section keeps the related sequence visible from the endpoints still in view.</p>'
+        + '<p class="workflow-empty-copy">The current table view is narrower than the available chain evidence, so this section keeps compact sequence reads available from the endpoints still in view.</p>'
         + renderRecoveryActions(["show-all-workflows"])
-        + "</div>"
-        + scopedGroups.map(workflowSurfaceRenderKindGroup).join("")
-      + "</section>"
+      + "</div>"
       + supportingContextHtml,
       scopedChains.length
     );
     bindRecoveryButtons(el.workflowChains);
-    workflowSurfaceBindStepInteractions();
-    workflowSurfaceSyncStepSelectionHighlight();
     workflowSurfaceBindChainsDrawerToggle();
     return;
   }
@@ -176,15 +155,15 @@ function workflowSurfaceRenderSupportingContext(workflowGuideHtml: string, journ
   var contentHtml = (workflowGuideHtml || "") + (journeyGuidanceHtml || "");
   if (!contentHtml) return "";
 
-  return '<details class="workflow-supporting-drawer">'
-    + '<summary class="workflow-supporting-summary">'
-    + "<strong>Supporting workflow notes</strong>"
-    + '<span class="workflow-supporting-copy">Compact path summaries and redesign guidance</span>'
-    + "</summary>"
+  return '<section class="workflow-supporting-shell">'
+    + '<div class="workflow-supporting-head">'
+    + "<strong>Workflow paths</strong>"
+    + '<span class="workflow-supporting-copy">Compact sequence reads and redesign guidance</span>'
+    + "</div>"
     + '<div class="workflow-supporting-body">'
     + contentHtml
     + "</div>"
-    + "</details>";
+    + "</section>";
 }
 
 function workflowSurfaceRenderGuideSection(chains: ExplorerWorkflowChain[]): string {
@@ -202,7 +181,7 @@ function workflowSurfaceRenderGuideSection(chains: ExplorerWorkflowChain[]): str
   return '<section class="workflow-guide-section">'
     + '<div class="workflow-guide-header">'
     + '<h3 class="workflow-guide-title">Path summaries</h3>'
-    + '<p class="workflow-guide-copy">Compact reads on the heaviest workflow paths. Use these as supporting context, not the main investigation surface.</p>'
+    + '<p class="workflow-guide-copy">Use these compact reads when the sequence itself is the problem. The family and endpoint tables remain the main investigation surface.</p>'
     + "</div>"
     + '<div class="workflow-guide-cards">'
     + featured.map(function (chain: ExplorerWorkflowChain, index: number) {
@@ -214,10 +193,18 @@ function workflowSurfaceRenderGuideSection(chains: ExplorerWorkflowChain[]): str
 
 function workflowSurfaceRenderGuideCard(chain: ExplorerWorkflowChain, isLead: boolean): string {
   var roles = workflowSurfaceParseChainRoles(chain.summary, (chain.endpointIds || []).length);
-  var burdenSummary = workflowSurfaceRenderBurdenSummary(chain, roles);
+  var burdenItems = workflowSurfaceCollectBurdenSummary(chain, roles).slice(0, 3);
   var leadClass = isLead ? " workflow-guide-card-lead" : "";
   var reasonHtml = chain.reason
     ? '<p class="workflow-guide-reason"><strong>Why developers get stuck here:</strong> ' + escapeHtml(chain.reason) + "</p>"
+    : "";
+  var blockerHtml = burdenItems.length
+    ? ('<div class="chips workflow-guide-blockers">' + burdenItems.map(function (item: WorkflowBurdenSummaryItem, index: number) {
+        var cls = index === 0 ? "chip chip-primary family-signal-chip" : "chip chip-secondary family-signal-chip";
+        return '<span class="' + cls + '" title="' + escapeHtml(item.why) + '"><span class="family-signal-chip-label">'
+          + escapeHtml(item.label)
+          + "</span></span>";
+      }).join("") + "</div>")
     : "";
 
   return '<article class="workflow-guide-card' + leadClass + '">'
@@ -230,11 +217,35 @@ function workflowSurfaceRenderGuideCard(chain: ExplorerWorkflowChain, isLead: bo
     + "</div>"
     + "</div>"
     + reasonHtml
-    + burdenSummary
+    + blockerHtml
     + '<div class="workflow-guide-chain">'
-    + workflowSurfaceRenderChain(chain, true)
+    + workflowSurfaceRenderCompactChain(chain, roles)
     + "</div>"
     + "</article>";
+}
+
+function workflowSurfaceRenderCompactChain(chain: ExplorerWorkflowChain, roles: string[]): string {
+  var steps = (chain && chain.endpointIds) ? chain.endpointIds : [];
+  var endpointDetails = payloadEndpointDetails();
+  if (!steps.length) return "";
+
+  var items = steps.map(function (endpointId: string, idx: number) {
+    var detail = endpointDetails[endpointId];
+    if (!detail || !detail.endpoint) return "";
+    var endpoint = detail.endpoint;
+    var role = workflowSurfaceHumanizeStepRole(roles[idx] || "");
+    return '<span class="workflow-family-flow-step">'
+      + '<span class="workflow-family-flow-step-num">' + escapeHtml(String(idx + 1)) + "</span>"
+      + '<span class="workflow-family-flow-step-body">'
+      + '<span class="workflow-family-flow-step-role">' + escapeHtml(role || "step") + "</span>"
+      + '<span class="workflow-family-flow-step-endpoint">' + escapeHtml(endpoint.method + " " + endpoint.path) + "</span>"
+      + "</span>"
+      + "</span>";
+  }).filter(Boolean).join('<span class="workflow-family-flow-arrow" aria-hidden="true">\u2192</span>');
+
+  return '<div class="workflow-family-flow-strip workflow-guide-flow-strip" aria-label="Workflow path summary">'
+    + items
+    + "</div>";
 }
 
 function workflowSurfaceBindStepInteractions(): void {

@@ -184,6 +184,18 @@ function renderEndpointRow(row: ExplorerEndpointRow, options?: RenderEndpointRow
   var rowClasses = (options.inlineTable ? 'nested-endpoint-row ' : '') + selected + ' row-pressure-' + row.priority + (additionalOpen ? ' findings-expanded' : '');
 
   if (options.inlineTable) {
+    if (state.activeTopTab === 'workflow' && firstFinding) {
+      var workflowCode = firstFinding.code || '';
+      if (workflowCode === 'prerequisite-task-burden') {
+        topIssueLabel = 'This step appears to need hidden prerequisite IDs or earlier state.';
+      } else if (workflowCode === 'weak-outcome-next-action-guidance') {
+        topIssueLabel = 'The response does not clearly say what changed or what to call next.';
+      } else if (workflowCode === 'weak-follow-up-linkage' || workflowCode === 'weak-action-follow-up-linkage' || workflowCode === 'weak-accepted-tracking-linkage') {
+        topIssueLabel = 'The next step needs a handoff ID or follow-up state that is not exposed clearly.';
+      } else if (workflowCode === 'contract-shape-workflow-guidance-burden') {
+        topIssueLabel = 'The response shape hides the outcome and makes the workflow harder to continue.';
+      }
+    }
     if (state.activeTopTab === 'shape' && firstFinding) {
       var shapeCode = firstFinding.code || '';
       if (shapeCode === 'snapshot-heavy-response' || shapeCode === 'contract-shape-workflow-guidance-burden') {

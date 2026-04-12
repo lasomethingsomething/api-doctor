@@ -62,6 +62,24 @@ interface FamilyTableRowRenderOptions {
   repeatContractSummaryCount?: number;
 }
 
+function compactWorkflowIssueSummary(findings: ExplorerFinding[], fallback: string): string {
+  var lead = (findings || [])[0] || null;
+  var code = lead ? (lead.code || "") : "";
+  if (code === "prerequisite-task-burden") {
+    return "This step appears to need hidden prerequisite IDs or earlier state before it can succeed.";
+  }
+  if (code === "weak-outcome-next-action-guidance") {
+    return "The response does not clearly say what changed or what the next valid call is.";
+  }
+  if (code === "weak-follow-up-linkage" || code === "weak-action-follow-up-linkage" || code === "weak-accepted-tracking-linkage") {
+    return "The next step depends on a follow-up ID or handoff field that is not exposed clearly.";
+  }
+  if (code === "contract-shape-workflow-guidance-burden") {
+    return "The response shape hides the result and makes the workflow harder to continue safely.";
+  }
+  return fallback || "The workflow still requires guesswork because the contract does not guide the next step clearly.";
+}
+
 function renderFamilyTableClamp(text: string, className: string): string {
   var value = text || "—";
   return '<div class="' + className + '" title="' + escapeHtml(value) + '">' + escapeHtml(value) + "</div>";
@@ -86,9 +104,14 @@ function familySignalItemsForActiveLens(
   if (state.activeTopTab === "shape") {
     return sortedSignalLabels(family.shapeSignalCounts || {}, 50);
   }
+  var contractSignals = sortedSignalLabels(family.contractSignalCounts || {}, 50);
+  if (contractSignals.length) return contractSignals;
+  if (ranked && ranked.dominantSignals && ranked.dominantSignals.length) {
+    return ranked.dominantSignals.slice();
+  }
   var dims = (family.topDimensions || []).slice();
   if (dims.length) return dims;
-  return (ranked && ranked.dominantSignals) ? ranked.dominantSignals.slice() : [];
+  return [];
 }
 
 function renderFamilyDominantSignalsCell(
@@ -160,6 +183,8 @@ function renderFamilyTopSignalCell(
     ? Math.min(items.length, 2)
     : state.activeTopTab === "shape"
     ? 1
+    : state.activeTopTab === "spec-rule"
+    ? Math.min(items.length, 2)
     : inlineExpand
     ? (expanded ? items.length : (items.length <= 4 ? items.length : 2))
     : (items.length <= 3 ? items.length : 2);
@@ -677,6 +702,9 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
       var topMsg = topGroup && topGroup.messages && topGroup.messages[0]
         ? topGroup.messages[0]
         : (findings[0] && findings[0].message ? findings[0].message : "No issue message extracted.");
+      if (state.activeTopTab === "workflow") {
+        topMsg = compactWorkflowIssueSummary(findings, topMsg);
+      }
       var severity = dominantSeverity(findings);
       var why = topGroup && topGroup.impact
         ? topGroup.impact
@@ -700,7 +728,7 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
         + '<td colspan="7" class="nested-endpoint-preview-cell">'
         + '<div class="nested-endpoint-preview"><div class="nested-endpoint-preview-grid">'
         + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Why this is hard</p><div class="nested-endpoint-preview-value">'
-        + (findings.length ? severityBadge(severity) : "")
+        + (state.activeTopTab === "workflow" ? "" : (findings.length ? severityBadge(severity) : ""))
         + '<span class="nested-endpoint-preview-text" title="' + escapeHtml(topMsg) + '">' + escapeHtml(topMsg) + "</span>"
         + '</div></div>'
         + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Exact evidence</p>'
