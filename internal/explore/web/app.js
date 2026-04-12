@@ -5733,12 +5733,37 @@ function renderFamilyInlineInsightRow(family) {
     var familyName = family.family || "unlabeled family";
     if (state.expandedFamilyInsight !== familyName)
         return "";
+    var workflowGuideHtml = "";
+    if (state.activeTopTab === "workflow") {
+        var endpointDetails = payloadEndpointDetails();
+        var familyChains = {};
+        filteredRows().forEach(function (row) {
+            if ((row.family || "unlabeled family") !== familyName)
+                return;
+            var detail = endpointDetails[row.id];
+            (detail && detail.relatedChains ? detail.relatedChains : []).forEach(function (chain) {
+                var key = ((chain && chain.kind) ? chain.kind : "workflow") + "|" + ((chain && chain.endpointIds) ? chain.endpointIds.join(",") : "");
+                if (key !== "|" && !familyChains[key])
+                    familyChains[key] = chain;
+            });
+        });
+        var journeysHtml = renderCommonWorkflowJourneys(Object.keys(familyChains).map(function (key) {
+            return familyChains[key];
+        }));
+        if (journeysHtml) {
+            workflowGuideHtml = '<details class="family-inline-workflow-guide" open>'
+                + '<summary class="family-inline-workflow-guide-summary"><strong>Workflow sequence guide</strong><span class="family-inline-workflow-guide-copy">Use this when the sequence itself is the problem.</span></summary>'
+                + '<div class="family-inline-workflow-guide-body">' + journeysHtml + '</div>'
+                + '</details>';
+        }
+    }
     return '<tr class="family-expansion-row family-inline-insight-row is-expanded pressure-' + escapeHtml(family.pressure) + '" data-family="'
         + escapeHtml(family.family)
         + '"><td colspan="'
         + String(familyTableColumnCountForActiveTab())
         + '" class="family-expansion-cell"><div class="family-row-insight">'
         + renderFamilyInsightPanel(family)
+        + workflowGuideHtml
         + "</div></td></tr>";
 }
 function renderFamilyEndpointExpansion(family) {
@@ -7824,6 +7849,56 @@ function workflowJourneyAnalyzePattern(kind, chains, endpointDetails, parseRoles
         contractGaps: contractGaps
     };
 }
+function workflowJourneyHumanizeRoleLabel(role) {
+    var value = String(role || "").toLowerCase();
+    var map = {
+        "list": "Browse list",
+        "search": "Search",
+        "detail": "Load item",
+        "create": "Create",
+        "update": "Update",
+        "delete": "Delete",
+        "action": "Trigger action",
+        "checkout": "Checkout",
+        "payment": "Handle payment",
+        "auth": "Authenticate",
+        "login": "Authenticate",
+        "register": "Register",
+        "submit": "Submit",
+        "confirm": "Confirm",
+        "follow-up": "Follow up",
+        "followup": "Follow up",
+        "cancel": "Cancel",
+        "upload": "Upload",
+        "download": "Download",
+        "refresh": "Refresh",
+        "poll": "Poll status"
+    };
+    return map[value] || (value ? value.replace(/-/g, " ") : "Step");
+}
+function workflowJourneyRenderSequenceStrip(chains, escape) {
+    var chain = (chains || [])[0] || null;
+    if (!chain || !(chain.endpointIds || []).length)
+        return "";
+    var endpointDetails = payloadEndpointDetails();
+    var roles = workflowSurfaceParseChainRoles(chain.summary, (chain.endpointIds || []).length);
+    var items = (chain.endpointIds || []).map(function (endpointId, idx) {
+        var detail = endpointDetails[endpointId];
+        var endpoint = detail && detail.endpoint ? detail.endpoint : null;
+        if (!endpoint)
+            return "";
+        return '<span class="workflow-journey-flow-step">'
+            + '<span class="workflow-journey-flow-step-num">' + escape(String(idx + 1)) + '</span>'
+            + '<span class="workflow-journey-flow-step-body">'
+            + '<span class="workflow-journey-flow-step-role">' + escape(workflowJourneyHumanizeRoleLabel(roles[idx] || "")) + '</span>'
+            + '<span class="workflow-journey-flow-step-endpoint">' + escape(endpoint.method + " " + endpoint.path) + '</span>'
+            + '</span>'
+            + '</span>';
+    }).filter(Boolean).join('<span class="workflow-journey-flow-arrow" aria-hidden="true">\u2192</span>');
+    if (!items)
+        return "";
+    return '<div class="workflow-journey-flow-strip" aria-label="Workflow sequence guide">' + items + '</div>';
+}
 function workflowJourneyRenderProblems(problems, escape) {
     if (!problems || !problems.length)
         return "";
@@ -7901,12 +7976,19 @@ function workflowJourneyRenderGuidance(kind, chains, analysis, kindLabel, totalB
     var chainCount = chains.length;
     var signalLabel = totalBurden === 1 ? "signal" : "signals";
     var chainLabel = chainCount === 1 ? "chain" : "chains";
+    var stripHtml = workflowJourneyRenderSequenceStrip(chains, escape);
     return '<details class="workflow-journey-card">'
         + '<summary class="workflow-journey-summary">'
         + '<span class="journey-label">' + escape(kindLabel) + "</span>"
         + '<span class="journey-meta">' + chainCount + " " + chainLabel + " · " + totalBurden + " workflow " + signalLabel + "</span>"
         + "</summary>"
         + '<div class="workflow-journey-body">'
+        + (stripHtml
+            ? ('<div class="workflow-journey-hero">'
+                + '<p class="journey-section-kicker">Sequence guide</p>'
+                + stripHtml
+                + '</div>')
+            : '')
         + workflowJourneyRenderProblems(analysis.problems, escape)
         + workflowJourneyRenderContractGaps(analysis.contractGaps, escape)
         + workflowJourneyRenderProposal(kind, analysis, escape)

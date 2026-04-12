@@ -118,6 +118,58 @@ function workflowJourneyAnalyzePattern(
   };
 }
 
+function workflowJourneyHumanizeRoleLabel(role: string): string {
+  var value = String(role || "").toLowerCase();
+  var map: StringMap<string> = {
+    "list": "Browse list",
+    "search": "Search",
+    "detail": "Load item",
+    "create": "Create",
+    "update": "Update",
+    "delete": "Delete",
+    "action": "Trigger action",
+    "checkout": "Checkout",
+    "payment": "Handle payment",
+    "auth": "Authenticate",
+    "login": "Authenticate",
+    "register": "Register",
+    "submit": "Submit",
+    "confirm": "Confirm",
+    "follow-up": "Follow up",
+    "followup": "Follow up",
+    "cancel": "Cancel",
+    "upload": "Upload",
+    "download": "Download",
+    "refresh": "Refresh",
+    "poll": "Poll status"
+  };
+  return map[value] || (value ? value.replace(/-/g, " ") : "Step");
+}
+
+function workflowJourneyRenderSequenceStrip(
+  chains: ExplorerWorkflowChain[],
+  escape: (value: unknown) => string
+): string {
+  var chain = (chains || [])[0] || null;
+  if (!chain || !(chain.endpointIds || []).length) return "";
+  var endpointDetails = payloadEndpointDetails();
+  var roles = workflowSurfaceParseChainRoles(chain.summary, (chain.endpointIds || []).length);
+  var items = (chain.endpointIds || []).map(function (endpointId: string, idx: number) {
+    var detail = endpointDetails[endpointId];
+    var endpoint = detail && detail.endpoint ? detail.endpoint : null;
+    if (!endpoint) return "";
+    return '<span class="workflow-journey-flow-step">'
+      + '<span class="workflow-journey-flow-step-num">' + escape(String(idx + 1)) + '</span>'
+      + '<span class="workflow-journey-flow-step-body">'
+      + '<span class="workflow-journey-flow-step-role">' + escape(workflowJourneyHumanizeRoleLabel(roles[idx] || "")) + '</span>'
+      + '<span class="workflow-journey-flow-step-endpoint">' + escape(endpoint.method + " " + endpoint.path) + '</span>'
+      + '</span>'
+      + '</span>';
+  }).filter(Boolean).join('<span class="workflow-journey-flow-arrow" aria-hidden="true">\u2192</span>');
+  if (!items) return "";
+  return '<div class="workflow-journey-flow-strip" aria-label="Workflow sequence guide">' + items + '</div>';
+}
+
 function workflowJourneyRenderProblems(
   problems: string[],
   escape: (value: unknown) => string
@@ -215,6 +267,7 @@ function workflowJourneyRenderGuidance(
   var chainCount = chains.length;
   var signalLabel = totalBurden === 1 ? "signal" : "signals";
   var chainLabel = chainCount === 1 ? "chain" : "chains";
+  var stripHtml = workflowJourneyRenderSequenceStrip(chains, escape);
 
   return '<details class="workflow-journey-card">'
     + '<summary class="workflow-journey-summary">'
@@ -222,6 +275,12 @@ function workflowJourneyRenderGuidance(
     + '<span class="journey-meta">' + chainCount + " " + chainLabel + " · " + totalBurden + " workflow " + signalLabel + "</span>"
     + "</summary>"
     + '<div class="workflow-journey-body">'
+    + (stripHtml
+        ? ('<div class="workflow-journey-hero">'
+          + '<p class="journey-section-kicker">Sequence guide</p>'
+          + stripHtml
+          + '</div>')
+        : '')
     + workflowJourneyRenderProblems(analysis.problems, escape)
     + workflowJourneyRenderContractGaps(analysis.contractGaps, escape)
     + workflowJourneyRenderProposal(kind, analysis, escape)

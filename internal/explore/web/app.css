@@ -1973,6 +1973,46 @@ body.lens-shape .caller-burden-more {
   margin: 0;
 }
 
+.family-inline-workflow-guide {
+  margin-top: 0.56rem;
+  border: 1px solid #dddff0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fcfbff 0%, #f8f5ff 100%);
+  overflow: hidden;
+}
+
+.family-inline-workflow-guide-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.8rem;
+  list-style: none;
+  cursor: pointer;
+  padding: 0.72rem 0.86rem;
+}
+
+.family-inline-workflow-guide-summary::-webkit-details-marker {
+  display: none;
+}
+
+.family-inline-workflow-guide-summary strong {
+  font-size: 0.9rem;
+  color: #17212f;
+}
+
+.family-inline-workflow-guide-copy {
+  font-size: 0.78rem;
+  color: #5e6a86;
+}
+
+.family-inline-workflow-guide[open] > .family-inline-workflow-guide-summary {
+  border-bottom: 1px solid #dddff0;
+}
+
+.family-inline-workflow-guide-body {
+  padding: 0.86rem;
+}
+
 .family-inline-insight-row .family-expansion-cell {
   padding: 0.56rem 0.48rem !important;
 }
@@ -6979,6 +7019,82 @@ tbody tr.active .endpoint-row-main strong {
 .workflow-journey-body {
   padding: 0.56rem 0.72rem;
   border-top: 1px solid #e6edf4;
+}
+
+.workflow-journey-hero {
+  margin-bottom: 0.68rem;
+  padding: 0.58rem 0.62rem;
+  border: 1px solid #dddff0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fcfbff 0%, #f7f4ff 100%);
+}
+
+.workflow-journey-flow-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 0.42rem;
+  flex-wrap: wrap;
+}
+
+.workflow-journey-flow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.44rem;
+  min-width: 0;
+  max-width: 18rem;
+  padding: 0.38rem 0.48rem;
+  border: 1px solid #d7c8f0;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 0 rgba(23, 33, 47, 0.04);
+}
+
+.workflow-journey-flow-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.34rem;
+  height: 1.34rem;
+  border-radius: 999px;
+  background: #efe6fb;
+  color: #44207c;
+  font-size: 0.72rem;
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+
+.workflow-journey-flow-step-body {
+  display: grid;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.workflow-journey-flow-step-role {
+  font-size: 0.68rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #5a4692;
+}
+
+.workflow-journey-flow-step-endpoint {
+  font-size: 0.78rem;
+  font-weight: 750;
+  color: #1f3344;
+  line-height: 1.28;
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  text-overflow: clip;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.workflow-journey-flow-arrow {
+  align-self: center;
+  color: #7a62b3;
+  font-size: 1rem;
+  font-weight: 900;
 }
 
 .journey-problems,

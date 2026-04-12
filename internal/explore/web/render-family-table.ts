@@ -28,6 +28,8 @@ declare function renderFamilyInsightPanel(
   family: ExplorerFamilySummary,
   preferredEndpointId?: string
 ): string;
+declare function renderCommonWorkflowJourneys(chains: ExplorerWorkflowChain[] | null | undefined): string;
+declare function payloadEndpointDetails(): StringMap<ExplorerEndpointDetail>;
 declare function buildContractImprovementItems(
   detail: ExplorerEndpointDetail,
   findings: ExplorerFinding[]
@@ -636,6 +638,28 @@ function renderFamilyPriorityCountStack(priorityCounts: StringMap<number>): stri
 function renderFamilyInlineInsightRow(family: ExplorerFamilySummary): string {
   var familyName = family.family || "unlabeled family";
   if (state.expandedFamilyInsight !== familyName) return "";
+  var workflowGuideHtml = "";
+  if (state.activeTopTab === "workflow") {
+    var endpointDetails = payloadEndpointDetails();
+    var familyChains: StringMap<ExplorerWorkflowChain> = {};
+    filteredRows().forEach(function (row: ExplorerEndpointRow) {
+      if ((row.family || "unlabeled family") !== familyName) return;
+      var detail = endpointDetails[row.id];
+      (detail && detail.relatedChains ? detail.relatedChains : []).forEach(function (chain: ExplorerWorkflowChain) {
+        var key = ((chain && chain.kind) ? chain.kind : "workflow") + "|" + ((chain && chain.endpointIds) ? chain.endpointIds.join(",") : "");
+        if (key !== "|" && !familyChains[key]) familyChains[key] = chain;
+      });
+    });
+    var journeysHtml = renderCommonWorkflowJourneys(Object.keys(familyChains).map(function (key: string) {
+      return familyChains[key];
+    }));
+    if (journeysHtml) {
+      workflowGuideHtml = '<details class="family-inline-workflow-guide" open>'
+        + '<summary class="family-inline-workflow-guide-summary"><strong>Workflow sequence guide</strong><span class="family-inline-workflow-guide-copy">Use this when the sequence itself is the problem.</span></summary>'
+        + '<div class="family-inline-workflow-guide-body">' + journeysHtml + '</div>'
+        + '</details>';
+    }
+  }
 
   return '<tr class="family-expansion-row family-inline-insight-row is-expanded pressure-' + escapeHtml(family.pressure) + '" data-family="'
     + escapeHtml(family.family)
@@ -643,6 +667,7 @@ function renderFamilyInlineInsightRow(family: ExplorerFamilySummary): string {
     + String(familyTableColumnCountForActiveTab())
     + '" class="family-expansion-cell"><div class="family-row-insight">'
     + renderFamilyInsightPanel(family)
+    + workflowGuideHtml
     + "</div></td></tr>";
 }
 
