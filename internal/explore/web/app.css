@@ -2345,7 +2345,7 @@ body.lens-shape .caller-burden-more {
   table-layout: fixed;
 }
 
-.nested-endpoint-table col.nested-col-severity { width: 92px; }
+.nested-endpoint-table col.nested-col-severity { width: 110px; }
 .nested-endpoint-table col.nested-col-instance { width: 126px; }
 .nested-endpoint-table col.nested-col-actions { width: 184px; }
 .nested-endpoint-table col.nested-col-path { width: 24%; }
@@ -2587,17 +2587,17 @@ body.lens-workflow .nested-endpoint-primary-issue {
 }
 
 .nested-endpoint-table .severity-badge {
-  padding: 0.16rem 0.5rem;
-  gap: 0.26rem;
-  font-size: 0.72rem;
+  padding: 0.14rem 0.46rem;
+  gap: 0.22rem;
+  font-size: 0.69rem;
   white-space: nowrap;
   flex-wrap: nowrap;
 }
 
 .nested-endpoint-table .severity-icon {
-  width: 0.92rem;
-  height: 0.92rem;
-  font-size: 0.68rem;
+  width: 0.84rem;
+  height: 0.84rem;
+  font-size: 0.62rem;
 }
 
 .nested-endpoint-table .endpoint-method-chip,

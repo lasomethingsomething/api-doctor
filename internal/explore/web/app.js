@@ -6522,7 +6522,7 @@ function workflowSurfaceRenderChains() {
     var allChains = state.payload.workflows.chains || [];
     if (!allChains.length) {
         el.workflowSection.style.display = "block";
-        el.workflowHelp.textContent = "Optional workflow-path guidance for this slice. Open only when developers are getting stuck between calls.";
+        el.workflowHelp.textContent = "Expand a workflow family below and open its Workflow sequence guide for the clearest step-by-step path. This section only gives a global overview.";
         el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(workflowSurfaceRenderEmptyState("absent"), 0);
         workflowSurfaceBindChainsDrawerToggle();
         return;
@@ -6551,13 +6551,13 @@ function workflowSurfaceRenderChains() {
     var workflowGuideHtml = workflowSurfaceRenderGuideSection(chainSource);
     var supportingContextHtml = workflowSurfaceRenderSupportingContext(workflowGuideHtml, "");
     if (filteredChains.length) {
-        el.workflowHelp.textContent = "Optional workflow-path guidance for the current slice. Open this when you need hidden prerequisites, carry-forward state, or the likely next call.";
+        el.workflowHelp.textContent = "Expand a workflow family below and open its Workflow sequence guide for the clearest step-by-step path. This section is only the global workflow overview for the current slice.";
         el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(supportingContextHtml || workflowSurfaceRenderEmptyState("filtered"), filteredChains.length);
         workflowSurfaceBindChainsDrawerToggle();
         return;
     }
     if (scopedChains.length) {
-        el.workflowHelp.textContent = "No workflow path lines up with the current evidence-only table view, but related call sequences are still available if you need sequence context.";
+        el.workflowHelp.textContent = "Sequence guides live inside expanded workflow families below. This overview keeps related call paths available when the current table view is narrower than the full workflow context.";
         el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer('<div class="workflow-no-match">'
             + '<p class="workflow-empty-title"><strong>Related workflow paths are still available</strong></p>'
             + '<p class="workflow-empty-copy">The current table view is narrower than the available chain evidence, so this section keeps compact sequence reads available from the endpoints still in view.</p>'
@@ -6581,7 +6581,7 @@ function workflowSurfaceRenderChainsDrawer(innerHtml, chainCount) {
     var openAttr = state.workflowChainsOpen ? " open" : "";
     return '<details class="workflow-chains-drawer"' + openAttr + ' data-workflow-chains-drawer="1">'
         + '<summary class="workflow-chains-drawer-summary">'
-        + "<strong>Workflow paths</strong>"
+        + "<strong>Global workflow overview</strong>"
         + '<span class="workflow-chains-drawer-meta">' + escapeHtml(countLabel) + "</span>"
         + "</summary>"
         + '<div class="workflow-chains-drawer-body">'
