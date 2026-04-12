@@ -41,7 +41,7 @@ function createInitialExplorerState() {
         issueScopeIndex: null,
         issueScopeIndexKey: "",
         familyTableShowAll: false,
-        workflowChainsOpen: true,
+        workflowChainsOpen: false,
         workflowChainFocusChainId: "",
         workflowChainFocusEndpointIds: [],
         inspectorWorkflowContextOpen: null,
@@ -62,8 +62,6 @@ function createExplorerElements(doc) {
         searchInput: doc.getElementById("searchInput"),
         categoryFilter: doc.getElementById("categoryFilter"),
         familyPriorityFilter: doc.getElementById("familyPriorityFilter"),
-        includeNoIssueRows: doc.getElementById("includeNoIssueRows"),
-        lensControlHint: doc.getElementById("lensControlHint"),
         filterEmptyState: doc.getElementById("filterEmptyState"),
         familySurfaceHelp: doc.getElementById("familySurfaceHelp"),
         familySurfaceContext: doc.getElementById("familySurfaceContext"),
@@ -1704,14 +1702,6 @@ function bindControls() {
             }, invalidateDerivedCaches, render);
         });
     }
-    if (el.includeNoIssueRows) {
-        el.includeNoIssueRows.addEventListener("change", function (event) {
-            var target = event.target;
-            applyFilterStateChange(state, function () {
-                state.filters.includeNoIssueRows = !!(target && target.checked);
-            }, invalidateDerivedCaches, render);
-        });
-    }
 }
 function invalidateDerivedCaches() {
     state.issueScopeIndex = null;
@@ -1862,10 +1852,6 @@ function clearCurrentLens() {
 function appRuntimeSyncControls() {
     el.searchInput.value = state.filters.search;
     el.familyPriorityFilter.value = state.filters.familyPressure;
-    el.includeNoIssueRows.checked = state.filters.includeNoIssueRows;
-    if (el.lensControlHint) {
-        el.lensControlHint.innerHTML = formatFilterSummaryHtml();
-    }
 }
 function appRuntimeEndpointRowForId(endpointId) {
     if (!endpointId || !state.payload || !state.payload.endpoints)
@@ -2617,29 +2603,24 @@ function viewScopeRenderFilterEmptyState() {
     if (state.filters.search) {
         primaryAction = 'clear-search';
         primaryLabel = 'Clear search';
-        why = 'The current search is narrower than the available contract-issue evidence in this slice.';
-    }
-    else if (state.filters.category !== 'all' && state.filters.category !== 'spec-rule') {
-        primaryAction = 'reset-category';
-        primaryLabel = 'Reset category';
-        why = 'The selected category has no matching contract-issue families in this slice.';
+        why = 'The current search is narrower than the available contract-problem evidence in this slice.';
     }
     else if (state.filters.familyPressure !== 'all') {
         primaryAction = 'clear-table-filters';
-        primaryLabel = 'Show all family priorities';
-        why = 'The selected family priority tier hides all contract-issue families in this slice.';
+        primaryLabel = 'Show all severity bands';
+        why = 'The selected severity band hides all contract-problem families in this slice.';
     }
     else {
         primaryAction = 'clear-table-filters';
-        primaryLabel = 'Clear table filters';
-        why = 'The current filter combination is narrower than the available contract-issue evidence in this slice.';
+        primaryLabel = 'Reset table view';
+        why = 'The current table view is narrower than the available contract-problem evidence in this slice.';
     }
     var actionHtml = '<div class="filter-empty-actions">'
         + '<button type="button" class="primary-action" data-recovery-action="' + escapeHtml(primaryAction) + '">' + escapeHtml(primaryLabel) + '</button>'
         + '</div>';
     el.filterEmptyState.innerHTML = '<section class="filter-empty-panel" aria-label="No matching families">'
         + '<p class="filter-empty-title"><strong>No matching families</strong></p>'
-        + '<p class="filter-empty-lead">No contract-issue families match the current filters.</p>'
+        + '<p class="filter-empty-lead">No contract-problem families match the current table view.</p>'
         + '<p class="subtle">' + escapeHtml(why) + '</p>'
         + actionHtml
         + '</section>';
@@ -4030,18 +4011,14 @@ function uiRecoveryLabel(action) {
         return 'Back to family table';
     if (action === 'clear-search')
         return 'Clear search';
-    if (action === 'reset-category')
-        return 'Reset category';
     if (action === 'show-all-matching-families')
         return 'Show all matching families';
     if (action === 'show-all-families')
-        return 'Show all families in current scope';
+        return 'Show all families';
     if (action === 'clear-table-filters')
-        return 'Clear table filters';
+        return 'Reset table view';
     if (action === 'show-all-workflows')
-        return 'Show all workflow patterns';
-    if (action === 'include-no-issue-rows')
-        return 'Include no-issue rows';
+        return 'Show all workflow paths';
     return 'Reset current view';
 }
 function uiIssueDimensionForFinding(code, category, burdenFocus) {
@@ -4858,16 +4835,12 @@ function familyTableColumnsForActiveTab() {
             tdClass: "family-col-name",
             render: function (family, ctx) {
                 var familyName = ctx.familyName;
-                var insightExpanded = state.expandedFamilyInsight === familyName;
-                return '<button type="button" class="family-name-toggle" data-insight-toggle="' + escapeHtml(familyName) + '"'
-                    + ' aria-expanded="' + (insightExpanded ? "true" : "false") + '"'
-                    + ' title="' + escapeHtml(insightExpanded ? "Hide insight" : "Show insight") + '">'
+                return '<div class="family-name-static">'
                     + '<span class="family-name-main">'
                     + '<strong title="' + escapeHtml(humanFamilyLabel(familyName)) + '">' + escapeHtml(humanFamilyLabel(familyName)) + "</strong>"
                     + '<span class="family-name-badgewrap">' + pressureBadge(family.pressure, "pressure-badge") + "</span>"
                     + "</span>"
-                    + '<span class="family-name-action" aria-hidden="true">' + escapeHtml(insightExpanded ? "Hide insight" : "Show insight") + "</span>"
-                    + "</button>";
+                    + "</div>";
             }
         },
         {
@@ -4903,19 +4876,9 @@ function familyTableColumnsForActiveTab() {
         }
     ];
     cols.push({
-        key: "issues",
-        thClass: "family-col-issues",
-        thHtml: '<span class="th-title">Findings</span><span class="th-helper" title="Total in-scope finding count across endpoints in this family.">in-scope</span>',
-        th: "",
-        tdClass: "family-col-issues",
-        render: function (family) {
-            return String(family.findings || 0);
-        }
-    });
-    cols.push({
         key: "signals",
         thClass: "family-col-top-signal",
-        th: tab.signalHeader,
+        th: "Lead signal",
         tdClass: "family-col-top-signal",
         render: function (family, ctx) {
             return renderFamilyTopSignalCell(family, ctx.ranked);
@@ -4924,52 +4887,44 @@ function familyTableColumnsForActiveTab() {
     cols.push({
         key: "risk",
         thClass: "family-col-primary-risk",
-        th: tab.riskHeader,
+        th: "Why this matters",
         tdClass: "family-col-primary-risk",
         render: function (_family, ctx) {
             var ranked = ctx.ranked || familyInsightBuildRankedSummary(_family);
-            var primaryRisk = ranked.primaryRisk || (ranked.driver === "workflow"
-                ? "workflow continuity risk"
+            var whyText = ranked.dxConsequence || ranked.primaryRisk || (ranked.driver === "workflow"
+                ? "Developers must infer multi-step behavior from runtime instead of contract guidance."
                 : ranked.driver === "shape"
-                    ? "response-shape risk"
-                    : "contract drift risk");
+                    ? "Developers have to interpret storage-shaped payloads instead of a task outcome."
+                    : "Developers cannot reliably infer behavior from the contract alone.");
             var clampClass = shape
                 ? "family-table-clamp family-table-clamp-risk"
                 : "family-table-clamp family-table-clamp-3 family-table-clamp-risk";
-            return renderFamilyTableClamp(primaryRisk, clampClass);
+            return renderFamilyTableClamp(whyText, clampClass);
         }
     });
     cols.push({
         key: "impact",
         thClass: "family-col-client-effect",
-        thHtml: shape
-            ? '<span class="th-title">Client effect</span><span class="th-helper" title="Primary caller-side costs created by the response shape in this family.">shape-driven costs</span>'
-            : "",
-        th: tab.clientEffectHeader,
+        th: "Recommended fix direction",
         tdClass: "family-col-client-effect",
         render: function (family, ctx) {
             var ranked = ctx.ranked || familyInsightBuildRankedSummary(family);
-            if (shape) {
-                return renderFamilyClientEffectCell(renderCallerBurdenCellValue(ranked));
-            }
-            var repeatCount = (ctx.dxCounts && ranked.dxConsequence) ? (ctx.dxCounts[ranked.dxConsequence] || 0) : 0;
-            return renderFamilyClientEffectCell(renderDxConsequenceCellValue(ranked, repeatCount));
+            return renderFamilyTableClamp(ranked.recommendedAction || "Clarify the contract for the next developer action.", "family-table-clamp family-table-clamp-3 family-table-clamp-effect");
         }
     });
     cols.push({
-        key: "driver",
-        thClass: "family-col-driver",
-        thHtml: '<span class="th-title">What dominates</span><span class="th-helper" title="Dominant issue source for this family (workflow continuity vs response shape vs contract consistency).">source</span>',
-        th: "",
-        tdClass: "family-col-driver",
+        key: "actions",
+        thClass: "family-col-actions",
+        th: "Actions",
+        tdClass: "family-col-actions",
         render: function (_family, ctx) {
-            var ranked = ctx.ranked || familyInsightBuildRankedSummary(_family);
-            var label = ranked.driverLabel || "—";
-            var focus = ranked.driverFocus || "";
-            return '<div class="family-driver-cell">'
-                + '<span class="chip family-driver-chip" title="' + escapeHtml(label) + '">' + escapeHtml(label) + "</span>"
-                + (focus ? ('<div class="family-driver-focus subtle" title="' + escapeHtml(focus) + '">' + escapeHtml(focus) + "</div>") : "")
-                + "</div>";
+            var familyName = ctx.familyName;
+            var insightExpanded = state.expandedFamilyInsight === familyName;
+            return '<button type="button" class="secondary-action family-row-action" data-insight-toggle="' + escapeHtml(familyName) + '"'
+                + ' aria-expanded="' + (insightExpanded ? "true" : "false") + '"'
+                + ' title="' + escapeHtml(insightExpanded ? "Hide summary" : "Show summary") + '">'
+                + escapeHtml(insightExpanded ? "Hide summary" : "Show summary")
+                + "</button>";
         }
     });
     return cols;
@@ -5241,7 +5196,7 @@ function renderFamilyEndpointExpansion(family) {
             + '">'
             + headerRow
             + "<strong>No endpoint rows match this family in the current lens.</strong>"
-            + '<p class="subtle">Widen the current filters or include endpoints without issues to repopulate this family-owned endpoint table.</p>'
+            + '<p class="subtle">Widen the current table view to repopulate this family-owned endpoint table.</p>'
             + '<div class="family-endpoint-table-footer">' + footerActions + "</div>"
             + "</section></div></div></td></tr>";
     }
@@ -5263,6 +5218,10 @@ function renderFamilyEndpointExpansion(family) {
             var why = topGroup && topGroup.impact
                 ? topGroup.impact
                 : "Clients may need extra guesswork or follow-up reads because the contract does not make the next step or safe fields obvious.";
+            var improvementItems = buildContractImprovementItems(detail || { endpoint: endpoint, findings: findings }, findings);
+            var nextChanges = (improvementItems || []).slice(0, 3).map(function (item) {
+                return '<li>' + escapeHtml(item.change || "Clarify the contract for the next developer action.") + "</li>";
+            }).join("");
             var evidenceItems = groups.slice(0, 2).map(function (group) {
                 var title = evidenceGroupTitleLine(group);
                 var count = group.count || 0;
@@ -5275,21 +5234,25 @@ function renderFamilyEndpointExpansion(family) {
                 ? ('<ul class="preview-evidence-list">' + evidenceItems + "</ul>")
                 : '<p class="subtle">No grouped evidence was available for this endpoint in the current view.</p>';
             html += '<tr class="nested-endpoint-preview-row" data-family="' + escapeHtml(family.family) + '" data-endpoint-id="' + escapeHtml(endpoint.id) + '">'
-                + '<td colspan="6" class="nested-endpoint-preview-cell">'
+                + '<td colspan="7" class="nested-endpoint-preview-cell">'
                 + '<div class="nested-endpoint-preview"><div class="nested-endpoint-preview-grid">'
-                + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Primary issue</p><div class="nested-endpoint-preview-value">'
+                + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Why this is hard</p><div class="nested-endpoint-preview-value">'
                 + (findings.length ? severityBadge(severity) : "")
                 + '<span class="nested-endpoint-preview-text" title="' + escapeHtml(topMsg) + '">' + escapeHtml(topMsg) + "</span>"
-                + "</div></div>"
-                + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Why it matters</p><p class="nested-endpoint-preview-why">'
+                + '</div><p class="nested-endpoint-preview-why">'
                 + escapeHtml(why)
-                + "</p></div>"
-                + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Top evidence groups</p>'
+                + "</div></div>"
+                + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Exact evidence</p>'
                 + evidenceList
+                + "</div>"
+                + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">What should change next</p>'
+                + (nextChanges
+                    ? ('<ul class="preview-evidence-list preview-change-list">' + nextChanges + "</ul>")
+                    : '<p class="subtle">No concrete contract changes were derived for this endpoint yet.</p>')
                 + "</div>"
                 + "</div>"
                 + '<div class="nested-endpoint-preview-actions">'
-                + '<button type="button" class="tertiary-action" data-open-evidence-id="' + escapeHtml(endpoint.id) + '">Open grouped deviations</button>'
+                + '<button type="button" class="tertiary-action" data-open-evidence-id="' + escapeHtml(endpoint.id) + '">Show evidence</button>'
                 + '<button type="button" class="tertiary-action" data-focus-endpoint="' + escapeHtml(endpoint.id) + '">Inspect endpoint</button>'
                 + "</div></div></td></tr>";
         }
@@ -5305,7 +5268,7 @@ function renderFamilyEndpointExpansion(family) {
         + headerRow
         + '<p class="eyebrow">' + escapeHtml(evidenceSectionTitleForActiveLens()) + "</p>"
         + '<p class="subtle">Endpoint rows stay attached to this family so the ownership and investigation flow stay together.</p>'
-        + '</div><div class="family-endpoint-table-scroll" data-family-endpoint-table-scroll="1"><table class="nested-endpoint-table"><colgroup><col class="nested-col-path"><col class="nested-col-method"><col class="nested-col-issue"><col class="nested-col-severity"><col class="nested-col-instance"><col class="nested-col-actions"></colgroup><thead><tr><th>Path</th><th>Method</th><th>Primary issue</th><th>Severity</th><th>Deviations</th><th class="nested-endpoint-actions-col">Actions</th></tr></thead><tbody>'
+        + '</div><div class="family-endpoint-table-scroll" data-family-endpoint-table-scroll="1"><table class="nested-endpoint-table"><colgroup><col class="nested-col-path"><col class="nested-col-issue"><col class="nested-col-type"><col class="nested-col-severity"><col class="nested-col-instance"><col class="nested-col-actionhint"><col class="nested-col-actions"></colgroup><thead><tr><th>Endpoint</th><th>Lead issue</th><th>Type</th><th>Severity</th><th>Evidence</th><th>Suggested action</th><th class="nested-endpoint-actions-col">Actions</th></tr></thead><tbody>'
         + nestedRows
         + '</tbody></table></div><div class="family-endpoint-table-footer"><span class="subtle">End of endpoints in <code>'
         + escapeHtml(familyLabel)
@@ -5368,7 +5331,7 @@ function renderFamilySurface() {
         else {
             el.familySurface.innerHTML = '<div class="empty">'
                 + '<strong>No matching families.</strong>'
-                + '<p class="subtle">No families match the current scope.' + (hasWidenAction ? ' Clear table filters to widen the view.' : '') + '</p>'
+                + '<p class="subtle">No families match the current table view.' + (hasWidenAction ? ' Reset the table view to widen it.' : '') + '</p>'
                 + recovery
                 + '</div>';
             bindRecoveryButtons(el.familySurface);
@@ -5523,7 +5486,7 @@ function renderEndpointRows() {
         el.endpointRows.innerHTML = '<tr><td colspan="3">'
             + '<div class="empty inline-empty">'
             + '<strong>No endpoints match this view.</strong>'
-            + '<p class="subtle">No endpoints remain under the current filters. Widen the filters above to continue.</p>'
+            + '<p class="subtle">No endpoints remain in the current table view. Reset the table view above to continue.</p>'
             + '</div>'
             + '</td></tr>';
         return;
@@ -5601,7 +5564,7 @@ function renderEndpointRow(row, options) {
         : '';
     var additionalFindingsRowInline = additionalFindingsList
         ? '<tr class="nested-endpoint-findings-row" data-endpoint-id="' + escapeHtml(row.id) + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
-            + '<td colspan="6" class="nested-endpoint-findings-cell">'
+            + '<td colspan="7" class="nested-endpoint-findings-cell">'
             + additionalFindingsList
             + '</td>'
             + '</tr>'
@@ -5614,6 +5577,15 @@ function renderEndpointRow(row, options) {
     var inspectButtonLabel = inspectLoading ? 'Inspecting...' : 'Inspect endpoint';
     var rowClasses = (options.inlineTable ? 'nested-endpoint-row ' : '') + selected + ' row-pressure-' + row.priority + (additionalOpen ? ' findings-expanded' : '');
     if (options.inlineTable) {
+        var suggestedAction = (function () {
+            var items = buildContractImprovementItems(detail, lensFindings);
+            if (items && items.length && items[0] && items[0].change)
+                return items[0].change;
+            if (firstFinding)
+                return "Clarify the contract so this problem is visible before runtime.";
+            return "No suggested contract change.";
+        })();
+        var issueType = rowDominantIssue(row).label || "Issue";
         var endpointIdentityTitle = escapeHtml(((row.method || '').toUpperCase() + ' ' + (row.path || '') + ' — ' + intent).trim());
         var scopeBadge = primaryScope
             ? '<span class="row-issue-scope-pill" title="' + escapeHtml('Scope: ' + primaryScope) + '"><strong>Scope:</strong> ' + escapeHtml(primaryScope) + '</span>'
@@ -5624,12 +5596,11 @@ function renderEndpointRow(row, options) {
             + '<td class="nested-endpoint-path-cell">'
             + '<div class="endpoint-row-main">'
             + '<button type="button" class="nested-endpoint-path-toggle" data-focus-endpoint="' + escapeHtml(row.id) + '" aria-pressed="' + labelPressed + '" title="' + escapeHtml('Inspect ' + ((row.method || '').toUpperCase()) + ' ' + (row.path || '')) + '">'
-            + '<strong title="' + endpointIdentityTitle + '">' + escapeHtml(row.path) + '</strong>'
+            + '<strong title="' + endpointIdentityTitle + '">' + escapeHtml((row.method || '').toUpperCase() + ' ' + (row.path || '')) + '</strong>'
             + '<span class="nested-endpoint-path-action" aria-hidden="true">' + escapeHtml(pathActionLabel) + '</span>'
             + '</button>'
             + '</div>'
             + '</td>'
-            + '<td class="nested-endpoint-method-cell"><span class="endpoint-method-chip">' + escapeHtml((row.method || '').toUpperCase()) + '</span></td>'
             + '<td class="nested-endpoint-issue-cell">'
             + '<div class="nested-endpoint-issue-top">'
             + '<div class="nested-endpoint-primary-issue" title="' + escapeHtml(topIssueLabel) + '">' + escapeHtml(topIssueLabel) + '</div>'
@@ -5637,16 +5608,19 @@ function renderEndpointRow(row, options) {
             + (additionalFindingsControl ? '<div class="nested-endpoint-issue-actions">' + additionalFindingsControl + '</div>' : '')
             + '</div>'
             + '</td>'
+            + '<td class="nested-endpoint-type-cell"><div class="nested-endpoint-type-label" title="' + escapeHtml(issueType) + '">' + escapeHtml(issueType) + '</div></td>'
             + '<td class="nested-endpoint-severity-cell">' + (firstFinding ? severityBadgeEvidenceCTA(severity, row.id) : '<span class="subtle">No issue</span>') + '</td>'
             + '<td class="nested-endpoint-instance-cell"><button type="button" class="instance-count-chip is-interactive" data-open-evidence-id="' + escapeHtml(row.id) + '" title="Open grouped deviations" aria-label="Open grouped deviations">' + instanceCount + ' deviation' + (instanceCount === 1 ? '' : 's') + '</button></td>'
+            + '<td class="nested-endpoint-actionhint-cell"><div class="nested-endpoint-actionhint" title="' + escapeHtml(suggestedAction) + '">' + escapeHtml(suggestedAction) + '</div></td>'
             + '<td class="nested-endpoint-actions-cell">'
             + '<div class="nested-endpoint-actions">'
-            + '<button type="button" class="tertiary-action endpoint-insight-toggle" data-endpoint-insight-toggle="' + escapeHtml(row.id) + '">' + (state.expandedEndpointInsightIds[row.id] ? 'Hide preview' : 'Preview') + '</button>'
+            + '<button type="button" class="tertiary-action" data-open-evidence-id="' + escapeHtml(row.id) + '">Show evidence</button>'
+            + '<button type="button" class="tertiary-action endpoint-insight-toggle" data-endpoint-insight-toggle="' + escapeHtml(row.id) + '">' + (state.expandedEndpointInsightIds[row.id] ? 'Hide summary' : 'Show summary') + '</button>'
             + '</div>'
             + '</td>'
             + '</tr>';
         var inspectorInlineRowNested = (row.id === state.selectedEndpointId && state.inspectPlacementHint === 'nested')
-            ? renderInlineInspectorMountRow(row.id, 6, 'nested')
+            ? renderInlineInspectorMountRow(row.id, 7, 'nested')
             : '';
         return rowHtml + additionalFindingsRowInline + inspectorInlineRowNested;
     }
@@ -5924,7 +5898,7 @@ function workflowSurfaceRenderChains() {
     var allChains = state.payload.workflows.chains || [];
     if (!allChains.length) {
         el.workflowSection.style.display = "block";
-        el.workflowHelp.textContent = "";
+        el.workflowHelp.textContent = "Optional inferred call paths for this slice. Open only when you need chaining context or hidden traps.";
         el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(workflowSurfaceRenderEmptyState("absent"), 0);
         workflowSurfaceBindChainsDrawerToggle();
         return;
@@ -5953,12 +5927,12 @@ function workflowSurfaceRenderChains() {
     var workflowGuideHtml = workflowSurfaceRenderGuideSection(chainSource);
     var journeyGuidanceHtml = renderCommonWorkflowJourneys(chainSource);
     if (filteredChains.length) {
-        el.workflowHelp.textContent = "Inferred multi-call flow for the current workflow slice. Selecting a step scopes the family and inline endpoint detail below to the matching API surface.";
+        el.workflowHelp.textContent = "Optional inferred call paths for the current slice. Open this when you need chaining context, hidden prerequisites, or likely next actions.";
         var groups = workflowSurfaceGroupChainsByKind(filteredChains, { focusChainId: state.workflowChainFocusChainId || "" });
         el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer('<section class="workflow-chain-surface-primary">'
             + '<div class="workflow-chain-surface-header">'
             + '<h3 class="workflow-guide-title">Step-by-step workflow chains and hidden traps</h3>'
-            + '<p class="workflow-guide-copy">Each step stays tied to detected continuity burden: required state, hidden trap, authoritative state after success, and likely next action. Click a step to scope the family surface below.</p>'
+            + '<p class="workflow-guide-copy">Use this only when the chain itself is the problem. Click a step to scope the family table above to the matching API surface.</p>'
             + '</div>'
             + groups.map(workflowSurfaceRenderKindGroup).join("")
             + "</section>"
@@ -5970,12 +5944,12 @@ function workflowSurfaceRenderChains() {
         return;
     }
     if (scopedChains.length) {
-        el.workflowHelp.textContent = "No chains overlap the current evidence-only slice. Showing inferred call chains from scoped endpoints so the sequence and hidden traps remain visible.";
+        el.workflowHelp.textContent = "No path matches the current evidence-only slice, but inferred chains from the scoped endpoints are still available if you need sequence context.";
         var scopedGroups = workflowSurfaceGroupChainsByKind(scopedChains, { focusChainId: state.workflowChainFocusChainId || "" });
         el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer('<section class="workflow-chain-surface-primary">'
             + '<div class="workflow-chain-surface-header">'
             + '<h3 class="workflow-guide-title">Step-by-step workflow chains and hidden traps</h3>'
-            + '<p class="workflow-guide-copy">Chains are still shown from the scoped endpoint set so the multi-call sequence and weak handoffs stay visible.</p>'
+            + '<p class="workflow-guide-copy">These paths stay available from the scoped endpoint set so you can still inspect sequence and weak handoffs when needed.</p>'
             + '</div>'
             + '<div class="workflow-no-match">'
             + '<p class="workflow-empty-title"><strong>Call chain surface restored for this lens</strong></p>'
@@ -6005,11 +5979,10 @@ function workflowSurfaceRenderChainsDrawer(innerHtml, chainCount) {
     var openAttr = state.workflowChainsOpen ? " open" : "";
     return '<details class="workflow-chains-drawer"' + openAttr + ' data-workflow-chains-drawer="1">'
         + '<summary class="workflow-chains-drawer-summary">'
-        + "<strong>Workflow chain view</strong>"
+        + "<strong>Workflow paths</strong>"
         + '<span class="workflow-chains-drawer-meta">' + escapeHtml(countLabel) + "</span>"
         + "</summary>"
         + '<div class="workflow-chains-drawer-body">'
-        + '<div class="details-close-row details-close-row-tight"><button type="button" class="tertiary-action details-close-btn" data-close-details="1" aria-label="Hide workflow chain view" title="Hide workflow chain view">Hide workflow chain view</button></div>'
         + innerHtml
         + "</div>"
         + "</details>";
@@ -6020,16 +5993,6 @@ function workflowSurfaceBindChainsDrawerToggle() {
         return;
     drawer.addEventListener("toggle", function () {
         state.workflowChainsOpen = !!drawer.open;
-    });
-    Array.prototype.forEach.call(drawer.querySelectorAll("button[data-close-details]"), function (btn) {
-        if (btn.__closeDetailsBound)
-            return;
-        btn.__closeDetailsBound = true;
-        btn.addEventListener("click", function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            drawer.open = false;
-        });
     });
 }
 function workflowSurfaceRenderGuideSection(chains) {
@@ -6047,7 +6010,7 @@ function workflowSurfaceRenderGuideSection(chains) {
     return '<section class="workflow-guide-section">'
         + '<div class="workflow-guide-header">'
         + '<h3 class="workflow-guide-title">High-signal workflow paths</h3>'
-        + '<p class="workflow-guide-copy">Secondary workflow summaries for the heaviest inferred paths. The primary chain surface above remains the main step-by-step view.</p>'
+        + '<p class="workflow-guide-copy">Use these when you need a compact read on the heaviest inferred paths. The family table above remains the main investigation surface.</p>'
         + "</div>"
         + '<div class="workflow-guide-cards">'
         + featured.map(function (chain, index) {
@@ -7475,9 +7438,6 @@ function activeTopTabLabel() {
 }
 function formatScopeValue(value, fallback) {
     return viewScopeFormatScopeValue(value, fallback);
-}
-function formatFilterSummaryHtml() {
-    return viewScopeFormatFilterSummaryHtml();
 }
 function renderFilterEmptyState() {
     viewScopeRenderFilterEmptyState();

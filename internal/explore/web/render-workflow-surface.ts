@@ -33,8 +33,6 @@ declare function renderEndpointDiagnostics(): void;
 declare function renderEndpointDetail(): void;
 declare function payloadEndpointDetails(): StringMap<ExplorerEndpointDetail>;
 
-type BoundWorkflowCloseButton = HTMLButtonElement & { __closeDetailsBound?: boolean };
-
 var workflowSurfaceKindGroupLabelMap: StringMap<string> = {
   "list-detail": "Browse then inspect",
   "list-detail-update": "Browse, inspect, and update",
@@ -59,7 +57,7 @@ function workflowSurfaceRenderChains(): void {
   var allChains = state.payload.workflows.chains || [];
   if (!allChains.length) {
     el.workflowSection.style.display = "block";
-    el.workflowHelp.textContent = "";
+    el.workflowHelp.textContent = "Optional inferred call paths for this slice. Open only when you need chaining context or hidden traps.";
     el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(workflowSurfaceRenderEmptyState("absent"), 0);
     workflowSurfaceBindChainsDrawerToggle();
     return;
@@ -93,13 +91,13 @@ function workflowSurfaceRenderChains(): void {
   var journeyGuidanceHtml = renderCommonWorkflowJourneys(chainSource);
 
   if (filteredChains.length) {
-    el.workflowHelp.textContent = "Inferred multi-call flow for the current workflow slice. Selecting a step scopes the family and inline endpoint detail below to the matching API surface.";
+    el.workflowHelp.textContent = "Optional inferred call paths for the current slice. Open this when you need chaining context, hidden prerequisites, or likely next actions.";
     var groups = workflowSurfaceGroupChainsByKind(filteredChains, { focusChainId: state.workflowChainFocusChainId || "" });
     el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(
       '<section class="workflow-chain-surface-primary">'
         + '<div class="workflow-chain-surface-header">'
         + '<h3 class="workflow-guide-title">Step-by-step workflow chains and hidden traps</h3>'
-        + '<p class="workflow-guide-copy">Each step stays tied to detected continuity burden: required state, hidden trap, authoritative state after success, and likely next action. Click a step to scope the family surface below.</p>'
+        + '<p class="workflow-guide-copy">Use this only when the chain itself is the problem. Click a step to scope the family table above to the matching API surface.</p>'
         + '</div>'
         + groups.map(workflowSurfaceRenderKindGroup).join("")
       + "</section>"
@@ -114,13 +112,13 @@ function workflowSurfaceRenderChains(): void {
   }
 
   if (scopedChains.length) {
-    el.workflowHelp.textContent = "No chains overlap the current evidence-only slice. Showing inferred call chains from scoped endpoints so the sequence and hidden traps remain visible.";
+    el.workflowHelp.textContent = "No path matches the current evidence-only slice, but inferred chains from the scoped endpoints are still available if you need sequence context.";
     var scopedGroups = workflowSurfaceGroupChainsByKind(scopedChains, { focusChainId: state.workflowChainFocusChainId || "" });
     el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(
       '<section class="workflow-chain-surface-primary">'
         + '<div class="workflow-chain-surface-header">'
         + '<h3 class="workflow-guide-title">Step-by-step workflow chains and hidden traps</h3>'
-        + '<p class="workflow-guide-copy">Chains are still shown from the scoped endpoint set so the multi-call sequence and weak handoffs stay visible.</p>'
+        + '<p class="workflow-guide-copy">These paths stay available from the scoped endpoint set so you can still inspect sequence and weak handoffs when needed.</p>'
         + '</div>'
         + '<div class="workflow-no-match">'
         + '<p class="workflow-empty-title"><strong>Call chain surface restored for this lens</strong></p>'
@@ -158,11 +156,10 @@ function workflowSurfaceRenderChainsDrawer(innerHtml: string, chainCount: number
 
   return '<details class="workflow-chains-drawer"' + openAttr + ' data-workflow-chains-drawer="1">'
     + '<summary class="workflow-chains-drawer-summary">'
-    + "<strong>Workflow chain view</strong>"
+    + "<strong>Workflow paths</strong>"
     + '<span class="workflow-chains-drawer-meta">' + escapeHtml(countLabel) + "</span>"
     + "</summary>"
     + '<div class="workflow-chains-drawer-body">'
-    + '<div class="details-close-row details-close-row-tight"><button type="button" class="tertiary-action details-close-btn" data-close-details="1" aria-label="Hide workflow chain view" title="Hide workflow chain view">Hide workflow chain view</button></div>'
     + innerHtml
     + "</div>"
     + "</details>";
@@ -173,16 +170,6 @@ function workflowSurfaceBindChainsDrawerToggle(): void {
   if (!drawer) return;
   drawer.addEventListener("toggle", function () {
     state.workflowChainsOpen = !!drawer.open;
-  });
-
-  Array.prototype.forEach.call(drawer.querySelectorAll("button[data-close-details]"), function (btn: BoundWorkflowCloseButton) {
-    if (btn.__closeDetailsBound) return;
-    btn.__closeDetailsBound = true;
-    btn.addEventListener("click", function (event) {
-      event.preventDefault();
-      event.stopPropagation();
-      drawer.open = false;
-    });
   });
 }
 
@@ -201,7 +188,7 @@ function workflowSurfaceRenderGuideSection(chains: ExplorerWorkflowChain[]): str
   return '<section class="workflow-guide-section">'
     + '<div class="workflow-guide-header">'
     + '<h3 class="workflow-guide-title">High-signal workflow paths</h3>'
-    + '<p class="workflow-guide-copy">Secondary workflow summaries for the heaviest inferred paths. The primary chain surface above remains the main step-by-step view.</p>'
+    + '<p class="workflow-guide-copy">Use these when you need a compact read on the heaviest inferred paths. The family table above remains the main investigation surface.</p>'
     + "</div>"
     + '<div class="workflow-guide-cards">'
     + featured.map(function (chain: ExplorerWorkflowChain, index: number) {
