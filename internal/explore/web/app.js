@@ -784,6 +784,8 @@ function issueGroupRenderOpenAPIContextPills(context, compact, escapeHtml) {
 }
 function issueGroupRenderOpenAPILocationCuesBlock(context, compact, escapeHtml) {
     var pills = issueGroupRenderOpenAPIContextPills(context || createEmptyOpenAPIContext(), !!compact, escapeHtml);
+    if (compact && !pills)
+        return '';
     var body = pills
         ? ('<div class="openapi-summary-list">' + pills + '</div>')
         : '<p class="subtle location-cues-empty">No location cues available.</p>';
@@ -826,8 +828,26 @@ function issueGroupFormatCountLabel(group) {
         }
         if (dimension === 'shape / storage-style response weakness') {
             return (target
-                ? ('Response shape is too storage-oriented for the next step: ' + target)
-                : 'Response shape is too storage-oriented for the next step')
+                ? ('Response looks like a storage snapshot instead of a task result: ' + target)
+                : 'Response looks like a storage snapshot instead of a task result')
+                + ' - ' + count + ' ' + unit + ' on this endpoint';
+        }
+        if (dimension === 'shape / duplicated state exposure') {
+            return (target
+                ? ('Same state is repeated in multiple parts of the response: ' + target)
+                : 'Same state is repeated in multiple parts of the response')
+                + ' - ' + count + ' ' + unit + ' on this endpoint';
+        }
+        if (dimension === 'shape / nesting complexity') {
+            return (target
+                ? ('Important outcome fields are buried too deep in the response: ' + target)
+                : 'Important outcome fields are buried too deep in the response')
+                + ' - ' + count + ' ' + unit + ' on this endpoint';
+        }
+        if (dimension === 'internal/incidental fields') {
+            return (target
+                ? ('Internal or incidental fields dominate the response: ' + target)
+                : 'Internal or incidental fields dominate the response')
                 + ' - ' + count + ' ' + unit + ' on this endpoint';
         }
     }
@@ -860,6 +880,30 @@ function issueGroupTopOpenAPIHighlights(groups, uniq) {
     });
     return uniq(highlights).slice(0, 6);
 }
+function issueGroupShortWhy(group) {
+    if (!group)
+        return '';
+    var dimension = (group.dimension || '').trim();
+    if (dimension === 'shape / storage-style response weakness') {
+        return 'The response emphasizes storage/model detail instead of the task result a caller needs.';
+    }
+    if (dimension === 'shape / duplicated state exposure') {
+        return 'The same state appears in multiple places, so callers have to guess which field is authoritative.';
+    }
+    if (dimension === 'shape / nesting complexity') {
+        return 'Important outcome and handoff fields are buried too deep in the payload.';
+    }
+    if (dimension === 'internal/incidental fields') {
+        return 'Internal or incidental fields distract from the useful outcome fields.';
+    }
+    if (dimension === 'workflow outcome weakness') {
+        return 'The response does not clearly say what changed or what the caller should do next.';
+    }
+    if (dimension === 'hidden dependency / linkage burden') {
+        return 'The contract does not clearly expose the handoff field or prerequisite needed for the next call.';
+    }
+    return group.impact || '';
+}
 function issueGroupRenderGroup(group, index, options, helpers) {
     options = options || {};
     var escapeHtml = helpers.escapeHtml;
@@ -887,6 +931,10 @@ function issueGroupRenderGroup(group, index, options, helpers) {
         var dim = (innerGroup.dimension || '').trim();
         if (!dim)
             return 'Issue';
+        if (state.activeTopTab === 'shape')
+            return 'Shape evidence';
+        if (state.activeTopTab === 'workflow')
+            return 'Workflow evidence';
         return dim.replace(/(^|\s)([a-z])/g, function (_, prefix, chr) { return prefix + chr.toUpperCase(); });
     }
     function issueGroupHumanTitle(innerGroup) {
@@ -929,8 +977,12 @@ function issueGroupRenderGroup(group, index, options, helpers) {
         if (innerGroup.isSpecRule && innerGroup.specRuleId)
             chips.push(issueMetaChip('Rule', innerGroup.specRuleId, 'rule', true));
         var count = innerGroup.count || 0;
-        if (count)
-            chips.push('<span class="issue-meta-chip" data-meta="count"><strong>Count:</strong> ' + String(count) + ' deviation' + (count === 1 ? '' : 's') + '</span>');
+        if (count) {
+            var unit = (state.activeTopTab === 'shape' || state.activeTopTab === 'workflow')
+                ? (' signal' + (count === 1 ? '' : 's'))
+                : (' deviation' + (count === 1 ? '' : 's'));
+            chips.push('<span class="issue-meta-chip" data-meta="count"><strong>Count:</strong> ' + String(count) + unit + '</span>');
+        }
         return chips.join('');
     }
     var scopeFamilyName = options.familyName || '';
@@ -943,6 +995,18 @@ function issueGroupRenderGroup(group, index, options, helpers) {
     var titleHtml = '<span class="issue-group-titleline" title="' + escapeHtml(titleLine) + '">' + escapeHtml(titleLine) + '</span>';
     var metaRow = '<span class="issue-group-meta-row">' + issueMetaChips(group) + '</span>';
     var inspectTarget = helpers.inspectTargetForGroup(group, options.endpoint || null) || group.inspectHint || '';
+    var shapeTabActive = state.activeTopTab === 'shape';
+    var shortWhy = issueGroupShortWhy(group);
+    var rawNotes = messageList
+        ? ('<details class="issue-raw-notes"><summary class="issue-raw-notes-toggle">Raw analyzer notes</summary><div class="issue-messages"><ul>' + messageList + '</ul></div>' + expandMore + '</details>')
+        : '';
+    var bodyMain = shapeTabActive
+        ? ((shortWhy ? ('  <p class="issue-compact-why">' + escapeHtml(shortWhy) + '</p>') : '')
+            + rawNotes)
+        : ('  <div class="issue-messages">'
+            + '    <ul>' + messageList + '</ul>'
+            + '  </div>'
+            + expandMore);
     return '<details class="issue-group'
         + (index > 0 ? ' issue-group-secondary' : '')
         + (group.isSpecRule ? ' issue-group-spec-rule' : '')
@@ -960,10 +1024,7 @@ function issueGroupRenderGroup(group, index, options, helpers) {
         + '</span>'
         + '</summary>'
         + '<div class="issue-group-body">'
-        + '  <div class="issue-messages">'
-        + '    <ul>' + messageList + '</ul>'
-        + '  </div>'
-        + expandMore
+        + bodyMain
         + specGrounding
         + openAPIMeta
         + (showScopeInline ? ('  <p class="issue-scope-line"><strong>Scope:</strong> ' + escapeHtml(scopeLabel) + '</p>') : '')
@@ -2156,9 +2217,17 @@ function evidenceGroupsSummaryLabel(groupCount) {
     return evidenceSectionTitleForActiveLens() + " (" + count + " by schema field and issue type)";
 }
 function evidenceGroupsGroupingBasisCopy() {
+    if (state.activeTopTab === "shape")
+        return "Grouped evidence highlights where the response becomes storage-shaped, repetitive, or hard to act on.";
+    if (state.activeTopTab === "workflow")
+        return "Grouped evidence highlights where follow-up state, prerequisites, and next-step cues break down.";
     return "Evidence grouped by schema field and issue type.";
 }
 function exactEvidenceTargetLabel() {
+    if (state.activeTopTab === "shape")
+        return "Grouped evidence";
+    if (state.activeTopTab === "workflow")
+        return "Grouped evidence";
     return "Grouped deviations";
 }
 function exactEvidenceTabLabelWithCount() {
@@ -2231,7 +2300,9 @@ function renderCountedOccurrencesList(groups) {
     var shown = ordered.slice(0, 10);
     var remaining = ordered.length - shown.length;
     return '<div class="counted-occurrences-summary" data-counted-occurrences="1">'
-        + '<p class="counted-occurrences-title"><strong>Counted deviations</strong> (' + String(total) + ")</p>"
+        + '<p class="counted-occurrences-title"><strong>'
+        + escapeHtml(state.activeTopTab === "shape" ? "Signal summary" : state.activeTopTab === "workflow" ? "Signal summary" : "Counted deviations")
+        + '</strong> (' + String(total) + ")</p>"
         + '<ul class="counted-occurrences-list">'
         + shown.map(function (label) {
             var n = counts[label] || 0;
@@ -2249,6 +2320,11 @@ function renderFullExactEvidenceDrawer(groups, options) {
     var openAttr = opts.open ? " open" : "";
     var groupCount = (groups || []).length || 0;
     var titleLabel = exactEvidenceGroupsSummaryLabel(groupCount);
+    var introCopy = state.activeTopTab === "shape"
+        ? 'Use these groups as supporting proof for the response-shape problem: what is buried, duplicated, or too storage-oriented.'
+        : state.activeTopTab === "workflow"
+            ? 'Use these groups as supporting proof for hidden handoffs, brittle sequencing, and weak next-step guidance.'
+            : evidenceGroupsGroupingBasisCopy();
     var closeControl = '<div class="details-close-row">'
         + '<button type="button" class="tertiary-action details-close-btn" data-close-details="1" aria-label="Hide evidence" title="Hide evidence">Hide evidence</button>'
         + "</div>";
@@ -2273,7 +2349,7 @@ function renderFullExactEvidenceDrawer(groups, options) {
         + '<section class="detail-section detail-section-tight">'
         + closeControl
         + renderCountedOccurrencesList(groups)
-        + '  <p class="subtle detail-section-copy">' + escapeHtml(evidenceGroupsGroupingBasisCopy()) + "</p>"
+        + '  <p class="subtle detail-section-copy">' + escapeHtml(introCopy) + "</p>"
         + scopeLine
         + (groups || []).map(function (group, index) {
             return renderIssueGroup(group, index, { familyName: familyName, endpoint: endpoint, commonScopeLabel: commonScope });
@@ -3260,6 +3336,9 @@ function familyInsightBuildRankedSummary(family) {
     if (state.activeTopTab === "workflow") {
         dxConsequence = familyWorkflowWhyThisMatters(dominantSignals);
     }
+    else if (state.activeTopTab === "shape") {
+        dxConsequence = familyShapeWhyThisMatters(dxSignals.length ? dxSignals : dominantSignals);
+    }
     else if (dxParts.length === 0) {
         dxConsequence = "Contract clarity is uneven, so similar operations may still teach different integration habits.";
     }
@@ -3441,14 +3520,66 @@ function familyInsightRenderPanel(family, preferredEndpointId) {
             + "</div>"
             + "</div>";
     }
+    if (shapeTabActive) {
+        var shapeChangeList = (improvementItems || []).slice(0, 2).map(function (item) {
+            return '<li>' + escapeHtml(item.change || "Return a task-shaped response instead of a storage snapshot.") + '</li>';
+        }).join("");
+        if (!shapeChangeList) {
+            shapeChangeList = '<li>' + escapeHtml(recommendedChangeText) + '</li>';
+        }
+        var shapeEvidenceList = topEvidence.length
+            ? ('<ul class="preview-evidence-list">' + topEvidence.slice(0, 2).map(function (group) {
+                return "<li>" + escapeHtml(formatIssueGroupCountLabel(group)) + "</li>";
+            }).join("") + "</ul>")
+            : '<p class="subtle">No grouped response-shape evidence is available for this endpoint in the current view.</p>';
+        var shapeComparisonBlock = (model.points.current.length || model.points.cleaner.length)
+            ? ('<div class="expansion-section expansion-contract-change">'
+                + '<p class="expansion-section-title">Current vs better response</p>'
+                + '<div class="expansion-cleaner-comparison expansion-cleaner-comparison-shape">'
+                + "<div><strong>What callers get today</strong><ul>" + (model.points.current.length ? model.points.current.slice(0, 3).map(function (item) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Storage-shaped response with mixed outcome signals.</li>') + "</ul></div>"
+                + "<div><strong>What the contract should return</strong><ul>" + (model.points.cleaner.length ? model.points.cleaner.slice(0, 3).map(function (item) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Task-shaped, outcome-first response.</li>') + "</ul></div>"
+                + "</div>"
+                + "</div>")
+            : '';
+        return '<div class="family-insight-panel family-insight-panel-shape">'
+            + '<div class="expansion-header">'
+            + '<div class="expansion-header-title">'
+            + "<strong>" + escapeHtml(insightEndpointLabel) + "</strong>"
+            + '<span class="expansion-secondary-label"> | Response-shape summary</span>'
+            + "</div>"
+            + "</div>"
+            + '<div class="expansion-sections expansion-sections-ordered">'
+            + '<div class="expansion-section expansion-problem">'
+            + '<p class="expansion-section-title">Why this shape is hard to use</p>'
+            + '<p class="expansion-text">' + escapeHtml(primaryProblemText) + '</p>'
+            + '<p class="expansion-text"><strong>Why developers feel it:</strong> ' + escapeHtml(whyMattersText) + '</p>'
+            + (clientEffectText ? ('<p class="expansion-text"><strong>Client effect:</strong> ' + escapeHtml(clientEffectText) + '</p>') : '')
+            + "</div>"
+            + shapeComparisonBlock
+            + '<div class="expansion-section expansion-open-evidence">'
+            + '<p class="expansion-section-title">What should change</p>'
+            + '<ul class="preview-evidence-list preview-change-list">' + shapeChangeList + '</ul>'
+            + '</div>'
+            + '<div class="expansion-section expansion-open-evidence">'
+            + '<p class="expansion-section-title">Evidence</p>'
+            + '<p class="subtle">Grouped evidence shows where the response becomes storage-shaped, repetitive, or hard to interpret.</p>'
+            + shapeEvidenceList
+            + '<div class="expansion-actions expansion-actions-inline">'
+            + '<button type="button" class="secondary-action" data-open-evidence-id="' + escapeHtml(model.leadRow.id) + '">Open grouped evidence</button>'
+            + '<button type="button" class="secondary-action" data-focus-family="' + escapeHtml(familyName) + '">Filter to family in list</button>'
+            + '</div>'
+            + '</div>'
+            + "</div>"
+            + "</div>";
+    }
     var groundingHtml = '<div class="expansion-grounding">'
         + renderOpenAPIContextPills(model.topContext || createEmptyOpenAPIContext(), true)
         + (lead && lead.isSpecRule ? renderSpecRuleGroundingForGroup(lead) : "")
         + "</div>";
     var problemBlock = '<div class="expansion-section expansion-problem">'
-        + '<p class="expansion-section-title">Lead issue</p>'
+        + '<p class="expansion-section-title">' + (shapeTabActive ? 'Why this shape is hard to use' : 'Lead issue') + '</p>'
         + '<p class="expansion-text">' + escapeHtml(primaryProblemText) + "</p>"
-        + groundingHtml
+        + (shapeTabActive ? '' : groundingHtml)
         + "</div>";
     var clientEffectText = rankedFamily && rankedFamily.dxConsequence ? rankedFamily.dxConsequence : "";
     var trapHtml = (workflowTabActive && workflowTrapGuidance.length)
@@ -3464,11 +3595,12 @@ function familyInsightRenderPanel(family, preferredEndpointId) {
             + "</div>")
         : "";
     var clientBlock = '<div class="expansion-section expansion-client-impact">'
-        + '<p class="expansion-section-title">Why it matters</p>'
+        + '<p class="expansion-section-title">' + (shapeTabActive ? 'Why developers feel this in practice' : 'Why it matters') + '</p>'
         + '<p class="expansion-text">' + escapeHtml(whyMattersText) + "</p>"
         + (clientEffectText ? ('<p class="expansion-text"><strong>Client effect:</strong> ' + escapeHtml(clientEffectText) + "</p>") : "")
         + trapHtml
         + workflowContextHtml
+        + (shapeTabActive && groundingHtml ? ('<div class="expansion-subblock expansion-subblock-grounding">' + groundingHtml + '</div>') : '')
         + "</div>";
     var changeItemsHtml = improvementItems.length
         ? '<div class="expansion-contract-items">'
@@ -3486,10 +3618,10 @@ function familyInsightRenderPanel(family, preferredEndpointId) {
             + '<p class="expansion-text"><strong>Where:</strong> ' + escapeHtml(formatWhereWithOpenAPITarget(leadEndpoint, model.topContext || createEmptyOpenAPIContext(), {})) + "</p>";
     var shapeComparisonHtml = (shapeTabActive && (model.points.current.length || model.points.cleaner.length))
         ? ('<div class="expansion-subblock">'
-            + '<p class="expansion-text"><strong>Current vs improved (illustrative):</strong></p>'
-            + '<div class="expansion-cleaner-comparison">'
-            + "<div><strong>Current</strong><ul>" + (model.points.current.length ? model.points.current.map(function (item) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Storage-shaped, mixed outcome.</li>') + "</ul></div>"
-            + "<div><strong>Improved</strong><ul>" + (model.points.cleaner.length ? model.points.cleaner.map(function (item) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Task-shaped, outcome-first.</li>') + "</ul></div>"
+            + '<p class="expansion-section-title expansion-section-title-inline">Current vs better response</p>'
+            + '<div class="expansion-cleaner-comparison expansion-cleaner-comparison-shape">'
+            + "<div><strong>What callers get today</strong><ul>" + (model.points.current.length ? model.points.current.slice(0, 3).map(function (item) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Storage-shaped response with mixed outcome signals.</li>') + "</ul></div>"
+            + "<div><strong>What the contract should return</strong><ul>" + (model.points.cleaner.length ? model.points.cleaner.slice(0, 3).map(function (item) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Task-shaped, outcome-first response.</li>') + "</ul></div>"
             + "</div>"
             + "</div>")
         : "";
@@ -3498,11 +3630,11 @@ function familyInsightRenderPanel(family, preferredEndpointId) {
         ? ('<p class="expansion-text"><strong>Recommended action:</strong> ' + escapeHtml(recommendedAction) + "</p>")
         : "";
     var changeBlock = '<div class="expansion-section expansion-contract-change">'
-        + '<p class="expansion-section-title">Recommended action</p>'
+        + '<p class="expansion-section-title">' + (shapeTabActive ? 'What should change' : 'Recommended action') + '</p>'
         + actionLine
-        + renderWhatToDoNextBlock(leadEndpoint, lensFindings, { maxItems: 2, leadCopy: "" })
-        + changeItemsHtml
         + shapeComparisonHtml
+        + renderWhatToDoNextBlock(leadEndpoint, lensFindings, { maxItems: shapeTabActive ? 1 : 2, leadCopy: "" })
+        + changeItemsHtml
         + "</div>";
     var evidenceListHtml = topEvidence.length
         ? ('<ul class="expansion-evidence-list">'
@@ -3514,8 +3646,10 @@ function familyInsightRenderPanel(family, preferredEndpointId) {
         + '<button type="button" class="secondary-action" data-focus-family="' + escapeHtml(familyName) + '">Filter to family in list</button>'
         + "</div>";
     var evidenceBlock = '<div class="expansion-section expansion-open-evidence">'
-        + '<p class="expansion-section-title">Grouped deviations</p>'
-        + '<p class="subtle">Evidence grouped by schema field and issue type. Open grouped deviations to see the exact findings and schema grounding.</p>'
+        + '<p class="expansion-section-title">' + (shapeTabActive ? 'Evidence' : 'Grouped deviations') + '</p>'
+        + '<p class="subtle">' + (shapeTabActive
+        ? 'Grouped evidence shows where the response becomes storage-shaped, repetitive, or hard to interpret.'
+        : 'Evidence grouped by schema field and issue type. Open grouped deviations to see the exact findings and schema grounding.') + '</p>'
         + evidenceListHtml
         + evidenceActions
         + "</div>";
@@ -3739,15 +3873,43 @@ function familyRecommendedAction(driverKey, dominantSignals) {
             return "Add missing response descriptions";
         if (/enum|typing|weak typing/.test(blob))
             return "Declare missing enums";
-        if (/snapshot-heavy|storage-shaped|outcome|next action/.test(blob))
-            return "Expose nextAction and required context";
+        if (/internal fields|incidental/.test(blob) && /deep nesting/.test(blob)) {
+            return "Pull the useful result fields up and hide internal metadata";
+        }
+        if (/duplicated state/.test(blob) && /deep nesting/.test(blob)) {
+            return "Flatten the response and keep one authoritative state field";
+        }
+        if (/internal fields|incidental/.test(blob) && /snapshot-heavy|storage-shaped/.test(blob)) {
+            return "Return a task-shaped summary instead of backend-oriented detail";
+        }
+        if (/snapshot-heavy|storage-shaped/.test(blob) && /outcome|next action/.test(blob)) {
+            return "Replace snapshot payloads with an outcome-first response";
+        }
+        if (/snapshot-heavy|storage-shaped/.test(blob) && /duplicated state/.test(blob)) {
+            return "Replace repeated snapshot branches with one task-shaped outcome";
+        }
+        if (/deep nesting/.test(blob) && /outcome|next action/.test(blob)) {
+            return "Move outcome and next-action fields to the top level";
+        }
+        if (/source-of-truth/.test(blob) && /outcome/.test(blob)) {
+            return "Return one authoritative status or outcome field";
+        }
         if (/deep nesting/.test(blob))
-            return "Move outcome and handoff IDs to top-level fields";
+            return "Bring the important result fields closer to the top level";
+        if (/duplicated state/.test(blob) && /source-of-truth|authoritative/.test(blob)) {
+            return "Keep one authoritative state field instead of repeated copies";
+        }
         if (/duplicated state/.test(blob))
-            return "Remove duplicated state; keep one canonical field";
+            return "Remove duplicated state and keep one canonical field";
         if (/internal fields|incidental/.test(blob))
-            return "Move internal fields out of default payloads";
-        return "Expose nextAction and required context";
+            return "Hide internal fields from the default response";
+        if (/source-of-truth/.test(blob))
+            return "Expose one authoritative status field";
+        if (/outcome/.test(blob))
+            return "Make the task outcome explicit in the response";
+        if (/next action/.test(blob))
+            return "Expose the next action directly in the response";
+        return "Return a task-shaped response instead of a storage snapshot";
     }
     if (/description/.test(blob))
         return "Add missing response descriptions";
@@ -3788,6 +3950,61 @@ function familyWorkflowWhyThisMatters(dominantSignals) {
         return "Developers cannot tell the next valid call from the response.";
     }
     return "Developers cannot chain these calls safely from the contract alone.";
+}
+function familyShapeWhyThisMatters(dominantSignals) {
+    var signals = dominantSignals || [];
+    var signal0 = (signals[0] || "").toLowerCase();
+    var signal1 = (signals[1] || "").toLowerCase();
+    var blob = (signal0 + " | " + signal1).trim();
+    if (/snapshot-heavy|storage-shaped/.test(blob) && /deep nesting/.test(blob)) {
+        return "Developers must hunt through nested storage detail before they can tell what happened.";
+    }
+    if (/duplicated state/.test(blob) && /source-of-truth|authoritative/.test(blob)) {
+        return "Developers see the same state in multiple places and cannot tell which field is authoritative.";
+    }
+    if (/internal fields|incidental/.test(blob) && /snapshot-heavy|storage-shaped/.test(blob)) {
+        return "Developers wade through internal backend detail instead of getting a task-shaped result.";
+    }
+    if (/internal fields|incidental/.test(blob) && /deep nesting/.test(blob)) {
+        return "Developers have to dig through nested internal detail before they can find the useful result.";
+    }
+    if (/duplicated state/.test(blob) && /deep nesting/.test(blob)) {
+        return "Developers must search deep branches and still guess which repeated field is the real one.";
+    }
+    if (/snapshot-heavy|storage-shaped/.test(blob) && /duplicated state/.test(blob)) {
+        return "Developers get a large storage snapshot with repeated state instead of one clear result.";
+    }
+    if (/deep nesting/.test(blob) && /next action/.test(blob)) {
+        return "Developers can find the response data, but the next useful action is buried too deep to spot quickly.";
+    }
+    if (/source-of-truth/.test(blob) && /outcome/.test(blob)) {
+        return "Developers cannot tell which field defines the real outcome after the call succeeds.";
+    }
+    if (/outcome/.test(blob) && /next action/.test(blob)) {
+        return "Developers cannot quickly see what changed or what call should happen next.";
+    }
+    if (/snapshot-heavy|storage-shaped/.test(blob)) {
+        return "Developers get a storage snapshot instead of a task result they can act on.";
+    }
+    if (/deep nesting/.test(blob)) {
+        return "Developers must hunt through nested objects to find the important result fields.";
+    }
+    if (/duplicated state/.test(blob)) {
+        return "Developers have to reconcile repeated state fields across the payload.";
+    }
+    if (/internal fields|incidental/.test(blob)) {
+        return "Developers risk coupling to internal fields that should not drive client logic.";
+    }
+    if (/source-of-truth/.test(blob)) {
+        return "Developers cannot tell which field is the real source of truth.";
+    }
+    if (/outcome/.test(blob)) {
+        return "Developers cannot tell the real outcome from the default response shape.";
+    }
+    if (/next action/.test(blob)) {
+        return "Developers do not get a clear next action from the response.";
+    }
+    return "Developers have to interpret payload structure instead of getting a clear task result.";
 }
 function familyPrimaryRisk(driverKey, dominantSignals) {
     var signals = dominantSignals || [];
@@ -4717,12 +4934,6 @@ function inspectorRenderEndpointDiagnosticsShapeSummary(detail) {
         title: 'Current response shape vs better workflow-first response shape',
         context: 'shape'
     });
-    var guidance = collectTrapGuidance(endpoint, findings, { prereq: [], establish: [], nextNeeds: [], hidden: [] }, [], [], null, '', false);
-    var guidanceHtml = renderTrapGuidanceList(guidance, {
-        title: 'Shape trap guidance',
-        className: 'inspector-trap-guidance',
-        limit: 3
-    });
     var profileItems = [
         { key: 'deep', label: 'deep nesting', val: shapeTotals.deep },
         { key: 'dup', label: 'duplicated state', val: shapeTotals.dup },
@@ -4758,6 +4969,7 @@ function inspectorRenderEndpointDiagnosticsShapeSummary(detail) {
                 : '')
             + '</div>'
         : '';
+    var leadEvidence = topGroup ? formatIssueGroupCountLabel(topGroup) : '';
     return '<div class="endpoint-diag-pane">'
         + '<div class="shape-summary-intro">'
         + '<p class="shape-summary-kicker">Why this response is hard to use</p>'
@@ -4770,9 +4982,18 @@ function inspectorRenderEndpointDiagnosticsShapeSummary(detail) {
         + locationHtml
         + '</div>'
         + noSignalsHtml
-        + painHtml
         + comparisonHtml
-        + guidanceHtml
+        + '<div class="detail-section detail-section-tight endpoint-diagnostics-shape-compact">'
+        + '<h3>What should change</h3>'
+        + '<p class="subtle">Return an outcome-first response with clearer next-action and handoff fields instead of a storage snapshot.</p>'
+        + '</div>'
+        + (leadEvidence
+            ? ('<div class="detail-section detail-section-tight endpoint-diagnostics-shape-compact">'
+                + '<h3>Evidence</h3>'
+                + '<p class="subtle">' + escapeHtml(leadEvidence) + '</p>'
+                + '</div>')
+            : '')
+        + painHtml
         + renderFullExactEvidenceDrawer(groups, { endpoint: endpoint, familyName: endpoint.family || '', open: false })
         + '</div>';
 }
@@ -4941,9 +5162,11 @@ function renderFamilyTopSignalCell(family, ranked) {
     var expanded = inlineExpand && !!(state.expandedFamilySignals && state.expandedFamilySignals[familyName]);
     var visibleCount = state.activeTopTab === "workflow"
         ? Math.min(items.length, 2)
-        : inlineExpand
-            ? (expanded ? items.length : (items.length <= 4 ? items.length : 2))
-            : (items.length <= 3 ? items.length : 2);
+        : state.activeTopTab === "shape"
+            ? 1
+            : inlineExpand
+                ? (expanded ? items.length : (items.length <= 4 ? items.length : 2))
+                : (items.length <= 3 ? items.length : 2);
     var visible = items.slice(0, visibleCount).map(function (raw, index) {
         var label = raw ? humanizeSignalLabel(raw) : "—";
         var cls = index === 0 ? "chip chip-primary family-signal-chip" : "chip chip-secondary family-signal-chip";
@@ -5036,7 +5259,7 @@ function familyTableColumnsForActiveTab() {
     cols.push({
         key: "signals",
         thClass: "family-col-top-signal",
-        th: workflow ? "Main blocker" : "Lead signal",
+        th: workflow ? "Main blocker" : shape ? "Main shape problem" : "Lead signal",
         tdClass: "family-col-top-signal",
         render: function (family, ctx) {
             return renderFamilyTopSignalCell(family, ctx.ranked);
@@ -5045,7 +5268,7 @@ function familyTableColumnsForActiveTab() {
     cols.push({
         key: "risk",
         thClass: "family-col-primary-risk",
-        th: workflow ? "Why developers get stuck" : "Why this matters",
+        th: workflow ? "Why developers get stuck" : shape ? "Why this response is hard" : "Why this matters",
         tdClass: "family-col-primary-risk",
         render: function (_family, ctx) {
             var ranked = ctx.ranked || familyInsightBuildRankedSummary(_family);
@@ -5065,7 +5288,7 @@ function familyTableColumnsForActiveTab() {
     cols.push({
         key: "impact",
         thClass: "family-col-client-effect",
-        th: workflow ? "What should change" : "Recommended fix direction",
+        th: workflow ? "What should change" : shape ? "What should change" : "Recommended fix direction",
         tdClass: "family-col-client-effect",
         render: function (family, ctx) {
             var ranked = ctx.ranked || familyInsightBuildRankedSummary(family);
@@ -5432,7 +5655,9 @@ function renderFamilyEndpointExpansion(family) {
         + '</div><div class="family-endpoint-table-scroll" data-family-endpoint-table-scroll="1"><table class="nested-endpoint-table"><colgroup><col class="nested-col-path"><col class="nested-col-issue"><col class="nested-col-type"><col class="nested-col-severity"><col class="nested-col-instance"><col class="nested-col-actionhint"><col class="nested-col-actions"></colgroup><thead><tr>'
         + (state.activeTopTab === "workflow"
             ? '<th>Step</th><th>Main blocker</th><th>Problem type</th><th>Severity</th><th>Evidence</th><th>What should change</th><th class="nested-endpoint-actions-col">Details</th>'
-            : '<th>Endpoint</th><th>Lead issue</th><th>Type</th><th>Severity</th><th>Evidence</th><th>Suggested action</th><th class="nested-endpoint-actions-col">Actions</th>')
+            : state.activeTopTab === "shape"
+                ? '<th>Endpoint</th><th>Main shape problem</th><th>Problem type</th><th>Severity</th><th>Evidence</th><th>What should change</th><th class="nested-endpoint-actions-col">Details</th>'
+                : '<th>Endpoint</th><th>Lead issue</th><th>Type</th><th>Severity</th><th>Evidence</th><th>Suggested action</th><th class="nested-endpoint-actions-col">Actions</th>')
         + '</tr></thead><tbody>'
         + nestedRows
         + '</tbody></table></div><div class="family-endpoint-table-footer"><span class="subtle">End of endpoints in <code>'
@@ -5736,6 +5961,24 @@ function renderEndpointRow(row, options) {
     var inspectButtonLabel = inspectLoading ? 'Inspecting...' : 'Inspect endpoint';
     var rowClasses = (options.inlineTable ? 'nested-endpoint-row ' : '') + selected + ' row-pressure-' + row.priority + (additionalOpen ? ' findings-expanded' : '');
     if (options.inlineTable) {
+        if (state.activeTopTab === 'shape' && firstFinding) {
+            var shapeCode = firstFinding.code || '';
+            if (shapeCode === 'snapshot-heavy-response' || shapeCode === 'contract-shape-workflow-guidance-burden') {
+                topIssueLabel = 'Response looks like a storage snapshot instead of a task result.';
+            }
+            else if (shapeCode === 'deeply-nested-response-structure') {
+                topIssueLabel = 'Outcome and handoff fields are buried too deep in the response.';
+            }
+            else if (shapeCode === 'duplicated-state-response') {
+                topIssueLabel = 'The same state appears in multiple places, so authority is unclear.';
+            }
+            else if (shapeCode === 'incidental-internal-field-exposure' || shapeCode === 'internal-incidental-field') {
+                topIssueLabel = 'Internal fields crowd the payload and distract from the outcome.';
+            }
+            else if (shapeCode === 'weak-outcome-next-action-guidance') {
+                topIssueLabel = 'The response does not make the outcome or next action explicit.';
+            }
+        }
         var suggestedAction = (function () {
             var items = buildContractImprovementItems(detail, lensFindings);
             if (items && items.length && items[0] && items[0].change)

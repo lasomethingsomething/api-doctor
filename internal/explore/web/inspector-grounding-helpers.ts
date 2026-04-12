@@ -103,13 +103,6 @@ function inspectorRenderEndpointDiagnosticsShapeSummary(detail: ExplorerEndpoint
     context: 'shape'
   });
 
-  var guidance = collectTrapGuidance(endpoint, findings, { prereq: [], establish: [], nextNeeds: [], hidden: [] }, [], [], null, '', false);
-  var guidanceHtml = renderTrapGuidanceList(guidance, {
-    title: 'Shape trap guidance',
-    className: 'inspector-trap-guidance',
-    limit: 3
-  });
-
   var profileItems = [
     { key: 'deep', label: 'deep nesting', val: shapeTotals.deep },
     { key: 'dup', label: 'duplicated state', val: shapeTotals.dup },
@@ -149,6 +142,8 @@ function inspectorRenderEndpointDiagnosticsShapeSummary(detail: ExplorerEndpoint
         + '</div>'
     : '';
 
+  var leadEvidence = topGroup ? formatIssueGroupCountLabel(topGroup) : '';
+
   return '<div class="endpoint-diag-pane">'
     + '<div class="shape-summary-intro">'
     + '<p class="shape-summary-kicker">Why this response is hard to use</p>'
@@ -161,9 +156,18 @@ function inspectorRenderEndpointDiagnosticsShapeSummary(detail: ExplorerEndpoint
     + locationHtml
     + '</div>'
     + noSignalsHtml
-    + painHtml
     + comparisonHtml
-    + guidanceHtml
+    + '<div class="detail-section detail-section-tight endpoint-diagnostics-shape-compact">'
+    + '<h3>What should change</h3>'
+    + '<p class="subtle">Return an outcome-first response with clearer next-action and handoff fields instead of a storage snapshot.</p>'
+    + '</div>'
+    + (leadEvidence
+        ? ('<div class="detail-section detail-section-tight endpoint-diagnostics-shape-compact">'
+          + '<h3>Evidence</h3>'
+          + '<p class="subtle">' + escapeHtml(leadEvidence) + '</p>'
+          + '</div>')
+        : '')
+    + painHtml
     + renderFullExactEvidenceDrawer(groups, { endpoint: endpoint, familyName: endpoint.family || '', open: false })
     + '</div>';
 }

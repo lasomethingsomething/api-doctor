@@ -3093,6 +3093,31 @@ body.lens-workflow .family-insight-panel-workflow .expansion-section.expansion-w
   border-color: #d7c8f0;
 }
 
+body.lens-shape .family-insight-panel .expansion-section {
+  background: linear-gradient(180deg, #fffdfc 0%, #fff8f5 100%);
+  border-color: #ead8d2;
+}
+
+body.lens-shape .family-insight-panel .expansion-section.expansion-contract-change {
+  background: linear-gradient(180deg, #fffdfb 0%, #fff4ef 100%);
+  border-color: #e6c9c0;
+}
+
+body.lens-shape .family-insight-panel .expansion-section.expansion-open-evidence {
+  background: linear-gradient(180deg, #fcfdff 0%, #f3f7fb 100%);
+  border-color: #d4dfef;
+}
+
+body.lens-shape .family-insight-panel-shape .expansion-section.expansion-open-evidence {
+  background: linear-gradient(180deg, #fffefd 0%, #fff8f5 100%);
+  border-color: #ead8d2;
+}
+
+body.lens-shape .family-insight-panel .expansion-section.expansion-problem,
+body.lens-shape .family-insight-panel .expansion-section.expansion-client-impact {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
 .expansion-section-title {
   margin: 0;
   font-size: 0.71rem;
@@ -3104,6 +3129,10 @@ body.lens-workflow .family-insight-panel-workflow .expansion-section.expansion-w
   align-items: center;
   padding-bottom: 0.16rem;
   border-bottom: 1px solid #e8eef7;
+}
+
+.expansion-section-title-inline {
+  margin-bottom: 0.36rem;
 }
 
 .expansion-text {
@@ -3179,6 +3208,26 @@ body.lens-workflow .family-insight-panel-workflow .expansion-section.expansion-w
   margin-top: 0.16rem;
   display: grid;
   gap: 0.12rem;
+}
+
+body.lens-shape .expansion-cleaner-comparison-shape {
+  margin-top: 0.14rem;
+  padding: 0.48rem 0.52rem;
+  border: 1px solid #ead8d2;
+  border-radius: 10px;
+  background: rgba(255, 251, 249, 0.9);
+}
+
+body.lens-shape .endpoint-diagnostics-shape-compact {
+  border: 1px solid #e7d6d1;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fffefd 0%, #fff8f5 100%);
+}
+
+body.lens-shape .expansion-subblock-grounding {
+  margin-top: 0.34rem;
+  padding-top: 0.34rem;
+  border-top: 1px dashed #e5d6d2;
 }
 
 .expansion-evidence-list,
@@ -3472,6 +3521,26 @@ body.lens-workflow .family-insight-panel-workflow .expansion-section.expansion-w
   border-radius: 10px;
   border: 1px solid rgba(var(--accent-rgb), 0.16);
   background: rgba(var(--accent-rgb), 0.06);
+}
+
+body.lens-shape .detail-evidence-drawer {
+  border-color: #decdc8;
+  background: linear-gradient(180deg, #fffefd 0%, #fff8f5 100%);
+}
+
+body.lens-shape .detail-evidence-drawer > summary {
+  color: #5a3c37;
+}
+
+body.lens-shape .detail-evidence-drawer > summary::after {
+  background: rgba(123, 74, 67, 0.08);
+  border-color: rgba(123, 74, 67, 0.16);
+  color: #6d443d;
+}
+
+body.lens-shape .counted-occurrences-summary {
+  border-color: rgba(123, 74, 67, 0.16);
+  background: rgba(123, 74, 67, 0.05);
 }
 
 .counted-occurrences-title {
@@ -7156,6 +7225,19 @@ body.lens-workflow .family-table .family-signal-chips {
   overflow: hidden;
 }
 
+body.lens-shape .issue-group {
+  border-color: #e4d6d2;
+  background: #fffdfa;
+}
+
+body.lens-shape .issue-group summary {
+  background: rgba(255, 249, 247, 0.9);
+}
+
+body.lens-shape .issue-group-kind {
+  color: #7b4a43;
+}
+
 .issue-group summary {
   list-style: none;
   cursor: pointer;
@@ -7343,6 +7425,41 @@ body.lens-workflow .family-table .family-signal-chips {
   min-width: 0;
 }
 
+.issue-compact-why {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.42;
+  color: #213949;
+}
+
+.issue-raw-notes {
+  border: 1px dashed #dde6ee;
+  border-radius: 9px;
+  background: rgba(248, 251, 254, 0.78);
+  padding: 0.22rem 0.42rem 0.34rem;
+}
+
+.issue-raw-notes-toggle {
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #4d6575;
+}
+
+.issue-raw-notes-toggle::-webkit-details-marker {
+  display: none;
+}
+
+body.lens-shape .issue-raw-notes {
+  border-color: #e5d6d2;
+  background: rgba(255, 250, 248, 0.92);
+}
+
+body.lens-shape .issue-raw-notes-toggle {
+  color: #6b4b44;
+}
+
 .active-scope-strip {
   display: block;
   padding: 0;
@@ -7468,6 +7585,11 @@ details[open] .issue-toggle-indicator {
   border-radius: 10px;
   border: 1px solid rgba(12, 46, 74, 0.12);
   background: rgba(12, 46, 74, 0.04);
+}
+
+body.lens-shape .issue-group-meta .location-cues-block {
+  border-color: rgba(123, 74, 67, 0.14);
+  background: rgba(123, 74, 67, 0.04);
 }
 
 .issue-support-grid {

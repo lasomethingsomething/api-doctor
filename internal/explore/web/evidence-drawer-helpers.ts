@@ -36,10 +36,14 @@ function evidenceGroupsSummaryLabel(groupCount: number): string {
 }
 
 function evidenceGroupsGroupingBasisCopy(): string {
+  if (state.activeTopTab === "shape") return "Grouped evidence highlights where the response becomes storage-shaped, repetitive, or hard to act on.";
+  if (state.activeTopTab === "workflow") return "Grouped evidence highlights where follow-up state, prerequisites, and next-step cues break down.";
   return "Evidence grouped by schema field and issue type.";
 }
 
 function exactEvidenceTargetLabel(): string {
+  if (state.activeTopTab === "shape") return "Grouped evidence";
+  if (state.activeTopTab === "workflow") return "Grouped evidence";
   return "Grouped deviations";
 }
 
@@ -116,7 +120,9 @@ function renderCountedOccurrencesList(groups: IssueGroup[]): string {
   var remaining = ordered.length - shown.length;
 
   return '<div class="counted-occurrences-summary" data-counted-occurrences="1">'
-    + '<p class="counted-occurrences-title"><strong>Counted deviations</strong> (' + String(total) + ")</p>"
+    + '<p class="counted-occurrences-title"><strong>'
+    + escapeHtml(state.activeTopTab === "shape" ? "Signal summary" : state.activeTopTab === "workflow" ? "Signal summary" : "Counted deviations")
+    + '</strong> (' + String(total) + ")</p>"
     + '<ul class="counted-occurrences-list">'
     + shown.map(function (label: string) {
       var n = counts[label] || 0;
@@ -138,6 +144,11 @@ function renderFullExactEvidenceDrawer(
   var openAttr = opts.open ? " open" : "";
   var groupCount = (groups || []).length || 0;
   var titleLabel = exactEvidenceGroupsSummaryLabel(groupCount);
+  var introCopy = state.activeTopTab === "shape"
+    ? 'Use these groups as supporting proof for the response-shape problem: what is buried, duplicated, or too storage-oriented.'
+    : state.activeTopTab === "workflow"
+    ? 'Use these groups as supporting proof for hidden handoffs, brittle sequencing, and weak next-step guidance.'
+    : evidenceGroupsGroupingBasisCopy();
   var closeControl = '<div class="details-close-row">'
     + '<button type="button" class="tertiary-action details-close-btn" data-close-details="1" aria-label="Hide evidence" title="Hide evidence">Hide evidence</button>'
     + "</div>";
@@ -164,7 +175,7 @@ function renderFullExactEvidenceDrawer(
     + '<section class="detail-section detail-section-tight">'
     + closeControl
     + renderCountedOccurrencesList(groups)
-    + '  <p class="subtle detail-section-copy">' + escapeHtml(evidenceGroupsGroupingBasisCopy()) + "</p>"
+    + '  <p class="subtle detail-section-copy">' + escapeHtml(introCopy) + "</p>"
     + scopeLine
     + (groups || []).map(function (group: IssueGroup, index: number) {
       return renderIssueGroup(group, index, { familyName: familyName, endpoint: endpoint, commonScopeLabel: commonScope });

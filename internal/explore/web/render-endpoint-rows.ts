@@ -184,6 +184,20 @@ function renderEndpointRow(row: ExplorerEndpointRow, options?: RenderEndpointRow
   var rowClasses = (options.inlineTable ? 'nested-endpoint-row ' : '') + selected + ' row-pressure-' + row.priority + (additionalOpen ? ' findings-expanded' : '');
 
   if (options.inlineTable) {
+    if (state.activeTopTab === 'shape' && firstFinding) {
+      var shapeCode = firstFinding.code || '';
+      if (shapeCode === 'snapshot-heavy-response' || shapeCode === 'contract-shape-workflow-guidance-burden') {
+        topIssueLabel = 'Response looks like a storage snapshot instead of a task result.';
+      } else if (shapeCode === 'deeply-nested-response-structure') {
+        topIssueLabel = 'Outcome and handoff fields are buried too deep in the response.';
+      } else if (shapeCode === 'duplicated-state-response') {
+        topIssueLabel = 'The same state appears in multiple places, so authority is unclear.';
+      } else if (shapeCode === 'incidental-internal-field-exposure' || shapeCode === 'internal-incidental-field') {
+        topIssueLabel = 'Internal fields crowd the payload and distract from the outcome.';
+      } else if (shapeCode === 'weak-outcome-next-action-guidance') {
+        topIssueLabel = 'The response does not make the outcome or next action explicit.';
+      }
+    }
     var suggestedAction = (function (): string {
       var items = buildContractImprovementItems(detail, lensFindings);
       if (items && items.length && items[0] && items[0].change) return items[0].change;

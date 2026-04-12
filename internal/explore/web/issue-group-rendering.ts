@@ -1,3 +1,5 @@
+declare var state: ExplorerState;
+
 function issueGroupRenderOpenAPIContextPills(
   context: OpenAPIContext,
   compact: boolean,
@@ -31,6 +33,7 @@ function issueGroupRenderOpenAPILocationCuesBlock(
   escapeHtml: (value: unknown) => string
 ): string {
   var pills = issueGroupRenderOpenAPIContextPills(context || createEmptyOpenAPIContext(), !!compact, escapeHtml);
+  if (compact && !pills) return '';
   var body = pills
     ? ('<div class="openapi-summary-list">' + pills + '</div>')
     : '<p class="subtle location-cues-empty">No location cues available.</p>';
@@ -77,8 +80,26 @@ function issueGroupFormatCountLabel(group: IssueGroup | null | undefined): strin
     }
     if (dimension === 'shape / storage-style response weakness') {
       return (target
-        ? ('Response shape is too storage-oriented for the next step: ' + target)
-        : 'Response shape is too storage-oriented for the next step')
+        ? ('Response looks like a storage snapshot instead of a task result: ' + target)
+        : 'Response looks like a storage snapshot instead of a task result')
+        + ' - ' + count + ' ' + unit + ' on this endpoint';
+    }
+    if (dimension === 'shape / duplicated state exposure') {
+      return (target
+        ? ('Same state is repeated in multiple parts of the response: ' + target)
+        : 'Same state is repeated in multiple parts of the response')
+        + ' - ' + count + ' ' + unit + ' on this endpoint';
+    }
+    if (dimension === 'shape / nesting complexity') {
+      return (target
+        ? ('Important outcome fields are buried too deep in the response: ' + target)
+        : 'Important outcome fields are buried too deep in the response')
+        + ' - ' + count + ' ' + unit + ' on this endpoint';
+    }
+    if (dimension === 'internal/incidental fields') {
+      return (target
+        ? ('Internal or incidental fields dominate the response: ' + target)
+        : 'Internal or incidental fields dominate the response')
         + ' - ' + count + ' ' + unit + ' on this endpoint';
     }
   }
@@ -110,6 +131,30 @@ function issueGroupTopOpenAPIHighlights(groups: IssueGroup[], uniq: (items: stri
     }
   });
   return uniq(highlights).slice(0, 6);
+}
+
+function issueGroupShortWhy(group: IssueGroup | null | undefined): string {
+  if (!group) return '';
+  var dimension = (group.dimension || '').trim();
+  if (dimension === 'shape / storage-style response weakness') {
+    return 'The response emphasizes storage/model detail instead of the task result a caller needs.';
+  }
+  if (dimension === 'shape / duplicated state exposure') {
+    return 'The same state appears in multiple places, so callers have to guess which field is authoritative.';
+  }
+  if (dimension === 'shape / nesting complexity') {
+    return 'Important outcome and handoff fields are buried too deep in the payload.';
+  }
+  if (dimension === 'internal/incidental fields') {
+    return 'Internal or incidental fields distract from the useful outcome fields.';
+  }
+  if (dimension === 'workflow outcome weakness') {
+    return 'The response does not clearly say what changed or what the caller should do next.';
+  }
+  if (dimension === 'hidden dependency / linkage burden') {
+    return 'The contract does not clearly expose the handoff field or prerequisite needed for the next call.';
+  }
+  return group.impact || '';
 }
 
 function issueGroupRenderGroup(
@@ -148,6 +193,8 @@ function issueGroupRenderGroup(
     if (innerGroup.isSpecRule) return 'Spec rule';
     var dim = (innerGroup.dimension || '').trim();
     if (!dim) return 'Issue';
+    if (state.activeTopTab === 'shape') return 'Shape evidence';
+    if (state.activeTopTab === 'workflow') return 'Workflow evidence';
     return dim.replace(/(^|\s)([a-z])/g, function (_, prefix, chr) { return prefix + chr.toUpperCase(); });
   }
 
@@ -183,7 +230,12 @@ function issueGroupRenderGroup(
     if (responses) chips.push(issueMetaChip('Responses', responses, 'responses', false));
     if (innerGroup.isSpecRule && innerGroup.specRuleId) chips.push(issueMetaChip('Rule', innerGroup.specRuleId, 'rule', true));
     var count = innerGroup.count || 0;
-    if (count) chips.push('<span class="issue-meta-chip" data-meta="count"><strong>Count:</strong> ' + String(count) + ' deviation' + (count === 1 ? '' : 's') + '</span>');
+    if (count) {
+      var unit = (state.activeTopTab === 'shape' || state.activeTopTab === 'workflow')
+        ? (' signal' + (count === 1 ? '' : 's'))
+        : (' deviation' + (count === 1 ? '' : 's'));
+      chips.push('<span class="issue-meta-chip" data-meta="count"><strong>Count:</strong> ' + String(count) + unit + '</span>');
+    }
     return chips.join('');
   }
 
@@ -197,6 +249,18 @@ function issueGroupRenderGroup(
   var titleHtml = '<span class="issue-group-titleline" title="' + escapeHtml(titleLine) + '">' + escapeHtml(titleLine) + '</span>';
   var metaRow = '<span class="issue-group-meta-row">' + issueMetaChips(group) + '</span>';
   var inspectTarget = helpers.inspectTargetForGroup(group, options.endpoint || null) || group.inspectHint || '';
+  var shapeTabActive = state.activeTopTab === 'shape';
+  var shortWhy = issueGroupShortWhy(group);
+  var rawNotes = messageList
+    ? ('<details class="issue-raw-notes"><summary class="issue-raw-notes-toggle">Raw analyzer notes</summary><div class="issue-messages"><ul>' + messageList + '</ul></div>' + expandMore + '</details>')
+    : '';
+  var bodyMain = shapeTabActive
+    ? ((shortWhy ? ('  <p class="issue-compact-why">' + escapeHtml(shortWhy) + '</p>') : '')
+      + rawNotes)
+    : ('  <div class="issue-messages">'
+      + '    <ul>' + messageList + '</ul>'
+      + '  </div>'
+      + expandMore);
 
   return '<details class="issue-group'
     + (index > 0 ? ' issue-group-secondary' : '')
@@ -215,10 +279,7 @@ function issueGroupRenderGroup(
     + '</span>'
     + '</summary>'
     + '<div class="issue-group-body">'
-    + '  <div class="issue-messages">'
-    + '    <ul>' + messageList + '</ul>'
-    + '  </div>'
-    + expandMore
+    + bodyMain
     + specGrounding
     + openAPIMeta
     + (showScopeInline ? ('  <p class="issue-scope-line"><strong>Scope:</strong> ' + escapeHtml(scopeLabel) + '</p>') : '')

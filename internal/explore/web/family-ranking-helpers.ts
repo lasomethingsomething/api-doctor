@@ -150,11 +150,37 @@ function familyRecommendedAction(driverKey: string, dominantSignals: string[]): 
   if (driverKey === "shape") {
     if (/description/.test(blob)) return "Add missing response descriptions";
     if (/enum|typing|weak typing/.test(blob)) return "Declare missing enums";
-    if (/snapshot-heavy|storage-shaped|outcome|next action/.test(blob)) return "Expose nextAction and required context";
-    if (/deep nesting/.test(blob)) return "Move outcome and handoff IDs to top-level fields";
-    if (/duplicated state/.test(blob)) return "Remove duplicated state; keep one canonical field";
-    if (/internal fields|incidental/.test(blob)) return "Move internal fields out of default payloads";
-    return "Expose nextAction and required context";
+    if (/internal fields|incidental/.test(blob) && /deep nesting/.test(blob)) {
+      return "Pull the useful result fields up and hide internal metadata";
+    }
+    if (/duplicated state/.test(blob) && /deep nesting/.test(blob)) {
+      return "Flatten the response and keep one authoritative state field";
+    }
+    if (/internal fields|incidental/.test(blob) && /snapshot-heavy|storage-shaped/.test(blob)) {
+      return "Return a task-shaped summary instead of backend-oriented detail";
+    }
+    if (/snapshot-heavy|storage-shaped/.test(blob) && /outcome|next action/.test(blob)) {
+      return "Replace snapshot payloads with an outcome-first response";
+    }
+    if (/snapshot-heavy|storage-shaped/.test(blob) && /duplicated state/.test(blob)) {
+      return "Replace repeated snapshot branches with one task-shaped outcome";
+    }
+    if (/deep nesting/.test(blob) && /outcome|next action/.test(blob)) {
+      return "Move outcome and next-action fields to the top level";
+    }
+    if (/source-of-truth/.test(blob) && /outcome/.test(blob)) {
+      return "Return one authoritative status or outcome field";
+    }
+    if (/deep nesting/.test(blob)) return "Bring the important result fields closer to the top level";
+    if (/duplicated state/.test(blob) && /source-of-truth|authoritative/.test(blob)) {
+      return "Keep one authoritative state field instead of repeated copies";
+    }
+    if (/duplicated state/.test(blob)) return "Remove duplicated state and keep one canonical field";
+    if (/internal fields|incidental/.test(blob)) return "Hide internal fields from the default response";
+    if (/source-of-truth/.test(blob)) return "Expose one authoritative status field";
+    if (/outcome/.test(blob)) return "Make the task outcome explicit in the response";
+    if (/next action/.test(blob)) return "Expose the next action directly in the response";
+    return "Return a task-shaped response instead of a storage snapshot";
   }
 
   if (/description/.test(blob)) return "Add missing response descriptions";
@@ -193,6 +219,63 @@ function familyWorkflowWhyThisMatters(dominantSignals: string[]): string {
     return "Developers cannot tell the next valid call from the response.";
   }
   return "Developers cannot chain these calls safely from the contract alone.";
+}
+
+function familyShapeWhyThisMatters(dominantSignals: string[]): string {
+  var signals = dominantSignals || [];
+  var signal0 = (signals[0] || "").toLowerCase();
+  var signal1 = (signals[1] || "").toLowerCase();
+  var blob = (signal0 + " | " + signal1).trim();
+
+  if (/snapshot-heavy|storage-shaped/.test(blob) && /deep nesting/.test(blob)) {
+    return "Developers must hunt through nested storage detail before they can tell what happened.";
+  }
+  if (/duplicated state/.test(blob) && /source-of-truth|authoritative/.test(blob)) {
+    return "Developers see the same state in multiple places and cannot tell which field is authoritative.";
+  }
+  if (/internal fields|incidental/.test(blob) && /snapshot-heavy|storage-shaped/.test(blob)) {
+    return "Developers wade through internal backend detail instead of getting a task-shaped result.";
+  }
+  if (/internal fields|incidental/.test(blob) && /deep nesting/.test(blob)) {
+    return "Developers have to dig through nested internal detail before they can find the useful result.";
+  }
+  if (/duplicated state/.test(blob) && /deep nesting/.test(blob)) {
+    return "Developers must search deep branches and still guess which repeated field is the real one.";
+  }
+  if (/snapshot-heavy|storage-shaped/.test(blob) && /duplicated state/.test(blob)) {
+    return "Developers get a large storage snapshot with repeated state instead of one clear result.";
+  }
+  if (/deep nesting/.test(blob) && /next action/.test(blob)) {
+    return "Developers can find the response data, but the next useful action is buried too deep to spot quickly.";
+  }
+  if (/source-of-truth/.test(blob) && /outcome/.test(blob)) {
+    return "Developers cannot tell which field defines the real outcome after the call succeeds.";
+  }
+  if (/outcome/.test(blob) && /next action/.test(blob)) {
+    return "Developers cannot quickly see what changed or what call should happen next.";
+  }
+  if (/snapshot-heavy|storage-shaped/.test(blob)) {
+    return "Developers get a storage snapshot instead of a task result they can act on.";
+  }
+  if (/deep nesting/.test(blob)) {
+    return "Developers must hunt through nested objects to find the important result fields.";
+  }
+  if (/duplicated state/.test(blob)) {
+    return "Developers have to reconcile repeated state fields across the payload.";
+  }
+  if (/internal fields|incidental/.test(blob)) {
+    return "Developers risk coupling to internal fields that should not drive client logic.";
+  }
+  if (/source-of-truth/.test(blob)) {
+    return "Developers cannot tell which field is the real source of truth.";
+  }
+  if (/outcome/.test(blob)) {
+    return "Developers cannot tell the real outcome from the default response shape.";
+  }
+  if (/next action/.test(blob)) {
+    return "Developers do not get a clear next action from the response.";
+  }
+  return "Developers have to interpret payload structure instead of getting a clear task result.";
 }
 
 function familyPrimaryRisk(driverKey: string, dominantSignals: string[]): string {

@@ -79,6 +79,7 @@ declare function summarizeWorkflowStepNarrative(
   isLast: boolean
 ): WorkflowStepNarrative;
 declare function humanizeStepRole(roleSlug: string): string;
+declare function familyShapeWhyThisMatters(dominantSignals: string[]): string;
 
 function familyInsightBestEndpointIdForFamily(familyName: string): string {
   if (!familyName) return "";
@@ -120,6 +121,8 @@ function familyInsightBuildRankedSummary(family: ExplorerFamilySummary): Explore
   var dxConsequence = "";
   if (state.activeTopTab === "workflow") {
     dxConsequence = familyWorkflowWhyThisMatters(dominantSignals);
+  } else if (state.activeTopTab === "shape") {
+    dxConsequence = familyShapeWhyThisMatters(dxSignals.length ? dxSignals : dominantSignals);
   } else if (dxParts.length === 0) {
     dxConsequence = "Contract clarity is uneven, so similar operations may still teach different integration habits.";
   } else if (dxParts.length === 1) {
@@ -314,15 +317,71 @@ function familyInsightRenderPanel(family: ExplorerFamilySummary, preferredEndpoi
       + "</div>";
   }
 
+  if (shapeTabActive) {
+    var shapeChangeList = (improvementItems || []).slice(0, 2).map(function (item: ContractImprovementItem) {
+      return '<li>' + escapeHtml(item.change || "Return a task-shaped response instead of a storage snapshot.") + '</li>';
+    }).join("");
+    if (!shapeChangeList) {
+      shapeChangeList = '<li>' + escapeHtml(recommendedChangeText) + '</li>';
+    }
+
+    var shapeEvidenceList = topEvidence.length
+      ? ('<ul class="preview-evidence-list">' + topEvidence.slice(0, 2).map(function (group: IssueGroup) {
+          return "<li>" + escapeHtml(formatIssueGroupCountLabel(group)) + "</li>";
+        }).join("") + "</ul>")
+      : '<p class="subtle">No grouped response-shape evidence is available for this endpoint in the current view.</p>';
+
+    var shapeComparisonBlock = (model.points.current.length || model.points.cleaner.length)
+      ? ('<div class="expansion-section expansion-contract-change">'
+        + '<p class="expansion-section-title">Current vs better response</p>'
+        + '<div class="expansion-cleaner-comparison expansion-cleaner-comparison-shape">'
+        + "<div><strong>What callers get today</strong><ul>" + (model.points.current.length ? model.points.current.slice(0, 3).map(function (item: string) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Storage-shaped response with mixed outcome signals.</li>') + "</ul></div>"
+        + "<div><strong>What the contract should return</strong><ul>" + (model.points.cleaner.length ? model.points.cleaner.slice(0, 3).map(function (item: string) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Task-shaped, outcome-first response.</li>') + "</ul></div>"
+        + "</div>"
+        + "</div>")
+      : '';
+
+    return '<div class="family-insight-panel family-insight-panel-shape">'
+      + '<div class="expansion-header">'
+      + '<div class="expansion-header-title">'
+      + "<strong>" + escapeHtml(insightEndpointLabel) + "</strong>"
+      + '<span class="expansion-secondary-label"> | Response-shape summary</span>'
+      + "</div>"
+      + "</div>"
+      + '<div class="expansion-sections expansion-sections-ordered">'
+      + '<div class="expansion-section expansion-problem">'
+      + '<p class="expansion-section-title">Why this shape is hard to use</p>'
+      + '<p class="expansion-text">' + escapeHtml(primaryProblemText) + '</p>'
+      + '<p class="expansion-text"><strong>Why developers feel it:</strong> ' + escapeHtml(whyMattersText) + '</p>'
+      + (clientEffectText ? ('<p class="expansion-text"><strong>Client effect:</strong> ' + escapeHtml(clientEffectText) + '</p>') : '')
+      + "</div>"
+      + shapeComparisonBlock
+      + '<div class="expansion-section expansion-open-evidence">'
+      + '<p class="expansion-section-title">What should change</p>'
+      + '<ul class="preview-evidence-list preview-change-list">' + shapeChangeList + '</ul>'
+      + '</div>'
+      + '<div class="expansion-section expansion-open-evidence">'
+      + '<p class="expansion-section-title">Evidence</p>'
+      + '<p class="subtle">Grouped evidence shows where the response becomes storage-shaped, repetitive, or hard to interpret.</p>'
+      + shapeEvidenceList
+      + '<div class="expansion-actions expansion-actions-inline">'
+      + '<button type="button" class="secondary-action" data-open-evidence-id="' + escapeHtml(model.leadRow.id) + '">Open grouped evidence</button>'
+      + '<button type="button" class="secondary-action" data-focus-family="' + escapeHtml(familyName) + '">Filter to family in list</button>'
+      + '</div>'
+      + '</div>'
+      + "</div>"
+      + "</div>";
+  }
+
   var groundingHtml = '<div class="expansion-grounding">'
     + renderOpenAPIContextPills(model.topContext || createEmptyOpenAPIContext(), true)
     + (lead && lead.isSpecRule ? renderSpecRuleGroundingForGroup(lead) : "")
     + "</div>";
 
   var problemBlock = '<div class="expansion-section expansion-problem">'
-    + '<p class="expansion-section-title">Lead issue</p>'
+    + '<p class="expansion-section-title">' + (shapeTabActive ? 'Why this shape is hard to use' : 'Lead issue') + '</p>'
     + '<p class="expansion-text">' + escapeHtml(primaryProblemText) + "</p>"
-    + groundingHtml
+    + (shapeTabActive ? '' : groundingHtml)
     + "</div>";
 
   var clientEffectText = rankedFamily && rankedFamily.dxConsequence ? rankedFamily.dxConsequence : "";
@@ -340,11 +399,12 @@ function familyInsightRenderPanel(family: ExplorerFamilySummary, preferredEndpoi
     : "";
 
   var clientBlock = '<div class="expansion-section expansion-client-impact">'
-    + '<p class="expansion-section-title">Why it matters</p>'
+    + '<p class="expansion-section-title">' + (shapeTabActive ? 'Why developers feel this in practice' : 'Why it matters') + '</p>'
     + '<p class="expansion-text">' + escapeHtml(whyMattersText) + "</p>"
     + (clientEffectText ? ('<p class="expansion-text"><strong>Client effect:</strong> ' + escapeHtml(clientEffectText) + "</p>") : "")
     + trapHtml
     + workflowContextHtml
+    + (shapeTabActive && groundingHtml ? ('<div class="expansion-subblock expansion-subblock-grounding">' + groundingHtml + '</div>') : '')
     + "</div>";
 
   var changeItemsHtml = improvementItems.length
@@ -364,10 +424,10 @@ function familyInsightRenderPanel(family: ExplorerFamilySummary, preferredEndpoi
 
   var shapeComparisonHtml = (shapeTabActive && (model.points.current.length || model.points.cleaner.length))
     ? ('<div class="expansion-subblock">'
-      + '<p class="expansion-text"><strong>Current vs improved (illustrative):</strong></p>'
-      + '<div class="expansion-cleaner-comparison">'
-      + "<div><strong>Current</strong><ul>" + (model.points.current.length ? model.points.current.map(function (item: string) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Storage-shaped, mixed outcome.</li>') + "</ul></div>"
-      + "<div><strong>Improved</strong><ul>" + (model.points.cleaner.length ? model.points.cleaner.map(function (item: string) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Task-shaped, outcome-first.</li>') + "</ul></div>"
+      + '<p class="expansion-section-title expansion-section-title-inline">Current vs better response</p>'
+      + '<div class="expansion-cleaner-comparison expansion-cleaner-comparison-shape">'
+      + "<div><strong>What callers get today</strong><ul>" + (model.points.current.length ? model.points.current.slice(0, 3).map(function (item: string) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Storage-shaped response with mixed outcome signals.</li>') + "</ul></div>"
+      + "<div><strong>What the contract should return</strong><ul>" + (model.points.cleaner.length ? model.points.cleaner.slice(0, 3).map(function (item: string) { return "<li>" + escapeHtml(item) + "</li>"; }).join("") : '<li class="subtle">Task-shaped, outcome-first response.</li>') + "</ul></div>"
       + "</div>"
       + "</div>")
     : "";
@@ -377,11 +437,11 @@ function familyInsightRenderPanel(family: ExplorerFamilySummary, preferredEndpoi
     ? ('<p class="expansion-text"><strong>Recommended action:</strong> ' + escapeHtml(recommendedAction) + "</p>")
     : "";
   var changeBlock = '<div class="expansion-section expansion-contract-change">'
-    + '<p class="expansion-section-title">Recommended action</p>'
+    + '<p class="expansion-section-title">' + (shapeTabActive ? 'What should change' : 'Recommended action') + '</p>'
     + actionLine
-    + renderWhatToDoNextBlock(leadEndpoint, lensFindings, { maxItems: 2, leadCopy: "" })
-    + changeItemsHtml
     + shapeComparisonHtml
+    + renderWhatToDoNextBlock(leadEndpoint, lensFindings, { maxItems: shapeTabActive ? 1 : 2, leadCopy: "" })
+    + changeItemsHtml
     + "</div>";
 
   var evidenceListHtml = topEvidence.length
@@ -396,8 +456,10 @@ function familyInsightRenderPanel(family: ExplorerFamilySummary, preferredEndpoi
     + "</div>";
 
   var evidenceBlock = '<div class="expansion-section expansion-open-evidence">'
-    + '<p class="expansion-section-title">Grouped deviations</p>'
-    + '<p class="subtle">Evidence grouped by schema field and issue type. Open grouped deviations to see the exact findings and schema grounding.</p>'
+    + '<p class="expansion-section-title">' + (shapeTabActive ? 'Evidence' : 'Grouped deviations') + '</p>'
+    + '<p class="subtle">' + (shapeTabActive
+      ? 'Grouped evidence shows where the response becomes storage-shaped, repetitive, or hard to interpret.'
+      : 'Evidence grouped by schema field and issue type. Open grouped deviations to see the exact findings and schema grounding.') + '</p>'
     + evidenceListHtml
     + evidenceActions
     + "</div>";

@@ -156,6 +156,8 @@ function renderFamilyTopSignalCell(
   var expanded = inlineExpand && !!(state.expandedFamilySignals && state.expandedFamilySignals[familyName]);
   var visibleCount = state.activeTopTab === "workflow"
     ? Math.min(items.length, 2)
+    : state.activeTopTab === "shape"
+    ? 1
     : inlineExpand
     ? (expanded ? items.length : (items.length <= 4 ? items.length : 2))
     : (items.length <= 3 ? items.length : 2);
@@ -259,7 +261,7 @@ function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
   cols.push({
     key: "signals",
     thClass: "family-col-top-signal",
-    th: workflow ? "Main blocker" : "Lead signal",
+    th: workflow ? "Main blocker" : shape ? "Main shape problem" : "Lead signal",
     tdClass: "family-col-top-signal",
     render: function (family: ExplorerFamilySummary, ctx: FamilyTableColumnContext): string {
       return renderFamilyTopSignalCell(family, ctx.ranked);
@@ -269,7 +271,7 @@ function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
   cols.push({
     key: "risk",
     thClass: "family-col-primary-risk",
-    th: workflow ? "Why developers get stuck" : "Why this matters",
+    th: workflow ? "Why developers get stuck" : shape ? "Why this response is hard" : "Why this matters",
     tdClass: "family-col-primary-risk",
     render: function (_family: ExplorerFamilySummary, ctx: FamilyTableColumnContext): string {
       var ranked = ctx.ranked || familyInsightBuildRankedSummary(_family);
@@ -290,7 +292,7 @@ function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
   cols.push({
     key: "impact",
     thClass: "family-col-client-effect",
-    th: workflow ? "What should change" : "Recommended fix direction",
+    th: workflow ? "What should change" : shape ? "What should change" : "Recommended fix direction",
     tdClass: "family-col-client-effect",
     render: function (family: ExplorerFamilySummary, ctx: FamilyTableColumnContext): string {
       var ranked = ctx.ranked || familyInsightBuildRankedSummary(family);
@@ -691,6 +693,8 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
     + '</div><div class="family-endpoint-table-scroll" data-family-endpoint-table-scroll="1"><table class="nested-endpoint-table"><colgroup><col class="nested-col-path"><col class="nested-col-issue"><col class="nested-col-type"><col class="nested-col-severity"><col class="nested-col-instance"><col class="nested-col-actionhint"><col class="nested-col-actions"></colgroup><thead><tr>'
     + (state.activeTopTab === "workflow"
         ? '<th>Step</th><th>Main blocker</th><th>Problem type</th><th>Severity</th><th>Evidence</th><th>What should change</th><th class="nested-endpoint-actions-col">Details</th>'
+        : state.activeTopTab === "shape"
+        ? '<th>Endpoint</th><th>Main shape problem</th><th>Problem type</th><th>Severity</th><th>Evidence</th><th>What should change</th><th class="nested-endpoint-actions-col">Details</th>'
         : '<th>Endpoint</th><th>Lead issue</th><th>Type</th><th>Severity</th><th>Evidence</th><th>Suggested action</th><th class="nested-endpoint-actions-col">Actions</th>')
     + '</tr></thead><tbody>'
     + nestedRows
