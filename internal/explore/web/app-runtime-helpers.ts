@@ -18,16 +18,10 @@ declare function renderFamilySurface(): void;
 declare function restoreFamilyTableBackState(state: ExplorerState): void;
 declare function syncSelectedEndpointHighlight(): void;
 declare function syncWorkflowStepSelectionHighlight(): void;
-declare function formatFilterSummaryHtml(): string;
 
 function appRuntimeSyncControls(): void {
   el.searchInput.value = state.filters.search;
   el.familyPriorityFilter.value = state.filters.familyPressure;
-  el.includeNoIssueRows.checked = state.filters.includeNoIssueRows;
-
-  if (el.lensControlHint) {
-    el.lensControlHint.innerHTML = formatFilterSummaryHtml();
-  }
 }
 
 function appRuntimeEndpointRowForId(endpointId: string): ExplorerEndpointRow | null {

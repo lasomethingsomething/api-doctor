@@ -25,7 +25,7 @@
           <input id="searchInput" type="search" placeholder="Search path, method, family" list="searchSuggestions" autocomplete="off">
           <datalist id="searchSuggestions"></datalist>
         </label>
-        <label class="field" title="High/Medium/Low summarizes how many endpoints in the family carry in-scope findings at each severity.">Family priority
+        <label class="field" title="High, medium, and low summarize how many endpoints in the family carry in-scope findings at each severity.">Severity band
           <select id="familyPriorityFilter">
             <option value="all">all families</option>
             <option value="high">high</option>
@@ -34,22 +34,8 @@
           </select>
           <span class="field-helper">High = 3+ high-severity endpoints · Medium = any high, or 3+ medium · Low = otherwise</span>
         </label>
-        <label class="field toggle-field">
-          <span>Include endpoints without issues</span>
-          <input id="includeNoIssueRows" type="checkbox">
-        </label>
       </div>
-	      <div id="lensControlHint" class="filter-summary-bar" aria-live="polite"></div>
 	      <div id="filterEmptyState" class="filter-empty-state" aria-live="polite"></div>
-	    </section>
-
-	    <section id="workflowSection" class="section workflow-section" style="display:none;">
-	      <div class="section-heading">
-	        <p class="eyebrow">Workflow Guidance</p>
-	        <h2>Common workflow chains</h2>
-	      </div>
-	      <p id="workflowHelp" class="subtle"></p>
-	      <div id="workflowChains" class="workflow-chains" aria-live="polite"></div>
 	    </section>
 
 	    <section class="section" id="familySurfaceSection">
@@ -60,6 +46,15 @@
 	      <p id="familySurfaceHelp" class="subtle"></p>
 	      <div id="familySurfaceContext" class="family-surface-context" aria-live="polite"></div>
 	      <div id="familySurface" class="family-surface"></div>
+	    </section>
+
+	    <section id="workflowSection" class="section workflow-section" style="display:none;">
+	      <div class="section-heading">
+	        <p class="eyebrow">Supporting workflow context</p>
+	        <h2>Workflow paths</h2>
+	      </div>
+	      <p id="workflowHelp" class="subtle"></p>
+	      <div id="workflowChains" class="workflow-chains" aria-live="polite"></div>
 	    </section>
 
 	    <section class="section" id="endpointListSection">

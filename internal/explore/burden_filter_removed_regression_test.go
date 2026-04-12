@@ -142,11 +142,6 @@ func burdenFilterRemovedHarness() string {
         failures.push({ kind: 'burden-field-label-present', step: step, label: firstLine });
       }
     }
-    var summary = document.getElementById('lensControlHint');
-    var sumText = summary ? (summary.textContent || '') : '';
-    if (sumText.toLowerCase().indexOf('burden ') !== -1 || sumText.toLowerCase().indexOf('· burden') !== -1) {
-      failures.push({ kind: 'burden-in-summary', step: step, text: sumText.trim() });
-    }
   }
 
   function waitForUI() {

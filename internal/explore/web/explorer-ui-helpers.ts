@@ -133,12 +133,10 @@ function uiRecoveryLabel(action: string): string {
   if (action === 'back-to-all-families') return 'Back to all families';
   if (action === 'back-to-family-table') return 'Back to family table';
   if (action === 'clear-search') return 'Clear search';
-  if (action === 'reset-category') return 'Reset category';
   if (action === 'show-all-matching-families') return 'Show all matching families';
-  if (action === 'show-all-families') return 'Show all families in current scope';
-  if (action === 'clear-table-filters') return 'Clear table filters';
-  if (action === 'show-all-workflows') return 'Show all workflow patterns';
-  if (action === 'include-no-issue-rows') return 'Include no-issue rows';
+  if (action === 'show-all-families') return 'Show all families';
+  if (action === 'clear-table-filters') return 'Reset table view';
+  if (action === 'show-all-workflows') return 'Show all workflow paths';
   return 'Reset current view';
 }
 

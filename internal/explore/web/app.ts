@@ -206,10 +206,6 @@ var el = createExplorerElements(document);
     return viewScopeFormatScopeValue(value, fallback);
   }
 
-  function formatFilterSummaryHtml() {
-    return viewScopeFormatFilterSummaryHtml();
-  }
-
   function renderFilterEmptyState() {
     viewScopeRenderFilterEmptyState();
   }

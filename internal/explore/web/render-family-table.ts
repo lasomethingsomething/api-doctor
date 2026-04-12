@@ -28,6 +28,10 @@ declare function renderFamilyInsightPanel(
   family: ExplorerFamilySummary,
   preferredEndpointId?: string
 ): string;
+declare function buildContractImprovementItems(
+  detail: ExplorerEndpointDetail,
+  findings: ExplorerFinding[]
+): ContractImprovementItem[];
 
 interface FamilyTableColumnContext {
   familyName: string;
@@ -208,16 +212,12 @@ function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
       tdClass: "family-col-name",
       render: function (family: ExplorerFamilySummary, ctx: FamilyTableColumnContext): string {
         var familyName = ctx.familyName;
-        var insightExpanded = state.expandedFamilyInsight === familyName;
-        return '<button type="button" class="family-name-toggle" data-insight-toggle="' + escapeHtml(familyName) + '"'
-          + ' aria-expanded="' + (insightExpanded ? "true" : "false") + '"'
-          + ' title="' + escapeHtml(insightExpanded ? "Hide insight" : "Show insight") + '">'
+        return '<div class="family-name-static">'
           + '<span class="family-name-main">'
           + '<strong title="' + escapeHtml(humanFamilyLabel(familyName)) + '">' + escapeHtml(humanFamilyLabel(familyName)) + "</strong>"
           + '<span class="family-name-badgewrap">' + pressureBadge(family.pressure, "pressure-badge") + "</span>"
           + "</span>"
-          + '<span class="family-name-action" aria-hidden="true">' + escapeHtml(insightExpanded ? "Hide insight" : "Show insight") + "</span>"
-          + "</button>";
+          + "</div>";
       }
     },
     {
@@ -254,20 +254,9 @@ function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
   ];
 
   cols.push({
-    key: "issues",
-    thClass: "family-col-issues",
-    thHtml: '<span class="th-title">Findings</span><span class="th-helper" title="Total in-scope finding count across endpoints in this family.">in-scope</span>',
-    th: "",
-    tdClass: "family-col-issues",
-    render: function (family: ExplorerFamilySummary): string {
-      return String(family.findings || 0);
-    }
-  });
-
-  cols.push({
     key: "signals",
     thClass: "family-col-top-signal",
-    th: tab.signalHeader,
+    th: "Lead signal",
     tdClass: "family-col-top-signal",
     render: function (family: ExplorerFamilySummary, ctx: FamilyTableColumnContext): string {
       return renderFamilyTopSignalCell(family, ctx.ranked);
@@ -277,54 +266,46 @@ function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
   cols.push({
     key: "risk",
     thClass: "family-col-primary-risk",
-    th: tab.riskHeader,
+    th: "Why this matters",
     tdClass: "family-col-primary-risk",
     render: function (_family: ExplorerFamilySummary, ctx: FamilyTableColumnContext): string {
       var ranked = ctx.ranked || familyInsightBuildRankedSummary(_family);
-      var primaryRisk = ranked.primaryRisk || (ranked.driver === "workflow"
-        ? "workflow continuity risk"
+      var whyText = ranked.dxConsequence || ranked.primaryRisk || (ranked.driver === "workflow"
+        ? "Developers must infer multi-step behavior from runtime instead of contract guidance."
         : ranked.driver === "shape"
-        ? "response-shape risk"
-        : "contract drift risk");
+        ? "Developers have to interpret storage-shaped payloads instead of a task outcome."
+        : "Developers cannot reliably infer behavior from the contract alone.");
       var clampClass = shape
         ? "family-table-clamp family-table-clamp-risk"
         : "family-table-clamp family-table-clamp-3 family-table-clamp-risk";
-      return renderFamilyTableClamp(primaryRisk, clampClass);
+      return renderFamilyTableClamp(whyText, clampClass);
     }
   });
 
   cols.push({
     key: "impact",
     thClass: "family-col-client-effect",
-    thHtml: shape
-      ? '<span class="th-title">Client effect</span><span class="th-helper" title="Primary caller-side costs created by the response shape in this family.">shape-driven costs</span>'
-      : "",
-    th: tab.clientEffectHeader,
+    th: "Recommended fix direction",
     tdClass: "family-col-client-effect",
     render: function (family: ExplorerFamilySummary, ctx: FamilyTableColumnContext): string {
       var ranked = ctx.ranked || familyInsightBuildRankedSummary(family);
-      if (shape) {
-        return renderFamilyClientEffectCell(renderCallerBurdenCellValue(ranked));
-      }
-      var repeatCount = (ctx.dxCounts && ranked.dxConsequence) ? (ctx.dxCounts[ranked.dxConsequence] || 0) : 0;
-      return renderFamilyClientEffectCell(renderDxConsequenceCellValue(ranked, repeatCount));
+      return renderFamilyTableClamp(ranked.recommendedAction || "Clarify the contract for the next developer action.", "family-table-clamp family-table-clamp-3 family-table-clamp-effect");
     }
   });
 
   cols.push({
-    key: "driver",
-    thClass: "family-col-driver",
-    thHtml: '<span class="th-title">What dominates</span><span class="th-helper" title="Dominant issue source for this family (workflow continuity vs response shape vs contract consistency).">source</span>',
-    th: "",
-    tdClass: "family-col-driver",
+    key: "actions",
+    thClass: "family-col-actions",
+    th: "Actions",
+    tdClass: "family-col-actions",
     render: function (_family: ExplorerFamilySummary, ctx: FamilyTableColumnContext): string {
-      var ranked = ctx.ranked || familyInsightBuildRankedSummary(_family);
-      var label = ranked.driverLabel || "—";
-      var focus = ranked.driverFocus || "";
-      return '<div class="family-driver-cell">'
-        + '<span class="chip family-driver-chip" title="' + escapeHtml(label) + '">' + escapeHtml(label) + "</span>"
-        + (focus ? ('<div class="family-driver-focus subtle" title="' + escapeHtml(focus) + '">' + escapeHtml(focus) + "</div>") : "")
-        + "</div>";
+      var familyName = ctx.familyName;
+      var insightExpanded = state.expandedFamilyInsight === familyName;
+      return '<button type="button" class="secondary-action family-row-action" data-insight-toggle="' + escapeHtml(familyName) + '"'
+        + ' aria-expanded="' + (insightExpanded ? "true" : "false") + '"'
+        + ' title="' + escapeHtml(insightExpanded ? "Hide summary" : "Show summary") + '">'
+        + escapeHtml(insightExpanded ? "Hide summary" : "Show summary")
+        + "</button>";
     }
   });
 
@@ -624,7 +605,7 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
       + '">'
       + headerRow
       + "<strong>No endpoint rows match this family in the current lens.</strong>"
-      + '<p class="subtle">Widen the current filters or include endpoints without issues to repopulate this family-owned endpoint table.</p>'
+      + '<p class="subtle">Widen the current table view to repopulate this family-owned endpoint table.</p>'
       + '<div class="family-endpoint-table-footer">' + footerActions + "</div>"
       + "</section></div></div></td></tr>";
   }
@@ -648,6 +629,10 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
       var why = topGroup && topGroup.impact
         ? topGroup.impact
         : "Clients may need extra guesswork or follow-up reads because the contract does not make the next step or safe fields obvious.";
+      var improvementItems = buildContractImprovementItems(detail || ({ endpoint: endpoint, findings: findings } as ExplorerEndpointDetail), findings);
+      var nextChanges = (improvementItems || []).slice(0, 3).map(function (item: ContractImprovementItem) {
+        return '<li>' + escapeHtml(item.change || "Clarify the contract for the next developer action.") + "</li>";
+      }).join("");
       var evidenceItems = groups.slice(0, 2).map(function (group: IssueGroup) {
         var title = evidenceGroupTitleLine(group);
         var count = group.count || 0;
@@ -661,21 +646,25 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
         : '<p class="subtle">No grouped evidence was available for this endpoint in the current view.</p>';
 
       html += '<tr class="nested-endpoint-preview-row" data-family="' + escapeHtml(family.family) + '" data-endpoint-id="' + escapeHtml(endpoint.id) + '">'
-        + '<td colspan="6" class="nested-endpoint-preview-cell">'
+        + '<td colspan="7" class="nested-endpoint-preview-cell">'
         + '<div class="nested-endpoint-preview"><div class="nested-endpoint-preview-grid">'
-        + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Primary issue</p><div class="nested-endpoint-preview-value">'
+        + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Why this is hard</p><div class="nested-endpoint-preview-value">'
         + (findings.length ? severityBadge(severity) : "")
         + '<span class="nested-endpoint-preview-text" title="' + escapeHtml(topMsg) + '">' + escapeHtml(topMsg) + "</span>"
-        + "</div></div>"
-        + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Why it matters</p><p class="nested-endpoint-preview-why">'
+        + '</div><p class="nested-endpoint-preview-why">'
         + escapeHtml(why)
-        + "</p></div>"
-        + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Top evidence groups</p>'
+        + "</div></div>"
+        + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Exact evidence</p>'
         + evidenceList
+        + "</div>"
+        + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">What should change next</p>'
+        + (nextChanges
+            ? ('<ul class="preview-evidence-list preview-change-list">' + nextChanges + "</ul>")
+            : '<p class="subtle">No concrete contract changes were derived for this endpoint yet.</p>')
         + "</div>"
         + "</div>"
         + '<div class="nested-endpoint-preview-actions">'
-        + '<button type="button" class="tertiary-action" data-open-evidence-id="' + escapeHtml(endpoint.id) + '">Open grouped deviations</button>'
+        + '<button type="button" class="tertiary-action" data-open-evidence-id="' + escapeHtml(endpoint.id) + '">Show evidence</button>'
         + '<button type="button" class="tertiary-action" data-focus-endpoint="' + escapeHtml(endpoint.id) + '">Inspect endpoint</button>'
         + "</div></div></td></tr>";
     }
@@ -693,7 +682,7 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
     + headerRow
     + '<p class="eyebrow">' + escapeHtml(evidenceSectionTitleForActiveLens()) + "</p>"
     + '<p class="subtle">Endpoint rows stay attached to this family so the ownership and investigation flow stay together.</p>'
-    + '</div><div class="family-endpoint-table-scroll" data-family-endpoint-table-scroll="1"><table class="nested-endpoint-table"><colgroup><col class="nested-col-path"><col class="nested-col-method"><col class="nested-col-issue"><col class="nested-col-severity"><col class="nested-col-instance"><col class="nested-col-actions"></colgroup><thead><tr><th>Path</th><th>Method</th><th>Primary issue</th><th>Severity</th><th>Deviations</th><th class="nested-endpoint-actions-col">Actions</th></tr></thead><tbody>'
+    + '</div><div class="family-endpoint-table-scroll" data-family-endpoint-table-scroll="1"><table class="nested-endpoint-table"><colgroup><col class="nested-col-path"><col class="nested-col-issue"><col class="nested-col-type"><col class="nested-col-severity"><col class="nested-col-instance"><col class="nested-col-actionhint"><col class="nested-col-actions"></colgroup><thead><tr><th>Endpoint</th><th>Lead issue</th><th>Type</th><th>Severity</th><th>Evidence</th><th>Suggested action</th><th class="nested-endpoint-actions-col">Actions</th></tr></thead><tbody>'
     + nestedRows
     + '</tbody></table></div><div class="family-endpoint-table-footer"><span class="subtle">End of endpoints in <code>'
     + escapeHtml(familyLabel)

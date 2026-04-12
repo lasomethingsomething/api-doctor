@@ -313,8 +313,6 @@ interface ExplorerElements {
   searchInput: HTMLInputElement | null;
   categoryFilter: HTMLSelectElement | null;
   familyPriorityFilter: HTMLSelectElement | null;
-  includeNoIssueRows: HTMLInputElement | null;
-  lensControlHint: HTMLElement | null;
   filterEmptyState: HTMLElement | null;
   familySurfaceHelp: HTMLElement | null;
   familySurfaceContext: HTMLElement | null;

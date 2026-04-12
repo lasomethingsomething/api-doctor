@@ -240,19 +240,15 @@ function viewScopeRenderFilterEmptyState(): void {
   if (state.filters.search) {
     primaryAction = 'clear-search';
     primaryLabel = 'Clear search';
-    why = 'The current search is narrower than the available contract-issue evidence in this slice.';
-  } else if (state.filters.category !== 'all' && state.filters.category !== 'spec-rule') {
-    primaryAction = 'reset-category';
-    primaryLabel = 'Reset category';
-    why = 'The selected category has no matching contract-issue families in this slice.';
+    why = 'The current search is narrower than the available contract-problem evidence in this slice.';
   } else if (state.filters.familyPressure !== 'all') {
     primaryAction = 'clear-table-filters';
-    primaryLabel = 'Show all family priorities';
-    why = 'The selected family priority tier hides all contract-issue families in this slice.';
+    primaryLabel = 'Show all severity bands';
+    why = 'The selected severity band hides all contract-problem families in this slice.';
   } else {
     primaryAction = 'clear-table-filters';
-    primaryLabel = 'Clear table filters';
-    why = 'The current filter combination is narrower than the available contract-issue evidence in this slice.';
+    primaryLabel = 'Reset table view';
+    why = 'The current table view is narrower than the available contract-problem evidence in this slice.';
   }
 
   var actionHtml = '<div class="filter-empty-actions">'
@@ -261,7 +257,7 @@ function viewScopeRenderFilterEmptyState(): void {
 
   el.filterEmptyState.innerHTML = '<section class="filter-empty-panel" aria-label="No matching families">'
     + '<p class="filter-empty-title"><strong>No matching families</strong></p>'
-    + '<p class="filter-empty-lead">No contract-issue families match the current filters.</p>'
+    + '<p class="filter-empty-lead">No contract-problem families match the current table view.</p>'
     + '<p class="subtle">' + escapeHtml(why) + '</p>'
     + actionHtml
     + '</section>';

@@ -211,43 +211,9 @@ func filtersRegressionHarness() string {
     var got = Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) {
       return (th.textContent || '').trim();
     }).filter(Boolean);
-    var expected = ['Path', 'Method', 'Primary issue', 'Severity', 'Deviations', 'Actions'];
+    var expected = ['Endpoint', 'Lead issue', 'Type', 'Severity', 'Evidence', 'Suggested action', 'Actions'];
     if (JSON.stringify(got) !== JSON.stringify(expected)) {
       failures.push({ kind: 'nested-headers', tab: tab, step: step, family: family, expected: expected, got: got });
-    }
-  }
-
-  function assertScopeIncludes(needle, tab, step, failures) {
-    var bar = document.getElementById('lensControlHint');
-    var text = bar ? (bar.textContent || '') : '';
-    if (text.toLowerCase().indexOf(String(needle || '').toLowerCase()) === -1) {
-      failures.push({ kind: 'filter-summary', tab: tab, step: step, expected_includes: needle, got: text });
-    }
-  }
-
-  function assertScopeExcludes(needle, tab, step, failures) {
-    var bar = document.getElementById('lensControlHint');
-    var text = bar ? (bar.textContent || '') : '';
-    if (text.toLowerCase().indexOf(String(needle || '').toLowerCase()) !== -1) {
-      failures.push({ kind: 'filter-summary-unexpected', tab: tab, step: step, unexpected_includes: needle, got: text });
-    }
-  }
-
-  function assertSummaryAddsMeaning(tab, step, failures) {
-    var bar = document.getElementById('lensControlHint');
-    var text = bar ? (bar.textContent || '') : '';
-    var lower = text.toLowerCase();
-    if (!text.trim()) {
-      failures.push({ kind: 'filter-summary-empty', tab: tab, step: step });
-      return;
-    }
-    // Guard against mechanical "serialization" of current control values.
-    if (lower.indexOf('current filters') !== -1
-      || lower.indexOf('search ') !== -1
-      || lower.indexOf('category ') !== -1
-      || lower.indexOf('family priority ') !== -1
-      || lower.indexOf('no-issue rows') !== -1) {
-      failures.push({ kind: 'filter-summary-mechanical', tab: tab, step: step, got: text.trim() });
     }
   }
 
@@ -276,6 +242,14 @@ func filtersRegressionHarness() string {
         assertNoHash(tabId, 'post-tab-select', failures);
         if (document.getElementById('categoryFilter')) {
           failures.push({ kind: 'unexpected-category-filter', tab: tabId, step: 'post-tab-select' });
+        }
+        if (tabId === 'workflow') {
+          var drawer = document.querySelector('[data-workflow-chains-drawer]');
+          if (!drawer) {
+            failures.push({ kind: 'workflow-drawer-missing', tab: tabId, step: 'post-tab-select' });
+          } else if (drawer.hasAttribute('open')) {
+            failures.push({ kind: 'workflow-drawer-open-by-default', tab: tabId, step: 'post-tab-select' });
+          }
         }
 
         // 0) Expansion behavior should be single-open: expanding a new family collapses the previous family's expansions.
@@ -325,8 +299,6 @@ func filtersRegressionHarness() string {
                       assertNoHash(tabId, 'after-inspect-tax-1', failures);
                       assertScrollTargetsAllowed(tabId, 'after-inspect-tax-1', failures);
                       assertInspectorEndpointIncludes('/tax-provider', tabId, 'inspect-tax-1', failures);
-                      assertScopeExcludes('Burden', tabId, 'scope-no-burden', failures);
-                      assertSummaryAddsMeaning(tabId, 'scope-summary', failures);
 
                       // 2) Same lens, pressure = medium => only /order
                       setSelect('familyPriorityFilter', 'medium');
@@ -359,8 +331,6 @@ func filtersRegressionHarness() string {
                             window.setTimeout(function () {
                               assertNestedCount(2, '/customer-wishlist', tabId, 'expand-wishlist', failures);
                               assertNestedHeaders(tabId, '/customer-wishlist', 'headers-wishlist', failures);
-                              assertScopeExcludes('Burden', tabId, 'scope-no-burden-2', failures);
-                              assertSummaryAddsMeaning(tabId, 'scope-summary-2', failures);
                               resolve(failures);
                             }, 120);
                           }, 120);

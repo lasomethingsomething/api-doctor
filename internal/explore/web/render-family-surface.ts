@@ -108,7 +108,7 @@ function renderFamilySurface(): void {
     } else {
       el.familySurface.innerHTML = '<div class="empty">'
         + '<strong>No matching families.</strong>'
-        + '<p class="subtle">No families match the current scope.' + (hasWidenAction ? ' Clear table filters to widen the view.' : '') + '</p>'
+        + '<p class="subtle">No families match the current table view.' + (hasWidenAction ? ' Reset the table view to widen it.' : '') + '</p>'
         + recovery
         + '</div>';
       bindRecoveryButtons(el.familySurface);

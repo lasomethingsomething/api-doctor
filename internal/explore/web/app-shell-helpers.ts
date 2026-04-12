@@ -63,14 +63,6 @@ function bindControls(): void {
       }, invalidateDerivedCaches, render);
     });
   }
-  if (el.includeNoIssueRows) {
-    el.includeNoIssueRows.addEventListener("change", function (event) {
-      var target = event.target as HTMLInputElement | null;
-      applyFilterStateChange(state, function () {
-        state.filters.includeNoIssueRows = !!(target && target.checked);
-      }, invalidateDerivedCaches, render);
-    });
-  }
 }
 
 function invalidateDerivedCaches(): void {

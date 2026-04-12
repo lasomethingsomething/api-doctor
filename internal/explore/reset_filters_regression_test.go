@@ -190,7 +190,6 @@ func resetFiltersHarness() string {
         setInput('searchInput', '/non-default');
         setSelect('categoryFilter', 'spec-rule');
         setSelect('familyPriorityFilter', 'high');
-        setCheckbox('includeNoIssueRows', true);
 
         click('button.reset-btn');
 
@@ -203,12 +202,10 @@ func resetFiltersHarness() string {
           var search = (document.getElementById('searchInput') || {}).value || '';
           var category = (document.getElementById('categoryFilter') || {}).value || '';
           var pressure = (document.getElementById('familyPriorityFilter') || {}).value || '';
-          var includeNoIssue = !!((document.getElementById('includeNoIssueRows') || {}).checked);
 
           if (search !== '') failures.push({ kind: 'search-not-reset', tab: tab.id, got: search });
           if (category !== tab.category) failures.push({ kind: 'category-not-reset', tab: tab.id, expected: tab.category, got: category });
           if (pressure !== 'all') failures.push({ kind: 'pressure-not-reset', tab: tab.id, got: pressure });
-          if (includeNoIssue) failures.push({ kind: 'include-no-issue-not-reset', tab: tab.id });
 
           resolve(failures);
         }, 80);
