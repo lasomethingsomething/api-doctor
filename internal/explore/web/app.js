@@ -84,7 +84,7 @@ var TOP_TABS = [
         copy: "OpenAPI rule violations (REQUIRED vs SHOULD) and consistency drift",
         color: "spec-rule",
         bodyClass: "lens-spec-rule",
-        defaultCategory: "spec-rule",
+        defaultCategory: "all",
         defaultSubTab: "exact",
         familyEyebrow: "Contract surface",
         familyHeading: "Family investigation clusters",
@@ -1696,14 +1696,6 @@ function bindControls() {
             }, invalidateDerivedCaches, render);
         });
     }
-    if (el.categoryFilter) {
-        el.categoryFilter.addEventListener("change", function (event) {
-            var target = event.target;
-            applyFilterStateChange(state, function () {
-                state.filters.category = target ? target.value : "all";
-            }, invalidateDerivedCaches, render);
-        });
-    }
     if (el.familyPriorityFilter) {
         el.familyPriorityFilter.addEventListener("change", function (event) {
             var target = event.target;
@@ -1735,28 +1727,6 @@ function isExactFamilyName(value) {
 function renderFilterOptions() {
     if (!state.payload)
         return;
-    var endpointDetails = state.payload.endpointDetails || {};
-    var categoryValues = uniq(flatMap(Object.keys(endpointDetails), function (endpointId) {
-        var detail = endpointDetails[endpointId];
-        return findingsForActiveLens((detail && detail.findings) || []).map(function (finding) {
-            return finding && finding.category ? finding.category : "";
-        }).filter(Boolean);
-    })).sort();
-    var cfg = activeTopTabConfig();
-    if (categoryValues.indexOf(cfg.defaultCategory) !== -1) {
-        categoryValues = [cfg.defaultCategory].concat(categoryValues.filter(function (category) {
-            return category !== cfg.defaultCategory;
-        }));
-    }
-    if (state.filters.category !== "all" && categoryValues.indexOf(state.filters.category) === -1) {
-        state.filters.category = categoryValues.indexOf(cfg.defaultCategory) !== -1 ? cfg.defaultCategory : "all";
-    }
-    setOptions(el.categoryFilter, [{ value: "all", label: "all categories" }].concat(categoryValues.map(function (category) {
-        return {
-            value: category,
-            label: category === "spec-rule" ? "spec rule violations (rules-based view)" : category.replaceAll("-", " ")
-        };
-    })));
     var datalist = document.getElementById("searchSuggestions");
     if (datalist) {
         var families = uniq(state.payload.endpoints.map(function (row) { return row.family; })).sort();
@@ -1764,13 +1734,6 @@ function renderFilterOptions() {
             return '<option value="' + escapeHtml(value) + '">';
         }).join("");
     }
-}
-function setOptions(select, options) {
-    if (!select)
-        return;
-    select.innerHTML = options.map(function (option) {
-        return '<option value="' + escapeHtml(option.value) + '">' + escapeHtml(option.label) + "</option>";
-    }).join("");
 }
 function activeTopTabConfig() {
     return TOP_TAB_INDEX[state.activeTopTab] || TOP_TAB_INDEX["spec-rule"];
@@ -1898,24 +1861,8 @@ function clearCurrentLens() {
 }
 function appRuntimeSyncControls() {
     el.searchInput.value = state.filters.search;
-    el.categoryFilter.value = state.filters.category;
     el.familyPriorityFilter.value = state.filters.familyPressure;
     el.includeNoIssueRows.checked = state.filters.includeNoIssueRows;
-    var categoryField = el.categoryFilter ? el.categoryFilter.closest('.field') : null;
-    var categoryFilterVisible = state.activeTopTab === 'spec-rule';
-    if (el.categoryFilter) {
-        el.categoryFilter.disabled = !categoryFilterVisible;
-        if (categoryFilterVisible) {
-            el.categoryFilter.removeAttribute('title');
-        }
-        else {
-            el.categoryFilter.setAttribute('title', 'Category filtering is only available on Contract Issues.');
-        }
-    }
-    if (categoryField) {
-        categoryField.classList.toggle('field-hidden-by-lens', !categoryFilterVisible);
-        categoryField.setAttribute('aria-hidden', categoryFilterVisible ? 'false' : 'true');
-    }
     if (el.lensControlHint) {
         el.lensControlHint.innerHTML = formatFilterSummaryHtml();
     }
@@ -2446,7 +2393,7 @@ function isShapeScopedFinding(finding) {
         || code === "generic-object-response"
         || code === "weak-array-items-schema";
 }
-function findingsForActiveLens(findings) {
+function findingsForActiveTopTab(findings) {
     var out = findings || [];
     if (state.activeTopTab === "spec-rule") {
         out = out.filter(function (finding) {
@@ -2459,6 +2406,10 @@ function findingsForActiveLens(findings) {
     if (state.activeTopTab === "shape") {
         out = out.filter(isResponseShapeFinding);
     }
+    return out;
+}
+function findingsForActiveLens(findings) {
+    var out = findingsForActiveTopTab(findings || []);
     if (state.filters.category && state.filters.category !== "all") {
         if (state.filters.category === "spec-rule") {
             out = out.filter(function (finding) {

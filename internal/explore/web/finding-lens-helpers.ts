@@ -81,7 +81,7 @@ function isShapeScopedFinding(finding: ExplorerFinding): boolean {
     || code === "weak-array-items-schema";
 }
 
-function findingsForActiveLens(findings: ExplorerFinding[]): ExplorerFinding[] {
+function findingsForActiveTopTab(findings: ExplorerFinding[]): ExplorerFinding[] {
   var out = findings || [];
 
   if (state.activeTopTab === "spec-rule") {
@@ -97,6 +97,12 @@ function findingsForActiveLens(findings: ExplorerFinding[]): ExplorerFinding[] {
   if (state.activeTopTab === "shape") {
     out = out.filter(isResponseShapeFinding);
   }
+
+  return out;
+}
+
+function findingsForActiveLens(findings: ExplorerFinding[]): ExplorerFinding[] {
+  var out = findingsForActiveTopTab(findings || []);
 
   if (state.filters.category && state.filters.category !== "all") {
     if (state.filters.category === "spec-rule") {

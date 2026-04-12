@@ -22,26 +22,8 @@ declare function formatFilterSummaryHtml(): string;
 
 function appRuntimeSyncControls(): void {
   el.searchInput.value = state.filters.search;
-  el.categoryFilter.value = state.filters.category;
   el.familyPriorityFilter.value = state.filters.familyPressure;
   el.includeNoIssueRows.checked = state.filters.includeNoIssueRows;
-
-  var categoryField = el.categoryFilter ? el.categoryFilter.closest('.field') : null;
-  var categoryFilterVisible = state.activeTopTab === 'spec-rule';
-
-  if (el.categoryFilter) {
-    el.categoryFilter.disabled = !categoryFilterVisible;
-    if (categoryFilterVisible) {
-      el.categoryFilter.removeAttribute('title');
-    } else {
-      el.categoryFilter.setAttribute('title', 'Category filtering is only available on Contract Issues.');
-    }
-  }
-
-  if (categoryField) {
-    categoryField.classList.toggle('field-hidden-by-lens', !categoryFilterVisible);
-    categoryField.setAttribute('aria-hidden', categoryFilterVisible ? 'false' : 'true');
-  }
 
   if (el.lensControlHint) {
     el.lensControlHint.innerHTML = formatFilterSummaryHtml();

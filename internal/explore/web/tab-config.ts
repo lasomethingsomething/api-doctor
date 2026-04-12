@@ -5,7 +5,7 @@ var TOP_TABS: ExplorerTopTab[] = [
     copy: "OpenAPI rule violations (REQUIRED vs SHOULD) and consistency drift",
     color: "spec-rule",
     bodyClass: "lens-spec-rule",
-    defaultCategory: "spec-rule",
+    defaultCategory: "all",
     defaultSubTab: "exact",
     familyEyebrow: "Contract surface",
     familyHeading: "Family investigation clusters",

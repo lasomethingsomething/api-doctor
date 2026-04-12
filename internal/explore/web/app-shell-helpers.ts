@@ -55,14 +55,6 @@ function bindControls(): void {
       }, invalidateDerivedCaches, render);
     });
   }
-  if (el.categoryFilter) {
-    el.categoryFilter.addEventListener("change", function (event) {
-      var target = event.target as HTMLSelectElement | null;
-      applyFilterStateChange(state, function () {
-        state.filters.category = target ? target.value : "all";
-      }, invalidateDerivedCaches, render);
-    });
-  }
   if (el.familyPriorityFilter) {
     el.familyPriorityFilter.addEventListener("change", function (event) {
       var target = event.target as HTMLSelectElement | null;
@@ -95,31 +87,6 @@ function isExactFamilyName(value: string): boolean {
 
 function renderFilterOptions(): void {
   if (!state.payload) return;
-  var endpointDetails = state.payload.endpointDetails || {};
-  var categoryValues = uniq(flatMap(Object.keys(endpointDetails), function (endpointId: string) {
-    var detail = endpointDetails[endpointId];
-    return findingsForActiveLens((detail && detail.findings) || []).map(function (finding: ExplorerFinding) {
-      return finding && finding.category ? finding.category : "";
-    }).filter(Boolean);
-  })).sort();
-  var cfg = activeTopTabConfig();
-  if (categoryValues.indexOf(cfg.defaultCategory) !== -1) {
-    categoryValues = [cfg.defaultCategory].concat(categoryValues.filter(function (category: string) {
-      return category !== cfg.defaultCategory;
-    }));
-  }
-  if (state.filters.category !== "all" && categoryValues.indexOf(state.filters.category) === -1) {
-    state.filters.category = categoryValues.indexOf(cfg.defaultCategory) !== -1 ? cfg.defaultCategory : "all";
-  }
-  setOptions(el.categoryFilter, [{ value: "all", label: "all categories" }].concat(
-    categoryValues.map(function (category: string) {
-      return {
-        value: category,
-        label: category === "spec-rule" ? "spec rule violations (rules-based view)" : category.replaceAll("-", " ")
-      };
-    })
-  ));
-
   var datalist = document.getElementById("searchSuggestions");
   if (datalist) {
     var families = uniq(state.payload.endpoints.map(function (row: ExplorerEndpointRow) { return row.family; })).sort();
@@ -127,16 +94,6 @@ function renderFilterOptions(): void {
       return '<option value="' + escapeHtml(value) + '">';
     }).join("");
   }
-}
-
-function setOptions(
-  select: HTMLSelectElement | null,
-  options: Array<{ value: string; label: string }>
-): void {
-  if (!select) return;
-  select.innerHTML = options.map(function (option) {
-    return '<option value="' + escapeHtml(option.value) + '">' + escapeHtml(option.label) + "</option>";
-  }).join("");
 }
 
 function activeTopTabConfig(): ExplorerTopTab {
