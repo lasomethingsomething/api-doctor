@@ -70,7 +70,7 @@ function restoreFamilyTableBackState(state: ExplorerState): void {
 function focusFamilySurface(
   state: ExplorerState,
   family: string,
-  filteredRows: () => any[],
+  filteredRows: () => ExplorerEndpointRow[],
   render: () => void
 ): void {
   if (!family) return;
