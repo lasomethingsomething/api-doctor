@@ -53,76 +53,12 @@ function workflowSurfaceRenderChains(): void {
     el.workflowChains.innerHTML = "";
     return;
   }
-
-  var allChains = state.payload.workflows.chains || [];
-  if (!allChains.length) {
-    el.workflowSection.style.display = "block";
-    el.workflowHelp.textContent = "Expand a workflow family below and open its Workflow sequence guide for the clearest step-by-step path. This section only gives a global overview.";
-    el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(workflowSurfaceRenderEmptyState("absent"), 0);
-    workflowSurfaceBindChainsDrawerToggle();
-    return;
-  }
-
-  var visibleRows = filteredRows();
-  var visibleByID: StringMap<boolean> = {};
-  visibleRows.forEach(function (row: ExplorerEndpointRow) {
-    visibleByID[row.id] = true;
-  });
-  var filteredChains = allChains.filter(function (chain: ExplorerWorkflowChain) {
-    return (chain.endpointIds || []).some(function (eid: string) {
-      return !!visibleByID[eid];
-    });
-  });
-
-  var scopedByID: StringMap<boolean> = {};
-  rowsInScopeAll().forEach(function (row: ExplorerEndpointRow) {
-    scopedByID[row.id] = true;
-  });
-  var scopedChains = allChains.filter(function (chain: ExplorerWorkflowChain) {
-    return (chain.endpointIds || []).some(function (eid: string) {
-      return !!scopedByID[eid];
-    });
-  });
-
-  el.workflowSection.style.display = "block";
-
-  var chainSource = filteredChains.length ? filteredChains : scopedChains;
-  var workflowGuideHtml = workflowSurfaceRenderGuideSection(chainSource);
-  var supportingContextHtml = workflowSurfaceRenderSupportingContext(workflowGuideHtml, "");
-
-  if (filteredChains.length) {
-    el.workflowHelp.textContent = "Expand a workflow family below and open its Workflow sequence guide for the clearest step-by-step path. This section is only the global workflow overview for the current slice.";
-    el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(
-      supportingContextHtml || workflowSurfaceRenderEmptyState("filtered"),
-      filteredChains.length
-    );
-    workflowSurfaceBindChainsDrawerToggle();
-    return;
-  }
-
-  if (scopedChains.length) {
-    el.workflowHelp.textContent = "Sequence guides live inside expanded workflow families below. This overview keeps related call paths available when the current table view is narrower than the full workflow context.";
-    el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(
-      '<div class="workflow-no-match">'
-        + '<p class="workflow-empty-title"><strong>Related workflow paths are still available</strong></p>'
-        + '<p class="workflow-empty-copy">The current table view is narrower than the available chain evidence, so this section keeps compact sequence reads available from the endpoints still in view.</p>'
-        + renderRecoveryActions(["show-all-workflows"])
-      + "</div>"
-      + supportingContextHtml,
-      scopedChains.length
-    );
-    bindRecoveryButtons(el.workflowChains);
-    workflowSurfaceBindChainsDrawerToggle();
-    return;
-  }
-
+  // Workflow sequence guidance now lives inline with expanded workflow families.
+  // Keep the old global workflow section hidden so it does not read like a
+  // detached bottom inspector competing with the family-owned sequence guide.
+  el.workflowSection.style.display = "none";
   el.workflowHelp.textContent = "";
-  el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(
-    supportingContextHtml + workflowSurfaceRenderEmptyState("filtered"),
-    0
-  );
-  bindRecoveryButtons(el.workflowChains);
-  workflowSurfaceBindChainsDrawerToggle();
+  el.workflowChains.innerHTML = "";
 }
 
 function workflowSurfaceRenderChainsDrawer(innerHtml: string, chainCount: number): string {

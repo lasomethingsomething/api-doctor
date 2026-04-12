@@ -25,7 +25,7 @@ var TOP_TABS: ExplorerTopTab[] = [
     defaultSubTab: "summary",
     familyEyebrow: "Workflow problems",
     familyHeading: "Workflow-problem families",
-    familyHelp: "Families stay in one shared table, but this tab ranks where developers can get stuck between calls, handoffs, and hidden prerequisites.",
+    familyHelp: "Families stay in one shared table, but this tab ranks where developers can get stuck between calls, handoffs, and hidden prerequisites. Expand a family and open its Workflow sequence guide for the clearest step-by-step path.",
     emptyHelp: "",
     signalHeader: "Lead workflow signal",
     riskHeader: "Why this is hard",
