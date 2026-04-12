@@ -67,6 +67,7 @@ function sumSignalCounts(map: StringMap<number>): number {
 function pickFamilyDominantDriver(family: ExplorerFamilySummary): { key: string; label: string; signalKey: string; score: number } {
   var workflowScore = sumSignalCounts(family.workflowSignalCounts || {});
   var shapeScore = sumSignalCounts(family.shapeSignalCounts || {});
+  var contractSignalScore = sumSignalCounts(family.contractSignalCounts || {});
   var contractScore = sumSignalCounts(family.consistencySignalCounts || {});
 
   Object.keys(family.burdenCounts || {}).forEach(function (key: string) {
@@ -75,11 +76,15 @@ function pickFamilyDominantDriver(family: ExplorerFamilySummary): { key: string;
     }
   });
 
-  var contractishScore = contractScore + shapeScore;
+  var contractishScore = contractScore + shapeScore + contractSignalScore;
   var top = Math.max(workflowScore, contractishScore);
   var second = Math.min(workflowScore, contractishScore);
   var mixed = top > 0 && second > 0 && (second / top) >= 0.6;
-  var contractSignalKey = (shapeScore >= contractScore && shapeScore > 0) ? "shape" : "contract";
+  var contractSignalKey = (shapeScore >= contractScore && shapeScore >= contractSignalScore && shapeScore > 0)
+    ? "shape"
+    : (contractSignalScore >= contractScore && contractSignalScore > 0)
+    ? "contract"
+    : "contract";
 
   if (mixed) {
     return { key: "mixed", label: "Mixed driver", signalKey: (workflowScore >= contractishScore ? "workflow" : contractSignalKey), score: top };
@@ -96,6 +101,10 @@ function familyDominantSignalsForDriver(family: ExplorerFamilySummary, driverKey
   }
   if (driverKey === "shape") {
     return sortedSignalLabels(family.shapeSignalCounts || {}, 2);
+  }
+  if (driverKey === "contract") {
+    var explicitContractSignals = sortedSignalLabels(family.contractSignalCounts || {}, 2);
+    if (explicitContractSignals.length) return explicitContractSignals;
   }
   var contractSignals = sortedSignalLabels(family.consistencySignalCounts || {}, 2);
   if (contractSignals.length) return contractSignals;
@@ -118,7 +127,15 @@ function familyDxSignalFragment(signal: string): string {
     "parameter naming drift appears likely": "developers special-case parameter names across sibling routes",
     "path style drift appears likely": "developers cannot compose sibling routes predictably",
     "response shape drift appears likely": "developers add per-endpoint parsing branches for sibling endpoints",
-    "outcome modeled differently across similar endpoints": "developers cannot reuse the same success/failure handling across siblings"
+    "outcome modeled differently across similar endpoints": "developers cannot reuse the same success/failure handling across siblings",
+    "missing response descriptions": "developers cannot tell what successful or failing responses mean from the spec",
+    "missing request/response schemas": "developers do not get machine-checkable request or response shapes",
+    "generic object schemas": "developers get vague object contracts instead of explicit fields",
+    "missing enums or weak typing": "developers cannot type-check valid values confidently",
+    "parameter naming drift": "developers special-case parameter names across sibling routes",
+    "path template drift": "developers cannot predict sibling route shapes consistently",
+    "response shape drift": "developers must special-case sibling response formats",
+    "general contract rule gaps": "developers cannot rely on the OpenAPI contract to guide integration"
   };
   return map[signal] || humanizeSignalLabel(signal).toLowerCase();
 }
@@ -183,6 +200,10 @@ function familyRecommendedAction(driverKey: string, dominantSignals: string[]): 
     return "Return a task-shaped response instead of a storage snapshot";
   }
 
+  if (/missing response descriptions/.test(blob)) return "Add response descriptions where the contract is silent";
+  if (/missing request\/response schemas/.test(blob)) return "Declare the missing request and response schemas";
+  if (/generic object schemas/.test(blob)) return "Replace generic object schemas with explicit fields";
+  if (/missing enums or weak typing/.test(blob)) return "Declare enums and explicit field types";
   if (/description/.test(blob)) return "Add missing response descriptions";
   if (/enum|typing|weak typing/.test(blob)) return "Declare missing enums";
   if (/parameter naming/.test(blob)) return "Normalize parameter naming across sibling endpoints";
@@ -219,6 +240,48 @@ function familyWorkflowWhyThisMatters(dominantSignals: string[]): string {
     return "Developers cannot tell the next valid call from the response.";
   }
   return "Developers cannot chain these calls safely from the contract alone.";
+}
+
+function familyContractWhyThisMatters(dominantSignals: string[]): string {
+  var signals = dominantSignals || [];
+  var signal0 = (signals[0] || "").toLowerCase();
+  var signal1 = (signals[1] || "").toLowerCase();
+  var blob = (signal0 + " | " + signal1).trim();
+
+  if (/missing response descriptions/.test(blob) && /missing request\/response schemas/.test(blob)) {
+    return "The spec neither explains the response meaning nor gives a stable machine-checkable shape.";
+  }
+  if (/missing response descriptions/.test(blob)) {
+    return "Developers cannot tell what success or failure responses mean from the spec.";
+  }
+  if (/missing request\/response schemas/.test(blob)) {
+    return "Developers do not get a machine-checkable request or response shape from the contract.";
+  }
+  if (/generic object schemas/.test(blob) && /missing enums or weak typing/.test(blob)) {
+    return "The contract stays too vague about both object fields and valid values.";
+  }
+  if (/generic object schemas/.test(blob)) {
+    return "The contract uses vague object placeholders instead of explicit fields clients can rely on.";
+  }
+  if (/missing enums or weak typing/.test(blob)) {
+    return "Developers cannot tell which values are valid from the spec alone.";
+  }
+  if (/parameter naming/.test(blob) && /path template drift/.test(blob)) {
+    return "Sibling routes teach different naming and path patterns for the same workflow.";
+  }
+  if (/response shape drift/.test(blob) && /parameter naming|path template drift/.test(blob)) {
+    return "Similar endpoints force special-case handling in both routes and payloads.";
+  }
+  if (/parameter naming/.test(blob)) {
+    return "Sibling routes use different parameter names for the same idea.";
+  }
+  if (/path template drift/.test(blob)) {
+    return "Sibling routes use different path patterns for similar operations.";
+  }
+  if (/response shape drift/.test(blob)) {
+    return "Similar endpoints return different payload shapes, so clients cannot reuse the same parsing logic.";
+  }
+  return "Contract clarity is uneven, so similar operations may still teach different integration habits.";
 }
 
 function familyShapeWhyThisMatters(dominantSignals: string[]): string {
@@ -301,6 +364,10 @@ function familyPrimaryRisk(driverKey: string, dominantSignals: string[]): string
     return "Response shape hides outcome and next-step cues";
   }
 
+  if (/missing response descriptions/.test(blob)) return "Response meaning is not explained clearly enough for client implementers.";
+  if (/missing request\/response schemas/.test(blob)) return "The spec leaves request or response shapes implicit instead of making them machine-checkable.";
+  if (/generic object schemas/.test(blob)) return "The contract stays too vague about object fields, so clients have to infer structure at runtime.";
+  if (/missing enums or weak typing/.test(blob)) return "Clients cannot tell which values are valid from the spec alone.";
   if (/parameter naming/.test(blob)) return "Parameter naming drift across sibling routes";
   if (/path style|path patterns/.test(blob)) return "Path template drift across sibling routes";
   if (/response shape drift|response shapes drift/.test(blob)) return "Response shape drift across sibling endpoints";
@@ -323,6 +390,10 @@ function familyDriverFocus(driverKey: string, dominantSignals: string[]): string
     if (/internal/.test(blob)) return "Focus: internal fields";
     return "Focus: response shape";
   }
+  if (/missing response descriptions/.test(blob)) return "Focus: response descriptions";
+  if (/missing request\/response schemas/.test(blob)) return "Focus: missing schemas";
+  if (/generic object schemas/.test(blob)) return "Focus: explicit object fields";
+  if (/missing enums or weak typing/.test(blob)) return "Focus: enums and typing";
   if (/parameter naming/.test(blob)) return "Focus: parameter consistency";
   if (/path style/.test(blob)) return "Focus: route shape consistency";
   if (/response shape drift/.test(blob)) return "Focus: response consistency";

@@ -1779,6 +1779,33 @@ body.lens-workflow .family-table col.family-col-actions {
   color: #223a4a;
 }
 
+.family-repeat-cell {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.family-repeat-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.14rem 0.46rem;
+  border-radius: 999px;
+  border: 1px solid rgba(12, 46, 74, 0.12);
+  background: rgba(12, 46, 74, 0.05);
+  color: #4a6070;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.family-repeat-ditto {
+  display: inline-flex;
+  align-items: center;
+  color: #778998;
+  font-size: 0.76rem;
+  font-weight: 750;
+  font-style: italic;
+}
+
 .family-row-action {
   width: 100%;
   justify-content: center;

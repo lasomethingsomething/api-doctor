@@ -21,6 +21,7 @@ declare function familyDriverFocus(driverKey: string, dominantSignals: string[])
 declare function familyPrimaryRisk(driverKey: string, dominantSignals: string[]): string;
 declare function familyRecommendedAction(driverKey: string, dominantSignals: string[]): string;
 declare function familyWorkflowWhyThisMatters(dominantSignals: string[]): string;
+declare function familyContractWhyThisMatters(dominantSignals: string[]): string;
 declare function collectTrapGuidance(
   endpoint: ExplorerEndpointRow,
   findings: ExplorerFinding[],
@@ -123,6 +124,8 @@ function familyInsightBuildRankedSummary(family: ExplorerFamilySummary): Explore
     dxConsequence = familyWorkflowWhyThisMatters(dominantSignals);
   } else if (state.activeTopTab === "shape") {
     dxConsequence = familyShapeWhyThisMatters(dxSignals.length ? dxSignals : dominantSignals);
+  } else if ((family && family.contractSignalCounts && Object.keys(family.contractSignalCounts).length) || driver.signalKey === "contract") {
+    dxConsequence = familyContractWhyThisMatters(dominantSignals);
   } else if (dxParts.length === 0) {
     dxConsequence = "Contract clarity is uneven, so similar operations may still teach different integration habits.";
   } else if (dxParts.length === 1) {

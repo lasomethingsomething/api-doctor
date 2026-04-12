@@ -114,6 +114,7 @@ function familySummaryRawList(): ExplorerFamilySummary[] {
         dimensionCounts: {},
         workflowSignalCounts: {},
         shapeSignalCounts: {},
+        contractSignalCounts: {},
         consistencySignalCounts: {}
       };
     }
@@ -154,6 +155,32 @@ function familySummaryRawList(): ExplorerFamilySummary[] {
 
         var code = finding.code || "";
         var msg = (finding.message || "").toLowerCase();
+        if (finding.evidenceType === "spec-rule" || state.activeTopTab === "spec-rule") {
+          if (code === "missing-response-description" || /missing\s+(?:a\s+)?description/.test(msg)) {
+            bumpFamilySignal(item.contractSignalCounts || {}, "missing response descriptions");
+          }
+          if (code === "missing-request-schema" || code === "missing-response-schema" || /has no schema|missing schema/.test(msg)) {
+            bumpFamilySignal(item.contractSignalCounts || {}, "missing request/response schemas");
+          }
+          if (code === "generic-object-request" || code === "generic-object-response") {
+            bumpFamilySignal(item.contractSignalCounts || {}, "generic object schemas");
+          }
+          if (code === "likely-missing-enum" || /enum/.test(msg)) {
+            bumpFamilySignal(item.contractSignalCounts || {}, "missing enums or weak typing");
+          }
+          if (code === "detail-path-parameter-name-drift") {
+            bumpFamilySignal(item.contractSignalCounts || {}, "parameter naming drift");
+          }
+          if (code === "endpoint-path-style-drift" || code === "sibling-path-shape-drift") {
+            bumpFamilySignal(item.contractSignalCounts || {}, "path template drift");
+          }
+          if (code === "inconsistent-response-shape" || code === "inconsistent-response-shape-family" || code === "inconsistent-response-shapes" || code === "inconsistent-response-shapes-family") {
+            bumpFamilySignal(item.contractSignalCounts || {}, "response shape drift");
+          }
+          if (!groupLooksLikeContractSubtype(item.contractSignalCounts || {})) {
+            if (code) bumpFamilySignal(item.contractSignalCounts || {}, "general contract rule gaps");
+          }
+        }
         if (finding.evidenceType === "spec-rule") return;
 
         if (code === "weak-follow-up-linkage" || code === "weak-action-follow-up-linkage" || code === "weak-accepted-tracking-linkage" || code === "weak-outcome-next-action-guidance" || code === "prerequisite-task-burden") {
@@ -227,6 +254,18 @@ function familySummaryRawList(): ExplorerFamilySummary[] {
     if ((a.findings || 0) !== (b.findings || 0)) return (b.findings || 0) - (a.findings || 0);
     return (a.family || "").localeCompare(b.family || "");
   });
+}
+
+function groupLooksLikeContractSubtype(map: StringMap<number>): boolean {
+  return !!(
+    map["missing response descriptions"]
+    || map["missing request/response schemas"]
+    || map["generic object schemas"]
+    || map["missing enums or weak typing"]
+    || map["parameter naming drift"]
+    || map["path template drift"]
+    || map["response shape drift"]
+  );
 }
 
 function familySummaryList(): ExplorerFamilySummary[] {

@@ -58,6 +58,8 @@ interface FamilyTableRowRenderOptions {
   ranked?: ExplorerFamilyRankedSummary;
   dxCounts?: StringMap<number>;
   columns?: FamilyTableColumn[];
+  repeatContractSummary?: boolean;
+  repeatContractSummaryCount?: number;
 }
 
 function renderFamilyTableClamp(text: string, className: string): string {
@@ -382,12 +384,35 @@ function renderFamilyTableView(summaries: ExplorerFamilySummary[]): string {
   });
 
   var rows: string[] = [];
+  var contractSummaryKeys: string[] = summaries.map(function (family: ExplorerFamilySummary) {
+    var key = family.family || "unlabeled family";
+    var ranked = rankedByFamily[key];
+    return [
+      (ranked && ranked.dominantSignals && ranked.dominantSignals[0]) || "",
+      (ranked && ranked.dxConsequence) || "",
+      (ranked && ranked.recommendedAction) || ""
+    ].join("||");
+  });
   summaries.forEach(function (family: ExplorerFamilySummary) {
     var key = family.family || "unlabeled family";
+    var idx = summaries.indexOf(family);
+    var repeatContractSummary = state.activeTopTab === "spec-rule"
+      && idx > 0
+      && contractSummaryKeys[idx] !== "||"
+      && contractSummaryKeys[idx] === contractSummaryKeys[idx - 1];
+    var repeatContractSummaryCount = 1;
+    if (!repeatContractSummary && state.activeTopTab === "spec-rule" && contractSummaryKeys[idx] !== "||") {
+      for (var next = idx + 1; next < contractSummaryKeys.length; next++) {
+        if (contractSummaryKeys[next] !== contractSummaryKeys[idx]) break;
+        repeatContractSummaryCount += 1;
+      }
+    }
     rows.push(renderFamilyTableRow(family, {
       ranked: rankedByFamily[key],
       dxCounts: dxConsequenceCounts,
-      columns: cols
+      columns: cols,
+      repeatContractSummary: repeatContractSummary,
+      repeatContractSummaryCount: repeatContractSummaryCount
     }));
     var familyInsightRow = renderFamilyInlineInsightRow(family);
     if (familyInsightRow) rows.push(familyInsightRow);
@@ -435,6 +460,8 @@ function renderFamilyTableRow(
     ranked: ranked,
     dxCounts: settings.dxCounts || {}
   };
+  var compactRepeat = state.activeTopTab === "spec-rule" && !!settings.repeatContractSummary;
+  var repeatRunCount = settings.repeatContractSummaryCount || 1;
 
   return '<tr class="family-row pressure-' + family.pressure + expandedClass + focusedClass + workflowFamilyActiveClass + '" data-family="'
     + escapeHtml(family.family)
@@ -442,6 +469,17 @@ function renderFamilyTableRow(
     + cols.map(function (col: FamilyTableColumn) {
       var tdClass = col.tdClass ? (' class="' + col.tdClass + '"') : "";
       var extra = col.key === "family" ? (' data-focus-family-cell="' + escapeHtml(familyName) + '"') : "";
+      if (state.activeTopTab === "spec-rule" && (col.key === "signals" || col.key === "risk" || col.key === "impact")) {
+        if (compactRepeat) {
+          return "<td" + tdClass + extra + '><span class="family-repeat-ditto" title="Same contract problem pattern as the row above">same as above</span></td>';
+        }
+        if (repeatRunCount > 1 && col.key === "signals") {
+          var rendered = col.render ? col.render(family, ctx) : "";
+          return "<td" + tdClass + extra + '><div class="family-repeat-cell">' + rendered
+            + '<span class="family-repeat-badge" title="' + escapeHtml(String(repeatRunCount) + ' families in a row share this same contract pattern') + '">shared by ' + escapeHtml(String(repeatRunCount)) + ' families</span>'
+            + '</div></td>';
+        }
+      }
       return "<td" + tdClass + extra + ">" + (col.render ? col.render(family, ctx) : "") + "</td>";
     }).join("")
     + "</tr>";

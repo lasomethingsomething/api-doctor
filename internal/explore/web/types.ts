@@ -77,6 +77,7 @@ interface ExplorerFamilySummary {
   dimensionCounts?: StringMap<number>;
   workflowSignalCounts?: StringMap<number>;
   shapeSignalCounts?: StringMap<number>;
+  contractSignalCounts?: StringMap<number>;
   consistencySignalCounts?: StringMap<number>;
   dominantBurden?: string;
   topDimensions?: string[];
