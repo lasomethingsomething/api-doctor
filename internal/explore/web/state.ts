@@ -1,3 +1,12 @@
+function createEmptyFilters(): ExplorerFilters {
+  return {
+    search: "",
+    category: "all",
+    familyPressure: "all",
+    includeNoIssueRows: false
+  };
+}
+
 function createInitialExplorerState(): ExplorerState {
   return {
     payload: null,
@@ -26,12 +35,7 @@ function createInitialExplorerState(): ExplorerState {
       direction: "asc"
     },
     detailEvidenceOpenForId: "",
-    filters: {
-      search: "",
-      category: "all",
-      familyPressure: "all",
-      includeNoIssueRows: false
-    }
+    filters: createEmptyFilters()
   };
 }
 

@@ -15,6 +15,14 @@ function createEmptyEndpointRow() {
         path: ""
     };
 }
+function createEmptyFilters() {
+    return {
+        search: "",
+        category: "all",
+        familyPressure: "all",
+        includeNoIssueRows: false
+    };
+}
 function createInitialExplorerState() {
     return {
         payload: null,
@@ -43,12 +51,7 @@ function createInitialExplorerState() {
             direction: "asc"
         },
         detailEvidenceOpenForId: "",
-        filters: {
-            search: "",
-            category: "all",
-            familyPressure: "all",
-            includeNoIssueRows: false
-        }
+        filters: createEmptyFilters()
     };
 }
 function createExplorerElements(doc) {
