@@ -482,19 +482,6 @@ function bindFamilySurfaceEndpointInteractions(options) {
             openExactEvidence(endpointId);
         });
     });
-    Array.prototype.forEach.call(familySurface.querySelectorAll(".nested-endpoint-row[data-endpoint-id]"), function (tr) {
-        tr.addEventListener("click", function () {
-            var endpointId = tr.getAttribute("data-endpoint-id") || "";
-            if (!endpointId)
-                return;
-            if (state.selectedEndpointId === endpointId && state.userSelectedEndpoint) {
-                collapseSelectedEndpointInline();
-                return;
-            }
-            state.inspectPlacementHint = "nested";
-            options.selectEndpointForInspector(endpointId);
-        });
-    });
 }
 function bindEndpointListInteractions(options) {
     var endpointRows = options.endpointRows;
@@ -3244,7 +3231,10 @@ function familyInsightBuildRankedSummary(family) {
     var dxReasons = uniq(dxSignals.map(function (s) { return familyDxSignalFragment(s); }).filter(Boolean));
     var dxParts = dxReasons.slice(0, 2);
     var dxConsequence = "";
-    if (dxParts.length === 0) {
+    if (state.activeTopTab === "workflow") {
+        dxConsequence = familyWorkflowWhyThisMatters(dominantSignals);
+    }
+    else if (dxParts.length === 0) {
         dxConsequence = "Contract clarity is uneven, so similar operations may still teach different integration habits.";
     }
     else if (dxParts.length === 1) {
@@ -3382,6 +3372,55 @@ function familyInsightRenderPanel(family, preferredEndpointId) {
     var lensFindings = findingsForActiveLens((model.detail && model.detail.findings) ? model.detail.findings : []);
     var improvementItems = buildContractImprovementItems(model.detail || { endpoint: leadEndpoint, findings: [] }, lensFindings);
     var topEvidence = model.groups.slice(0, 3);
+    if (workflowTabActive) {
+        var primaryChain = (model.detail && model.detail.relatedChains && model.detail.relatedChains.length)
+            ? model.detail.relatedChains[0]
+            : null;
+        var workflowSummaryItems = [];
+        workflowSummaryItems.push('<li><strong>Lead issue:</strong> ' + escapeHtml(primaryProblemText) + '</li>');
+        workflowSummaryItems.push('<li><strong>Why this is hard:</strong> ' + escapeHtml(whyMattersText) + '</li>');
+        if (workflowTrapGuidance.length) {
+            workflowSummaryItems.push('<li><strong>Main trap:</strong> ' + escapeHtml(workflowTrapGuidance[0].title || workflowTrapGuidance[0].happened || "Hidden prerequisites or handoffs are likely.") + '</li>');
+        }
+        if (model.workflowLines.length) {
+            workflowSummaryItems.push('<li><strong>Most likely path:</strong> ' + escapeHtml(model.workflowLines[0]) + '</li>');
+        }
+        var workflowChangeList = (improvementItems || []).slice(0, 2).map(function (item) {
+            return '<li>' + escapeHtml(item.change || "Clarify the next step and required handoff state.") + '</li>';
+        }).join("");
+        if (!workflowChangeList) {
+            workflowChangeList = '<li>' + escapeHtml(recommendedChangeText) + '</li>';
+        }
+        var workflowEvidenceList = topEvidence.length
+            ? ('<ul class="preview-evidence-list">' + topEvidence.slice(0, 2).map(function (group) {
+                return "<li>" + escapeHtml(formatIssueGroupCountLabel(group)) + "</li>";
+            }).join("") + "</ul>")
+            : '<p class="subtle">No grouped workflow evidence is available for this endpoint in the current view.</p>';
+        var workflowPathHtml = familyInsightRenderMostLikelyPath(primaryChain);
+        return '<div class="family-insight-panel family-insight-panel-workflow">'
+            + '<div class="expansion-header">'
+            + '<div class="expansion-header-title">'
+            + "<strong>" + escapeHtml(insightEndpointLabel) + "</strong>"
+            + '<span class="expansion-secondary-label"> | Workflow summary</span>'
+            + "</div>"
+            + "</div>"
+            + '<div class="expansion-sections expansion-sections-ordered">'
+            + '<div class="expansion-section expansion-problem">'
+            + '<p class="expansion-section-title">Why developers get stuck here</p>'
+            + '<ul class="expansion-evidence-list">' + workflowSummaryItems.join("") + '</ul>'
+            + "</div>"
+            + '<div class="expansion-section expansion-contract-change">'
+            + '<p class="expansion-section-title">What should change next</p>'
+            + '<ul class="preview-evidence-list preview-change-list">' + workflowChangeList + '</ul>'
+            + "</div>"
+            + workflowPathHtml
+            + '<div class="expansion-section expansion-open-evidence">'
+            + '<p class="expansion-section-title">Evidence</p>'
+            + workflowEvidenceList
+            + "</div>"
+            + "</div>"
+            + "</div>";
+    }
     var groundingHtml = '<div class="expansion-grounding">'
         + renderOpenAPIContextPills(model.topContext || createEmptyOpenAPIContext(), true)
         + (lead && lead.isSpecRule ? renderSpecRuleGroundingForGroup(lead) : "")
@@ -3472,6 +3511,53 @@ function familyInsightRenderPanel(family, preferredEndpointId) {
         + sections.join("")
         + "</div>"
         + "</div>";
+}
+function familyInsightRenderMostLikelyPath(chain) {
+    if (!chain || !(chain.endpointIds || []).length) {
+        return '<div class="expansion-section expansion-workflow-path">'
+            + '<p class="expansion-section-title">Most likely path</p>'
+            + '<p class="subtle">No clear multi-step path was inferred for the lead endpoint in this family.</p>'
+            + '</div>';
+    }
+    var endpointDetails = payloadEndpointDetails();
+    var steps = chain.endpointIds || [];
+    var roles = parseChainRoles(chain.summary, steps.length);
+    var taskLabel = chainTaskLabel(chain);
+    var stepItems = steps.slice(0, 4).map(function (endpointId, idx) {
+        var detail = endpointDetails[endpointId];
+        var endpoint = detail && detail.endpoint ? detail.endpoint : createEmptyEndpointRow();
+        var findings = detail && detail.findings ? findingsForActiveLens(detail.findings) : [];
+        var nextEndpointId = idx < (steps.length - 1) ? steps[idx + 1] : "";
+        var nextDetail = nextEndpointId ? endpointDetails[nextEndpointId] : null;
+        var nextEndpoint = nextDetail && nextDetail.endpoint ? nextDetail.endpoint : null;
+        var roleLabel = roles[idx] || "";
+        var nextRoleLabel = roles[idx + 1] || "";
+        var linkageFindings = findings.filter(function (finding) {
+            return finding.code === "weak-follow-up-linkage"
+                || finding.code === "weak-action-follow-up-linkage"
+                || finding.code === "weak-accepted-tracking-linkage"
+                || finding.code === "weak-outcome-next-action-guidance";
+        });
+        var prerequisiteFindings = findings.filter(function (finding) {
+            return finding.code === "prerequisite-task-burden";
+        });
+        var clues = buildWorkflowDependencyClues(endpoint, findings, idx, steps.length, roleLabel, nextEndpoint, nextRoleLabel, linkageFindings, prerequisiteFindings);
+        var narrative = summarizeWorkflowStepNarrative(endpoint, roleLabel, nextEndpoint, clues, findings, linkageFindings, prerequisiteFindings, idx === (steps.length - 1));
+        var carryForward = ((clues.nextNeeds || [])[0] || (clues.hidden || [])[0] || "No clear carry-forward state is exposed.");
+        var nextAction = narrative.nextAction || (nextEndpoint ? (nextEndpoint.method + " " + nextEndpoint.path) : "No next step is clearly exposed.");
+        var purpose = narrative.callDoes || (roleLabel ? humanizeStepRole(roleLabel) : "call endpoint");
+        return '<li class="workflow-family-path-step">'
+            + '<p><strong>Step ' + String(idx + 1) + ':</strong> ' + escapeHtml(endpoint.method + " " + endpoint.path) + '</p>'
+            + '<p><strong>Purpose:</strong> ' + escapeHtml(purpose) + '</p>'
+            + '<p><strong>Carry forward:</strong> ' + escapeHtml(carryForward) + '</p>'
+            + '<p><strong>Likely next action:</strong> ' + escapeHtml(nextAction) + '</p>'
+            + '</li>';
+    }).join("");
+    return '<div class="expansion-section expansion-workflow-path">'
+        + '<p class="expansion-section-title">Most likely path</p>'
+        + '<p class="expansion-text"><strong>' + escapeHtml(taskLabel) + '</strong> across ' + escapeHtml(String(steps.length)) + ' step' + (steps.length === 1 ? '' : 's') + '.</p>'
+        + '<ol class="expansion-workflow-list expansion-workflow-path-list">' + stepItems + '</ol>'
+        + '</div>';
 }
 function familyBurdenWhyText(family) {
     var burden = state.activeTopTab === "workflow"
@@ -3595,17 +3681,19 @@ function familyRecommendedAction(driverKey, dominantSignals) {
     var signal1 = (signals[1] || "").toLowerCase();
     var blob = (signal0 + " | " + signal1).trim();
     if (driverKey === "workflow") {
-        if (/description/.test(blob))
-            return "Add missing response descriptions";
-        if (/enum|typing|weak typing/.test(blob))
-            return "Declare missing enums";
-        if (/token|context handoff|handoff context|next step|next action|implicit|handoff/.test(blob))
-            return "Expose nextAction and required context";
+        if (/auth\/header|auth|header/.test(blob))
+            return "Make auth and required headers explicit";
         if (/sequencing|brittle|prerequisite/.test(blob))
             return "Expose prerequisites and required ordering cues";
-        if (/auth\/header|auth|header/.test(blob))
-            return "Expose auth/header requirements in schema and errors";
-        return "Expose nextAction and required context";
+        if (/next step|next action/.test(blob))
+            return "Expose the next valid call in the response";
+        if (/token|context handoff|handoff context|implicit|handoff/.test(blob))
+            return "Return the handoff ID or context needed for the next call";
+        if (/description/.test(blob))
+            return "Add endpoint descriptions for purpose and continuation rules";
+        if (/enum|typing|weak typing/.test(blob))
+            return "Declare missing enums and required workflow fields";
+        return "Make the next step and required handoff state explicit";
     }
     if (driverKey === "shape") {
         if (/description/.test(blob))
@@ -3633,6 +3721,25 @@ function familyRecommendedAction(driverKey, dominantSignals) {
     if (/response shape drift|response shapes drift/.test(blob))
         return "Align response schemas across sibling endpoints";
     return "Normalize contract patterns across sibling endpoints";
+}
+function familyWorkflowWhyThisMatters(dominantSignals) {
+    var signals = dominantSignals || [];
+    var signal0 = (signals[0] || "").toLowerCase();
+    var signal1 = (signals[1] || "").toLowerCase();
+    var blob = (signal0 + " | " + signal1).trim();
+    if (/handoff context|token\/context|handoff/.test(blob)) {
+        return "Developers must infer required handoff IDs or context between calls.";
+    }
+    if (/auth\/header|auth|header/.test(blob)) {
+        return "Developers must discover auth and required headers step by step.";
+    }
+    if (/sequencing|brittle|prerequisite/.test(blob)) {
+        return "Developers learn the safe call order from runtime behavior, not the contract.";
+    }
+    if (/next step|next action/.test(blob)) {
+        return "Developers cannot tell the next valid call from the response.";
+    }
+    return "Developers cannot chain these calls safely from the contract alone.";
 }
 function familyPrimaryRisk(driverKey, dominantSignals) {
     var signals = dominantSignals || [];
@@ -4784,9 +4891,11 @@ function renderFamilyTopSignalCell(family, ranked) {
     var familyName = family.family || "unlabeled family";
     var inlineExpand = state.activeTopTab === "shape";
     var expanded = inlineExpand && !!(state.expandedFamilySignals && state.expandedFamilySignals[familyName]);
-    var visibleCount = inlineExpand
-        ? (expanded ? items.length : (items.length <= 4 ? items.length : 2))
-        : (items.length <= 3 ? items.length : 2);
+    var visibleCount = state.activeTopTab === "workflow"
+        ? 1
+        : inlineExpand
+            ? (expanded ? items.length : (items.length <= 4 ? items.length : 2))
+            : (items.length <= 3 ? items.length : 2);
     var visible = items.slice(0, visibleCount).map(function (raw, index) {
         var label = raw ? humanizeSignalLabel(raw) : "—";
         var cls = index === 0 ? "chip chip-primary family-signal-chip" : "chip chip-secondary family-signal-chip";
@@ -4819,6 +4928,7 @@ function renderFamilyTopSignalCell(family, ranked) {
 function familyTableColumnsForActiveTab() {
     var tab = activeTopTabConfig();
     var shape = tab.id === "shape";
+    var workflow = tab.id === "workflow";
     function severityMixHeaderHtml() {
         return '<span class="th-title">Severity mix</span>'
             + '<span class="th-helper" title="Counts are endpoints in this family with in-scope findings at each severity (High/Med/Low).">endpoint counts</span>';
@@ -4878,7 +4988,7 @@ function familyTableColumnsForActiveTab() {
     cols.push({
         key: "signals",
         thClass: "family-col-top-signal",
-        th: "Lead signal",
+        th: workflow ? "Main blocker" : "Lead signal",
         tdClass: "family-col-top-signal",
         render: function (family, ctx) {
             return renderFamilyTopSignalCell(family, ctx.ranked);
@@ -4887,7 +4997,7 @@ function familyTableColumnsForActiveTab() {
     cols.push({
         key: "risk",
         thClass: "family-col-primary-risk",
-        th: "Why this matters",
+        th: workflow ? "Why developers get stuck" : "Why this matters",
         tdClass: "family-col-primary-risk",
         render: function (_family, ctx) {
             var ranked = ctx.ranked || familyInsightBuildRankedSummary(_family);
@@ -4896,20 +5006,25 @@ function familyTableColumnsForActiveTab() {
                 : ranked.driver === "shape"
                     ? "Developers have to interpret storage-shaped payloads instead of a task outcome."
                     : "Developers cannot reliably infer behavior from the contract alone.");
-            var clampClass = shape
-                ? "family-table-clamp family-table-clamp-risk"
-                : "family-table-clamp family-table-clamp-3 family-table-clamp-risk";
+            var clampClass = state.activeTopTab === "workflow"
+                ? "family-table-clamp family-table-clamp-2 family-table-clamp-risk"
+                : shape
+                    ? "family-table-clamp family-table-clamp-risk"
+                    : "family-table-clamp family-table-clamp-3 family-table-clamp-risk";
             return renderFamilyTableClamp(whyText, clampClass);
         }
     });
     cols.push({
         key: "impact",
         thClass: "family-col-client-effect",
-        th: "Recommended fix direction",
+        th: workflow ? "What should change" : "Recommended fix direction",
         tdClass: "family-col-client-effect",
         render: function (family, ctx) {
             var ranked = ctx.ranked || familyInsightBuildRankedSummary(family);
-            return renderFamilyTableClamp(ranked.recommendedAction || "Clarify the contract for the next developer action.", "family-table-clamp family-table-clamp-3 family-table-clamp-effect");
+            var clampClass = state.activeTopTab === "workflow"
+                ? "family-table-clamp family-table-clamp-2 family-table-clamp-effect"
+                : "family-table-clamp family-table-clamp-3 family-table-clamp-effect";
+            return renderFamilyTableClamp(ranked.recommendedAction || "Clarify the contract for the next developer action.", clampClass);
         }
     });
     cols.push({
@@ -4922,8 +5037,8 @@ function familyTableColumnsForActiveTab() {
             var insightExpanded = state.expandedFamilyInsight === familyName;
             return '<button type="button" class="secondary-action family-row-action" data-insight-toggle="' + escapeHtml(familyName) + '"'
                 + ' aria-expanded="' + (insightExpanded ? "true" : "false") + '"'
-                + ' title="' + escapeHtml(insightExpanded ? "Hide summary" : "Show summary") + '">'
-                + escapeHtml(insightExpanded ? "Hide summary" : "Show summary")
+                + ' title="' + escapeHtml(insightExpanded ? "Hide details" : "Show details") + '">'
+                + escapeHtml(insightExpanded ? "Hide details" : "Show details")
                 + "</button>";
         }
     });
@@ -5171,7 +5286,11 @@ function renderFamilyEndpointExpansion(family) {
     if (state.expandedFamily !== familyName)
         return "";
     var familyLabel = humanFamilyLabel(familyName);
-    var familyHeader = '<p class="family-endpoint-table-title">Endpoints in <code>' + escapeHtml(familyLabel) + "</code> family</p>";
+    var familyHeader = '<p class="family-endpoint-table-title">'
+        + (state.activeTopTab === "workflow"
+            ? 'Workflow evidence in <code>' + escapeHtml(familyLabel) + '</code> family'
+            : 'Endpoints in <code>' + escapeHtml(familyLabel) + '</code> family')
+        + "</p>";
     var headerRow = '<div class="family-endpoint-table-header-row">' + familyHeader + "</div>";
     var backToTableControl = state.familyTableBackState
         ? '<button type="button" class="secondary-action family-endpoint-footer-action" data-recovery-action="back-to-all-families">Back to all families</button>'
@@ -5222,17 +5341,16 @@ function renderFamilyEndpointExpansion(family) {
             var nextChanges = (improvementItems || []).slice(0, 3).map(function (item) {
                 return '<li>' + escapeHtml(item.change || "Clarify the contract for the next developer action.") + "</li>";
             }).join("");
-            var evidenceItems = groups.slice(0, 2).map(function (group) {
-                var title = evidenceGroupTitleLine(group);
-                var count = group.count || 0;
-                return "<li>"
-                    + '<span class="preview-evidence-title" title="' + escapeHtml(title) + '">' + escapeHtml(title) + "</span>"
-                    + '<span class="preview-evidence-count">' + count + " occurrence" + (count === 1 ? "" : "s") + "</span>"
-                    + "</li>";
-            }).join("");
-            var evidenceList = evidenceItems
-                ? ('<ul class="preview-evidence-list">' + evidenceItems + "</ul>")
+            var evidenceCount = groups.length || 0;
+            var topEvidenceTitle = topGroup ? evidenceGroupTitleLine(topGroup) : "";
+            var evidenceSummary = evidenceCount
+                ? ('<p class="nested-endpoint-preview-why"><strong>' + evidenceCount + ' evidence group' + (evidenceCount === 1 ? '' : 's') + '.</strong> '
+                    + escapeHtml(topEvidenceTitle || 'Open details to inspect grouped evidence.')
+                    + '</p>')
                 : '<p class="subtle">No grouped evidence was available for this endpoint in the current view.</p>';
+            var compactChanges = (improvementItems || []).slice(0, 2).map(function (item) {
+                return '<li>' + escapeHtml(item.change || "Clarify the contract for the next developer action.") + "</li>";
+            }).join("");
             html += '<tr class="nested-endpoint-preview-row" data-family="' + escapeHtml(family.family) + '" data-endpoint-id="' + escapeHtml(endpoint.id) + '">'
                 + '<td colspan="7" class="nested-endpoint-preview-cell">'
                 + '<div class="nested-endpoint-preview"><div class="nested-endpoint-preview-grid">'
@@ -5243,18 +5361,15 @@ function renderFamilyEndpointExpansion(family) {
                 + escapeHtml(why)
                 + "</div></div>"
                 + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Exact evidence</p>'
-                + evidenceList
+                + evidenceSummary
                 + "</div>"
                 + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">What should change next</p>'
-                + (nextChanges
-                    ? ('<ul class="preview-evidence-list preview-change-list">' + nextChanges + "</ul>")
+                + (compactChanges
+                    ? ('<ul class="preview-evidence-list preview-change-list">' + compactChanges + "</ul>")
                     : '<p class="subtle">No concrete contract changes were derived for this endpoint yet.</p>')
                 + "</div>"
                 + "</div>"
-                + '<div class="nested-endpoint-preview-actions">'
-                + '<button type="button" class="tertiary-action" data-open-evidence-id="' + escapeHtml(endpoint.id) + '">Show evidence</button>'
-                + '<button type="button" class="tertiary-action" data-focus-endpoint="' + escapeHtml(endpoint.id) + '">Inspect endpoint</button>'
-                + "</div></div></td></tr>";
+                + "</div></td></tr>";
         }
         return html;
     }).join("");
@@ -5268,7 +5383,11 @@ function renderFamilyEndpointExpansion(family) {
         + headerRow
         + '<p class="eyebrow">' + escapeHtml(evidenceSectionTitleForActiveLens()) + "</p>"
         + '<p class="subtle">Endpoint rows stay attached to this family so the ownership and investigation flow stay together.</p>'
-        + '</div><div class="family-endpoint-table-scroll" data-family-endpoint-table-scroll="1"><table class="nested-endpoint-table"><colgroup><col class="nested-col-path"><col class="nested-col-issue"><col class="nested-col-type"><col class="nested-col-severity"><col class="nested-col-instance"><col class="nested-col-actionhint"><col class="nested-col-actions"></colgroup><thead><tr><th>Endpoint</th><th>Lead issue</th><th>Type</th><th>Severity</th><th>Evidence</th><th>Suggested action</th><th class="nested-endpoint-actions-col">Actions</th></tr></thead><tbody>'
+        + '</div><div class="family-endpoint-table-scroll" data-family-endpoint-table-scroll="1"><table class="nested-endpoint-table"><colgroup><col class="nested-col-path"><col class="nested-col-issue"><col class="nested-col-type"><col class="nested-col-severity"><col class="nested-col-instance"><col class="nested-col-actionhint"><col class="nested-col-actions"></colgroup><thead><tr>'
+        + (state.activeTopTab === "workflow"
+            ? '<th>Step</th><th>Main blocker</th><th>Problem type</th><th>Severity</th><th>Evidence</th><th>What should change</th><th class="nested-endpoint-actions-col">Details</th>'
+            : '<th>Endpoint</th><th>Lead issue</th><th>Type</th><th>Severity</th><th>Evidence</th><th>Suggested action</th><th class="nested-endpoint-actions-col">Actions</th>')
+        + '</tr></thead><tbody>'
         + nestedRows
         + '</tbody></table></div><div class="family-endpoint-table-footer"><span class="subtle">End of endpoints in <code>'
         + escapeHtml(familyLabel)
@@ -5562,13 +5681,7 @@ function renderEndpointRow(row, options) {
                 + '</div>';
         })()
         : '';
-    var additionalFindingsRowInline = additionalFindingsList
-        ? '<tr class="nested-endpoint-findings-row" data-endpoint-id="' + escapeHtml(row.id) + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
-            + '<td colspan="7" class="nested-endpoint-findings-cell">'
-            + additionalFindingsList
-            + '</td>'
-            + '</tr>'
-        : '';
+    var additionalFindingsRowInline = '';
     var inspectLoading = state.inspectingEndpointId === row.id;
     var inspectSelected = state.selectedEndpointId === row.id && !inspectLoading;
     var inspectButtonClass = 'tertiary-action endpoint-inspect-action'
@@ -5585,37 +5698,28 @@ function renderEndpointRow(row, options) {
                 return "Clarify the contract so this problem is visible before runtime.";
             return "No suggested contract change.";
         })();
-        var issueType = rowDominantIssue(row).label || "Issue";
+        var workflowInline = state.activeTopTab === 'workflow';
+        var issueType = rowDominantIssue(row).label || (workflowInline ? "Workflow problem" : "Issue");
         var endpointIdentityTitle = escapeHtml(((row.method || '').toUpperCase() + ' ' + (row.path || '') + ' — ' + intent).trim());
-        var scopeBadge = primaryScope
-            ? '<span class="row-issue-scope-pill" title="' + escapeHtml('Scope: ' + primaryScope) + '"><strong>Scope:</strong> ' + escapeHtml(primaryScope) + '</span>'
-            : '';
-        var labelPressed = (row.id === state.selectedEndpointId) ? 'true' : 'false';
-        var pathActionLabel = 'Inspect';
+        var detailToggleLabel = state.expandedEndpointInsightIds[row.id] ? 'Hide details' : 'Show details';
         var rowHtml = '<tr class="' + rowClasses.trim() + '" data-id="' + row.id + '" data-endpoint-id="' + row.id + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
             + '<td class="nested-endpoint-path-cell">'
             + '<div class="endpoint-row-main">'
-            + '<button type="button" class="nested-endpoint-path-toggle" data-focus-endpoint="' + escapeHtml(row.id) + '" aria-pressed="' + labelPressed + '" title="' + escapeHtml('Inspect ' + ((row.method || '').toUpperCase()) + ' ' + (row.path || '')) + '">'
             + '<strong title="' + endpointIdentityTitle + '">' + escapeHtml((row.method || '').toUpperCase() + ' ' + (row.path || '')) + '</strong>'
-            + '<span class="nested-endpoint-path-action" aria-hidden="true">' + escapeHtml(pathActionLabel) + '</span>'
-            + '</button>'
             + '</div>'
             + '</td>'
             + '<td class="nested-endpoint-issue-cell">'
             + '<div class="nested-endpoint-issue-top">'
             + '<div class="nested-endpoint-primary-issue" title="' + escapeHtml(topIssueLabel) + '">' + escapeHtml(topIssueLabel) + '</div>'
-            + scopeBadge
-            + (additionalFindingsControl ? '<div class="nested-endpoint-issue-actions">' + additionalFindingsControl + '</div>' : '')
             + '</div>'
             + '</td>'
             + '<td class="nested-endpoint-type-cell"><div class="nested-endpoint-type-label" title="' + escapeHtml(issueType) + '">' + escapeHtml(issueType) + '</div></td>'
-            + '<td class="nested-endpoint-severity-cell">' + (firstFinding ? severityBadgeEvidenceCTA(severity, row.id) : '<span class="subtle">No issue</span>') + '</td>'
-            + '<td class="nested-endpoint-instance-cell"><button type="button" class="instance-count-chip is-interactive" data-open-evidence-id="' + escapeHtml(row.id) + '" title="Open grouped deviations" aria-label="Open grouped deviations">' + instanceCount + ' deviation' + (instanceCount === 1 ? '' : 's') + '</button></td>'
+            + '<td class="nested-endpoint-severity-cell">' + (firstFinding ? severityBadge(severity) : '<span class="subtle">No issue</span>') + '</td>'
+            + '<td class="nested-endpoint-instance-cell"><span class="instance-count-chip">' + instanceCount + ' ' + (workflowInline ? 'signal' : 'deviation') + (instanceCount === 1 ? '' : 's') + '</span></td>'
             + '<td class="nested-endpoint-actionhint-cell"><div class="nested-endpoint-actionhint" title="' + escapeHtml(suggestedAction) + '">' + escapeHtml(suggestedAction) + '</div></td>'
             + '<td class="nested-endpoint-actions-cell">'
             + '<div class="nested-endpoint-actions">'
-            + '<button type="button" class="tertiary-action" data-open-evidence-id="' + escapeHtml(row.id) + '">Show evidence</button>'
-            + '<button type="button" class="tertiary-action endpoint-insight-toggle" data-endpoint-insight-toggle="' + escapeHtml(row.id) + '">' + (state.expandedEndpointInsightIds[row.id] ? 'Hide summary' : 'Show summary') + '</button>'
+            + '<button type="button" class="tertiary-action endpoint-insight-toggle" data-endpoint-insight-toggle="' + escapeHtml(row.id) + '">' + escapeHtml(detailToggleLabel) + '</button>'
             + '</div>'
             + '</td>'
             + '</tr>';
@@ -5710,6 +5814,11 @@ function buildEndpointDiagnosticsBody(detail, findings) {
     if (workflowTabActive) {
         body += renderWorkflowStepWorkspace(detail);
     }
+    if (workflowTabActive) {
+        body += renderEndpointDiagnosticsWorkflowSummary(detail);
+        body += '</div>';
+        return body;
+    }
     if (!workflowTabActive && relatedChains.length) {
         var primary = relatedChains[0] || { endpointIds: [] };
         var steps = primary.endpointIds || [];
@@ -5731,12 +5840,6 @@ function buildEndpointDiagnosticsBody(detail, findings) {
     }
     if (findings && findings.length) {
         body += renderWhatToDoNextBlock(endpoint, findings, { maxItems: 2, showEndpointLabel: false });
-    }
-    if (workflowTabActive) {
-        body += renderWorkflowDiagnosticsFrame(detail);
-    }
-    if (workflowTabActive && state.endpointDiagnosticsSubTab !== 'summary') {
-        body += renderInspectorWorkflowContextSupport(detail, { defaultOpen: true });
     }
     body += renderInspectorContentMap();
     body += renderEndpointDiagnosticsTabs();
@@ -6794,24 +6897,44 @@ function renderEndpointDiagnosticsWorkflowSummary(detail) {
     var signalSummary = summarizeWorkflowHeaderSignals(detail);
     var guidance = collectTrapGuidance(endpoint, findings, { prereq: [], establish: [], nextNeeds: [], hidden: [] }, [], [], null, "", false);
     var guidanceHtml = renderTrapGuidanceList(guidance, {
-        title: "Workflow trap guidance",
+        title: "Exact evidence",
         className: "inspector-trap-guidance",
-        limit: 3
+        limit: 2
     });
     var chainContextHtml = renderWorkflowChainContextForEndpoint(detail);
+    var whyCopy = signalSummary.replace(/^main workflow clues:\s*/i, "");
+    var whyList = [
+        "Developers have to infer what state or identifier must be carried forward between calls.",
+        "The next valid call is not obvious from the response, so sequencing is learned at runtime."
+    ];
+    if (whyCopy && whyCopy !== signalSummary) {
+        whyList.unshift("Primary workflow problems: " + whyCopy + ".");
+    }
+    var whyHtml = whyList.map(function (line) {
+        return "<li>" + escapeHtml(line) + "</li>";
+    }).join("");
+    var nextBlock = renderWhatToDoNextBlock(endpoint, findings, {
+        maxItems: 2,
+        leadCopy: "Choose the smallest contract change that makes the next step obvious and the handoff explicit.",
+        showEndpointLabel: false
+    });
     return '<div class="endpoint-diag-pane">'
-        + chainContextHtml
         + '<div class="family-insight-card">'
-        + '<p class="insight-kicker">Workflow continuity evidence</p>'
-        + '<p class="subtle"><strong>' + escapeHtml(endpoint.method + " " + endpoint.path) + "</strong> "
-        + (chainCount ? ("appears in " + chainCount + " workflow chain" + (chainCount === 1 ? "" : "s")) : "is not currently linked to an inferred chain")
-        + " and is prioritized here for continuity burden signals.</p>"
+        + '<p class="insight-kicker">Why developers get stuck here</p>'
+        + '<p class="subtle"><strong>' + escapeHtml(endpoint.method + " " + endpoint.path) + '</strong> '
+        + (chainCount ? ("sits inside " + chainCount + " likely workflow path" + (chainCount === 1 ? "" : "s")) : "shows workflow friction even without a full inferred path")
+        + '.</p>'
         + '<ul class="family-top-evidence">'
-        + '<li><strong>Primary continuity signals:</strong> ' + escapeHtml(signalSummary.replace(/^primary continuity signals:\s*/i, "")) + ".</li>"
-        + "<li><strong>Why this matters to a client:</strong> When the contract does not expose next-step IDs/context, clients must guess, store hidden state, or add extra reads between calls.</li>"
+        + whyHtml
         + "</ul>"
-        + guidanceHtml
         + "</div>"
+        + chainContextHtml
+        + nextBlock
+        + '<div class="family-insight-card">'
+        + '<p class="insight-kicker">Exact evidence</p>'
+        + '<p class="subtle">These findings show where the contract leaves sequencing, handoff state, or next-step guidance too implicit.</p>'
+        + guidanceHtml
+        + '</div>'
         + renderFullExactEvidenceDrawer(groups, { endpoint: endpoint, familyName: endpoint.family || "", open: false })
         + "</div>";
 }

@@ -154,7 +154,9 @@ function renderFamilyTopSignalCell(
   var familyName = family.family || "unlabeled family";
   var inlineExpand = state.activeTopTab === "shape";
   var expanded = inlineExpand && !!(state.expandedFamilySignals && state.expandedFamilySignals[familyName]);
-  var visibleCount = inlineExpand
+  var visibleCount = state.activeTopTab === "workflow"
+    ? 1
+    : inlineExpand
     ? (expanded ? items.length : (items.length <= 4 ? items.length : 2))
     : (items.length <= 3 ? items.length : 2);
   var visible = items.slice(0, visibleCount).map(function (raw: string, index: number) {
@@ -193,6 +195,7 @@ function renderFamilyTopSignalCell(
 function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
   var tab = activeTopTabConfig();
   var shape = tab.id === "shape";
+  var workflow = tab.id === "workflow";
 
   function severityMixHeaderHtml(): string {
     return '<span class="th-title">Severity mix</span>'
@@ -256,7 +259,7 @@ function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
   cols.push({
     key: "signals",
     thClass: "family-col-top-signal",
-    th: "Lead signal",
+    th: workflow ? "Main blocker" : "Lead signal",
     tdClass: "family-col-top-signal",
     render: function (family: ExplorerFamilySummary, ctx: FamilyTableColumnContext): string {
       return renderFamilyTopSignalCell(family, ctx.ranked);
@@ -266,7 +269,7 @@ function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
   cols.push({
     key: "risk",
     thClass: "family-col-primary-risk",
-    th: "Why this matters",
+    th: workflow ? "Why developers get stuck" : "Why this matters",
     tdClass: "family-col-primary-risk",
     render: function (_family: ExplorerFamilySummary, ctx: FamilyTableColumnContext): string {
       var ranked = ctx.ranked || familyInsightBuildRankedSummary(_family);
@@ -275,7 +278,9 @@ function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
         : ranked.driver === "shape"
         ? "Developers have to interpret storage-shaped payloads instead of a task outcome."
         : "Developers cannot reliably infer behavior from the contract alone.");
-      var clampClass = shape
+      var clampClass = state.activeTopTab === "workflow"
+        ? "family-table-clamp family-table-clamp-2 family-table-clamp-risk"
+        : shape
         ? "family-table-clamp family-table-clamp-risk"
         : "family-table-clamp family-table-clamp-3 family-table-clamp-risk";
       return renderFamilyTableClamp(whyText, clampClass);
@@ -285,11 +290,14 @@ function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
   cols.push({
     key: "impact",
     thClass: "family-col-client-effect",
-    th: "Recommended fix direction",
+    th: workflow ? "What should change" : "Recommended fix direction",
     tdClass: "family-col-client-effect",
     render: function (family: ExplorerFamilySummary, ctx: FamilyTableColumnContext): string {
       var ranked = ctx.ranked || familyInsightBuildRankedSummary(family);
-      return renderFamilyTableClamp(ranked.recommendedAction || "Clarify the contract for the next developer action.", "family-table-clamp family-table-clamp-3 family-table-clamp-effect");
+      var clampClass = state.activeTopTab === "workflow"
+        ? "family-table-clamp family-table-clamp-2 family-table-clamp-effect"
+        : "family-table-clamp family-table-clamp-3 family-table-clamp-effect";
+      return renderFamilyTableClamp(ranked.recommendedAction || "Clarify the contract for the next developer action.", clampClass);
     }
   });
 
@@ -303,8 +311,8 @@ function familyTableColumnsForActiveTab(): FamilyTableColumn[] {
       var insightExpanded = state.expandedFamilyInsight === familyName;
       return '<button type="button" class="secondary-action family-row-action" data-insight-toggle="' + escapeHtml(familyName) + '"'
         + ' aria-expanded="' + (insightExpanded ? "true" : "false") + '"'
-        + ' title="' + escapeHtml(insightExpanded ? "Hide summary" : "Show summary") + '">'
-        + escapeHtml(insightExpanded ? "Hide summary" : "Show summary")
+        + ' title="' + escapeHtml(insightExpanded ? "Hide details" : "Show details") + '">'
+        + escapeHtml(insightExpanded ? "Hide details" : "Show details")
         + "</button>";
     }
   });
@@ -578,7 +586,11 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
   if (state.expandedFamily !== familyName) return "";
 
   var familyLabel = humanFamilyLabel(familyName);
-  var familyHeader = '<p class="family-endpoint-table-title">Endpoints in <code>' + escapeHtml(familyLabel) + "</code> family</p>";
+  var familyHeader = '<p class="family-endpoint-table-title">'
+    + (state.activeTopTab === "workflow"
+      ? 'Workflow evidence in <code>' + escapeHtml(familyLabel) + '</code> family'
+      : 'Endpoints in <code>' + escapeHtml(familyLabel) + '</code> family')
+    + "</p>";
   var headerRow = '<div class="family-endpoint-table-header-row">' + familyHeader + "</div>";
   var backToTableControl = state.familyTableBackState
     ? '<button type="button" class="secondary-action family-endpoint-footer-action" data-recovery-action="back-to-all-families">Back to all families</button>'
@@ -633,17 +645,16 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
       var nextChanges = (improvementItems || []).slice(0, 3).map(function (item: ContractImprovementItem) {
         return '<li>' + escapeHtml(item.change || "Clarify the contract for the next developer action.") + "</li>";
       }).join("");
-      var evidenceItems = groups.slice(0, 2).map(function (group: IssueGroup) {
-        var title = evidenceGroupTitleLine(group);
-        var count = group.count || 0;
-        return "<li>"
-          + '<span class="preview-evidence-title" title="' + escapeHtml(title) + '">' + escapeHtml(title) + "</span>"
-          + '<span class="preview-evidence-count">' + count + " occurrence" + (count === 1 ? "" : "s") + "</span>"
-          + "</li>";
-      }).join("");
-      var evidenceList = evidenceItems
-        ? ('<ul class="preview-evidence-list">' + evidenceItems + "</ul>")
+      var evidenceCount = groups.length || 0;
+      var topEvidenceTitle = topGroup ? evidenceGroupTitleLine(topGroup) : "";
+      var evidenceSummary = evidenceCount
+        ? ('<p class="nested-endpoint-preview-why"><strong>' + evidenceCount + ' evidence group' + (evidenceCount === 1 ? '' : 's') + '.</strong> '
+          + escapeHtml(topEvidenceTitle || 'Open details to inspect grouped evidence.')
+          + '</p>')
         : '<p class="subtle">No grouped evidence was available for this endpoint in the current view.</p>';
+      var compactChanges = (improvementItems || []).slice(0, 2).map(function (item: ContractImprovementItem) {
+        return '<li>' + escapeHtml(item.change || "Clarify the contract for the next developer action.") + "</li>";
+      }).join("");
 
       html += '<tr class="nested-endpoint-preview-row" data-family="' + escapeHtml(family.family) + '" data-endpoint-id="' + escapeHtml(endpoint.id) + '">'
         + '<td colspan="7" class="nested-endpoint-preview-cell">'
@@ -655,18 +666,15 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
         + escapeHtml(why)
         + "</div></div>"
         + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">Exact evidence</p>'
-        + evidenceList
+        + evidenceSummary
         + "</div>"
         + '<div class="nested-endpoint-preview-block"><p class="nested-endpoint-preview-label">What should change next</p>'
-        + (nextChanges
-            ? ('<ul class="preview-evidence-list preview-change-list">' + nextChanges + "</ul>")
+        + (compactChanges
+            ? ('<ul class="preview-evidence-list preview-change-list">' + compactChanges + "</ul>")
             : '<p class="subtle">No concrete contract changes were derived for this endpoint yet.</p>')
         + "</div>"
         + "</div>"
-        + '<div class="nested-endpoint-preview-actions">'
-        + '<button type="button" class="tertiary-action" data-open-evidence-id="' + escapeHtml(endpoint.id) + '">Show evidence</button>'
-        + '<button type="button" class="tertiary-action" data-focus-endpoint="' + escapeHtml(endpoint.id) + '">Inspect endpoint</button>'
-        + "</div></div></td></tr>";
+        + "</div></td></tr>";
     }
 
     return html;
@@ -682,7 +690,11 @@ function renderFamilyEndpointExpansion(family: ExplorerFamilySummary): string {
     + headerRow
     + '<p class="eyebrow">' + escapeHtml(evidenceSectionTitleForActiveLens()) + "</p>"
     + '<p class="subtle">Endpoint rows stay attached to this family so the ownership and investigation flow stay together.</p>'
-    + '</div><div class="family-endpoint-table-scroll" data-family-endpoint-table-scroll="1"><table class="nested-endpoint-table"><colgroup><col class="nested-col-path"><col class="nested-col-issue"><col class="nested-col-type"><col class="nested-col-severity"><col class="nested-col-instance"><col class="nested-col-actionhint"><col class="nested-col-actions"></colgroup><thead><tr><th>Endpoint</th><th>Lead issue</th><th>Type</th><th>Severity</th><th>Evidence</th><th>Suggested action</th><th class="nested-endpoint-actions-col">Actions</th></tr></thead><tbody>'
+    + '</div><div class="family-endpoint-table-scroll" data-family-endpoint-table-scroll="1"><table class="nested-endpoint-table"><colgroup><col class="nested-col-path"><col class="nested-col-issue"><col class="nested-col-type"><col class="nested-col-severity"><col class="nested-col-instance"><col class="nested-col-actionhint"><col class="nested-col-actions"></colgroup><thead><tr>'
+    + (state.activeTopTab === "workflow"
+        ? '<th>Step</th><th>Main blocker</th><th>Problem type</th><th>Severity</th><th>Evidence</th><th>What should change</th><th class="nested-endpoint-actions-col">Details</th>'
+        : '<th>Endpoint</th><th>Lead issue</th><th>Type</th><th>Severity</th><th>Evidence</th><th>Suggested action</th><th class="nested-endpoint-actions-col">Actions</th>')
+    + '</tr></thead><tbody>'
     + nestedRows
     + '</tbody></table></div><div class="family-endpoint-table-footer"><span class="subtle">End of endpoints in <code>'
     + escapeHtml(familyLabel)

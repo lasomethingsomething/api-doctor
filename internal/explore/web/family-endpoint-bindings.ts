@@ -150,16 +150,4 @@ function bindFamilySurfaceEndpointInteractions(options: {
     });
   });
 
-  Array.prototype.forEach.call(familySurface.querySelectorAll(".nested-endpoint-row[data-endpoint-id]"), function (tr: Element) {
-    tr.addEventListener("click", function () {
-      var endpointId = tr.getAttribute("data-endpoint-id") || "";
-      if (!endpointId) return;
-      if (state.selectedEndpointId === endpointId && state.userSelectedEndpoint) {
-        collapseSelectedEndpointInline();
-        return;
-      }
-      state.inspectPlacementHint = "nested";
-      options.selectEndpointForInspector(endpointId);
-    });
-  });
 }

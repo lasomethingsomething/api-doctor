@@ -19,6 +19,7 @@ declare function toSentenceCase(text: string): string;
 declare function familyDriverFocus(driverKey: string, dominantSignals: string[]): string;
 declare function familyPrimaryRisk(driverKey: string, dominantSignals: string[]): string;
 declare function familyRecommendedAction(driverKey: string, dominantSignals: string[]): string;
+declare function familyWorkflowWhyThisMatters(dominantSignals: string[]): string;
 declare function collectTrapGuidance(
   endpoint: ExplorerEndpointRow,
   findings: ExplorerFinding[],
@@ -53,6 +54,30 @@ declare function renderWhatToDoNextBlock(
 declare function formatIssueGroupCountLabel(group: IssueGroup): string;
 declare function escapeHtml(value: unknown): string;
 declare function payloadEndpointDetails(): StringMap<ExplorerEndpointDetail>;
+declare function parseChainRoles(summary: string | undefined, count?: number): string[];
+declare function chainTaskLabel(chain: ExplorerWorkflowChain): string;
+declare function buildWorkflowDependencyClues(
+  endpoint: ExplorerEndpointRow,
+  findings: ExplorerFinding[],
+  stepIndex: number,
+  totalSteps: number,
+  roleLabel: string,
+  nextEndpoint: ExplorerEndpointRow | null,
+  nextRoleLabel: string,
+  linkageFindings: ExplorerFinding[],
+  prerequisiteFindings: ExplorerFinding[]
+): WorkflowDependencyClues;
+declare function summarizeWorkflowStepNarrative(
+  endpoint: ExplorerEndpointRow,
+  roleLabel: string,
+  nextEndpoint: ExplorerEndpointRow | null,
+  clues: WorkflowDependencyClues,
+  findings: ExplorerFinding[],
+  linkageFindings: ExplorerFinding[],
+  prerequisiteFindings: ExplorerFinding[],
+  isLast: boolean
+): WorkflowStepNarrative;
+declare function humanizeStepRole(roleSlug: string): string;
 
 function familyInsightBestEndpointIdForFamily(familyName: string): string {
   if (!familyName) return "";
@@ -92,7 +117,9 @@ function familyInsightBuildRankedSummary(family: ExplorerFamilySummary): Explore
   var dxReasons = uniq(dxSignals.map(function (s: string) { return familyDxSignalFragment(s); }).filter(Boolean));
   var dxParts = dxReasons.slice(0, 2);
   var dxConsequence = "";
-  if (dxParts.length === 0) {
+  if (state.activeTopTab === "workflow") {
+    dxConsequence = familyWorkflowWhyThisMatters(dominantSignals);
+  } else if (dxParts.length === 0) {
     dxConsequence = "Contract clarity is uneven, so similar operations may still teach different integration habits.";
   } else if (dxParts.length === 1) {
     dxConsequence = toSentenceCase(dxParts[0]) + ".";
@@ -240,6 +267,59 @@ function familyInsightRenderPanel(family: ExplorerFamilySummary, preferredEndpoi
   var improvementItems = buildContractImprovementItems(model.detail || ({ endpoint: leadEndpoint, findings: [] } as ExplorerEndpointDetail), lensFindings);
   var topEvidence = model.groups.slice(0, 3);
 
+  if (workflowTabActive) {
+    var primaryChain = (model.detail && model.detail.relatedChains && model.detail.relatedChains.length)
+      ? model.detail.relatedChains[0]
+      : null;
+    var workflowSummaryItems: string[] = [];
+    workflowSummaryItems.push('<li><strong>Lead issue:</strong> ' + escapeHtml(primaryProblemText) + '</li>');
+    workflowSummaryItems.push('<li><strong>Why this is hard:</strong> ' + escapeHtml(whyMattersText) + '</li>');
+    if (workflowTrapGuidance.length) {
+      workflowSummaryItems.push('<li><strong>Main trap:</strong> ' + escapeHtml(workflowTrapGuidance[0].title || workflowTrapGuidance[0].happened || "Hidden prerequisites or handoffs are likely.") + '</li>');
+    }
+    if (model.workflowLines.length) {
+      workflowSummaryItems.push('<li><strong>Most likely path:</strong> ' + escapeHtml(model.workflowLines[0]) + '</li>');
+    }
+
+    var workflowChangeList = (improvementItems || []).slice(0, 2).map(function (item: ContractImprovementItem) {
+      return '<li>' + escapeHtml(item.change || "Clarify the next step and required handoff state.") + '</li>';
+    }).join("");
+    if (!workflowChangeList) {
+      workflowChangeList = '<li>' + escapeHtml(recommendedChangeText) + '</li>';
+    }
+
+    var workflowEvidenceList = topEvidence.length
+      ? ('<ul class="preview-evidence-list">' + topEvidence.slice(0, 2).map(function (group: IssueGroup) {
+          return "<li>" + escapeHtml(formatIssueGroupCountLabel(group)) + "</li>";
+        }).join("") + "</ul>")
+      : '<p class="subtle">No grouped workflow evidence is available for this endpoint in the current view.</p>';
+    var workflowPathHtml = familyInsightRenderMostLikelyPath(primaryChain);
+
+    return '<div class="family-insight-panel family-insight-panel-workflow">'
+      + '<div class="expansion-header">'
+      + '<div class="expansion-header-title">'
+      + "<strong>" + escapeHtml(insightEndpointLabel) + "</strong>"
+      + '<span class="expansion-secondary-label"> | Workflow summary</span>'
+      + "</div>"
+      + "</div>"
+      + '<div class="expansion-sections expansion-sections-ordered">'
+      + '<div class="expansion-section expansion-problem">'
+      + '<p class="expansion-section-title">Why developers get stuck here</p>'
+      + '<ul class="expansion-evidence-list">' + workflowSummaryItems.join("") + '</ul>'
+      + "</div>"
+      + '<div class="expansion-section expansion-contract-change">'
+      + '<p class="expansion-section-title">What should change next</p>'
+      + '<ul class="preview-evidence-list preview-change-list">' + workflowChangeList + '</ul>'
+      + "</div>"
+      + workflowPathHtml
+      + '<div class="expansion-section expansion-open-evidence">'
+      + '<p class="expansion-section-title">Evidence</p>'
+      + workflowEvidenceList
+      + "</div>"
+      + "</div>"
+      + "</div>";
+  }
+
   var groundingHtml = '<div class="expansion-grounding">'
     + renderOpenAPIContextPills(model.topContext || createEmptyOpenAPIContext(), true)
     + (lead && lead.isSpecRule ? renderSpecRuleGroundingForGroup(lead) : "")
@@ -341,4 +421,74 @@ function familyInsightRenderPanel(family: ExplorerFamilySummary, preferredEndpoi
     + sections.join("")
     + "</div>"
     + "</div>";
+}
+
+function familyInsightRenderMostLikelyPath(chain: ExplorerWorkflowChain | null): string {
+  if (!chain || !(chain.endpointIds || []).length) {
+    return '<div class="expansion-section expansion-workflow-path">'
+      + '<p class="expansion-section-title">Most likely path</p>'
+      + '<p class="subtle">No clear multi-step path was inferred for the lead endpoint in this family.</p>'
+      + '</div>';
+  }
+
+  var endpointDetails = payloadEndpointDetails();
+  var steps = chain.endpointIds || [];
+  var roles = parseChainRoles(chain.summary, steps.length);
+  var taskLabel = chainTaskLabel(chain);
+  var stepItems = steps.slice(0, 4).map(function (endpointId: string, idx: number) {
+    var detail = endpointDetails[endpointId];
+    var endpoint = detail && detail.endpoint ? detail.endpoint : createEmptyEndpointRow();
+    var findings = detail && detail.findings ? findingsForActiveLens(detail.findings) : [];
+    var nextEndpointId = idx < (steps.length - 1) ? steps[idx + 1] : "";
+    var nextDetail = nextEndpointId ? endpointDetails[nextEndpointId] : null;
+    var nextEndpoint = nextDetail && nextDetail.endpoint ? nextDetail.endpoint : null;
+    var roleLabel = roles[idx] || "";
+    var nextRoleLabel = roles[idx + 1] || "";
+    var linkageFindings = findings.filter(function (finding: ExplorerFinding) {
+      return finding.code === "weak-follow-up-linkage"
+        || finding.code === "weak-action-follow-up-linkage"
+        || finding.code === "weak-accepted-tracking-linkage"
+        || finding.code === "weak-outcome-next-action-guidance";
+    });
+    var prerequisiteFindings = findings.filter(function (finding: ExplorerFinding) {
+      return finding.code === "prerequisite-task-burden";
+    });
+    var clues = buildWorkflowDependencyClues(
+      endpoint,
+      findings,
+      idx,
+      steps.length,
+      roleLabel,
+      nextEndpoint,
+      nextRoleLabel,
+      linkageFindings,
+      prerequisiteFindings
+    );
+    var narrative = summarizeWorkflowStepNarrative(
+      endpoint,
+      roleLabel,
+      nextEndpoint,
+      clues,
+      findings,
+      linkageFindings,
+      prerequisiteFindings,
+      idx === (steps.length - 1)
+    );
+    var carryForward = ((clues.nextNeeds || [])[0] || (clues.hidden || [])[0] || "No clear carry-forward state is exposed.");
+    var nextAction = narrative.nextAction || (nextEndpoint ? (nextEndpoint.method + " " + nextEndpoint.path) : "No next step is clearly exposed.");
+    var purpose = narrative.callDoes || (roleLabel ? humanizeStepRole(roleLabel) : "call endpoint");
+
+    return '<li class="workflow-family-path-step">'
+      + '<p><strong>Step ' + String(idx + 1) + ':</strong> ' + escapeHtml(endpoint.method + " " + endpoint.path) + '</p>'
+      + '<p><strong>Purpose:</strong> ' + escapeHtml(purpose) + '</p>'
+      + '<p><strong>Carry forward:</strong> ' + escapeHtml(carryForward) + '</p>'
+      + '<p><strong>Likely next action:</strong> ' + escapeHtml(nextAction) + '</p>'
+      + '</li>';
+  }).join("");
+
+  return '<div class="expansion-section expansion-workflow-path">'
+    + '<p class="expansion-section-title">Most likely path</p>'
+    + '<p class="expansion-text"><strong>' + escapeHtml(taskLabel) + '</strong> across ' + escapeHtml(String(steps.length)) + ' step' + (steps.length === 1 ? '' : 's') + '.</p>'
+    + '<ol class="expansion-workflow-list expansion-workflow-path-list">' + stepItems + '</ol>'
+    + '</div>';
 }

@@ -135,12 +135,13 @@ function familyRecommendedAction(driverKey: string, dominantSignals: string[]): 
   var blob = (signal0 + " | " + signal1).trim();
 
   if (driverKey === "workflow") {
-    if (/description/.test(blob)) return "Add missing response descriptions";
-    if (/enum|typing|weak typing/.test(blob)) return "Declare missing enums";
-    if (/token|context handoff|handoff context|next step|next action|implicit|handoff/.test(blob)) return "Expose nextAction and required context";
+    if (/auth\/header|auth|header/.test(blob)) return "Make auth and required headers explicit";
     if (/sequencing|brittle|prerequisite/.test(blob)) return "Expose prerequisites and required ordering cues";
-    if (/auth\/header|auth|header/.test(blob)) return "Expose auth/header requirements in schema and errors";
-    return "Expose nextAction and required context";
+    if (/next step|next action/.test(blob)) return "Expose the next valid call in the response";
+    if (/token|context handoff|handoff context|implicit|handoff/.test(blob)) return "Return the handoff ID or context needed for the next call";
+    if (/description/.test(blob)) return "Add endpoint descriptions for purpose and continuation rules";
+    if (/enum|typing|weak typing/.test(blob)) return "Declare missing enums and required workflow fields";
+    return "Make the next step and required handoff state explicit";
   }
 
   if (driverKey === "shape") {
@@ -159,6 +160,27 @@ function familyRecommendedAction(driverKey: string, dominantSignals: string[]): 
   if (/path style|path patterns/.test(blob)) return "Align path templates across sibling routes";
   if (/response shape drift|response shapes drift/.test(blob)) return "Align response schemas across sibling endpoints";
   return "Normalize contract patterns across sibling endpoints";
+}
+
+function familyWorkflowWhyThisMatters(dominantSignals: string[]): string {
+  var signals = dominantSignals || [];
+  var signal0 = (signals[0] || "").toLowerCase();
+  var signal1 = (signals[1] || "").toLowerCase();
+  var blob = (signal0 + " | " + signal1).trim();
+
+  if (/handoff context|token\/context|handoff/.test(blob)) {
+    return "Developers must infer required handoff IDs or context between calls.";
+  }
+  if (/auth\/header|auth|header/.test(blob)) {
+    return "Developers must discover auth and required headers step by step.";
+  }
+  if (/sequencing|brittle|prerequisite/.test(blob)) {
+    return "Developers learn the safe call order from runtime behavior, not the contract.";
+  }
+  if (/next step|next action/.test(blob)) {
+    return "Developers cannot tell the next valid call from the response.";
+  }
+  return "Developers cannot chain these calls safely from the contract alone.";
 }
 
 function familyPrimaryRisk(driverKey: string, dominantSignals: string[]): string {

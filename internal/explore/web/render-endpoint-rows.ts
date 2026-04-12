@@ -174,13 +174,7 @@ function renderEndpointRow(row: ExplorerEndpointRow, options?: RenderEndpointRow
           + '</div>';
       })()
     : '';
-  var additionalFindingsRowInline = additionalFindingsList
-    ? '<tr class="nested-endpoint-findings-row" data-endpoint-id="' + escapeHtml(row.id) + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
-        + '<td colspan="7" class="nested-endpoint-findings-cell">'
-        + additionalFindingsList
-        + '</td>'
-      + '</tr>'
-    : '';
+  var additionalFindingsRowInline = '';
   var inspectLoading = state.inspectingEndpointId === row.id;
   var inspectSelected = state.selectedEndpointId === row.id && !inspectLoading;
   var inspectButtonClass = 'tertiary-action endpoint-inspect-action'
@@ -196,37 +190,28 @@ function renderEndpointRow(row: ExplorerEndpointRow, options?: RenderEndpointRow
       if (firstFinding) return "Clarify the contract so this problem is visible before runtime.";
       return "No suggested contract change.";
     })();
-    var issueType = rowDominantIssue(row).label || "Issue";
+    var workflowInline = state.activeTopTab === 'workflow';
+    var issueType = rowDominantIssue(row).label || (workflowInline ? "Workflow problem" : "Issue");
     var endpointIdentityTitle = escapeHtml(((row.method || '').toUpperCase() + ' ' + (row.path || '') + ' — ' + intent).trim());
-    var scopeBadge = primaryScope
-      ? '<span class="row-issue-scope-pill" title="' + escapeHtml('Scope: ' + primaryScope) + '"><strong>Scope:</strong> ' + escapeHtml(primaryScope) + '</span>'
-      : '';
-    var labelPressed = (row.id === state.selectedEndpointId) ? 'true' : 'false';
-    var pathActionLabel = 'Inspect';
+    var detailToggleLabel = state.expandedEndpointInsightIds[row.id] ? 'Hide details' : 'Show details';
     var rowHtml = '<tr class="' + rowClasses.trim() + '" data-id="' + row.id + '" data-endpoint-id="' + row.id + '"' + (options.familyName ? ' data-family="' + escapeHtml(options.familyName) + '"' : '') + '>'
       + '<td class="nested-endpoint-path-cell">'
       + '<div class="endpoint-row-main">'
-      + '<button type="button" class="nested-endpoint-path-toggle" data-focus-endpoint="' + escapeHtml(row.id) + '" aria-pressed="' + labelPressed + '" title="' + escapeHtml('Inspect ' + ((row.method || '').toUpperCase()) + ' ' + (row.path || '')) + '">'
       + '<strong title="' + endpointIdentityTitle + '">' + escapeHtml((row.method || '').toUpperCase() + ' ' + (row.path || '')) + '</strong>'
-      + '<span class="nested-endpoint-path-action" aria-hidden="true">' + escapeHtml(pathActionLabel) + '</span>'
-      + '</button>'
       + '</div>'
       + '</td>'
       + '<td class="nested-endpoint-issue-cell">'
       + '<div class="nested-endpoint-issue-top">'
       + '<div class="nested-endpoint-primary-issue" title="' + escapeHtml(topIssueLabel) + '">' + escapeHtml(topIssueLabel) + '</div>'
-      + scopeBadge
-      + (additionalFindingsControl ? '<div class="nested-endpoint-issue-actions">' + additionalFindingsControl + '</div>' : '')
       + '</div>'
       + '</td>'
       + '<td class="nested-endpoint-type-cell"><div class="nested-endpoint-type-label" title="' + escapeHtml(issueType) + '">' + escapeHtml(issueType) + '</div></td>'
-      + '<td class="nested-endpoint-severity-cell">' + (firstFinding ? severityBadgeEvidenceCTA(severity, row.id) : '<span class="subtle">No issue</span>') + '</td>'
-      + '<td class="nested-endpoint-instance-cell"><button type="button" class="instance-count-chip is-interactive" data-open-evidence-id="' + escapeHtml(row.id) + '" title="Open grouped deviations" aria-label="Open grouped deviations">' + instanceCount + ' deviation' + (instanceCount === 1 ? '' : 's') + '</button></td>'
+      + '<td class="nested-endpoint-severity-cell">' + (firstFinding ? severityBadge(severity) : '<span class="subtle">No issue</span>') + '</td>'
+      + '<td class="nested-endpoint-instance-cell"><span class="instance-count-chip">' + instanceCount + ' ' + (workflowInline ? 'signal' : 'deviation') + (instanceCount === 1 ? '' : 's') + '</span></td>'
       + '<td class="nested-endpoint-actionhint-cell"><div class="nested-endpoint-actionhint" title="' + escapeHtml(suggestedAction) + '">' + escapeHtml(suggestedAction) + '</div></td>'
       + '<td class="nested-endpoint-actions-cell">'
       + '<div class="nested-endpoint-actions">'
-      + '<button type="button" class="tertiary-action" data-open-evidence-id="' + escapeHtml(row.id) + '">Show evidence</button>'
-      + '<button type="button" class="tertiary-action endpoint-insight-toggle" data-endpoint-insight-toggle="' + escapeHtml(row.id) + '">' + (state.expandedEndpointInsightIds[row.id] ? 'Hide summary' : 'Show summary') + '</button>'
+      + '<button type="button" class="tertiary-action endpoint-insight-toggle" data-endpoint-insight-toggle="' + escapeHtml(row.id) + '">' + escapeHtml(detailToggleLabel) + '</button>'
       + '</div>'
       + '</td>'
       + '</tr>';

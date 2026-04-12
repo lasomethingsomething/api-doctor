@@ -62,6 +62,12 @@ function buildEndpointDiagnosticsBody(detail: ExplorerEndpointDetail, findings: 
     body += renderWorkflowStepWorkspace(detail);
   }
 
+  if (workflowTabActive) {
+    body += renderEndpointDiagnosticsWorkflowSummary(detail);
+    body += '</div>';
+    return body;
+  }
+
   if (!workflowTabActive && relatedChains.length) {
     var primary = relatedChains[0] || ({ endpointIds: [] } as ExplorerWorkflowChain);
     var steps = primary.endpointIds || [];
@@ -83,13 +89,6 @@ function buildEndpointDiagnosticsBody(detail: ExplorerEndpointDetail, findings: 
   }
   if (findings && findings.length) {
     body += renderWhatToDoNextBlock(endpoint, findings, { maxItems: 2, showEndpointLabel: false });
-  }
-  if (workflowTabActive) {
-    body += renderWorkflowDiagnosticsFrame(detail);
-  }
-
-  if (workflowTabActive && state.endpointDiagnosticsSubTab !== 'summary') {
-    body += renderInspectorWorkflowContextSupport(detail, { defaultOpen: true });
   }
 
   body += renderInspectorContentMap();

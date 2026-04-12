@@ -45,6 +45,11 @@ declare function renderTrapGuidanceList(
   traps: WorkflowTrapGuidance[],
   options: { title?: string; className?: string; limit?: number }
 ): string;
+declare function renderWhatToDoNextBlock(
+  endpoint: ExplorerEndpointRow,
+  findings: ExplorerFinding[],
+  options: { maxItems?: number; leadCopy?: string; showEndpointLabel?: boolean }
+): string;
 declare function renderFullExactEvidenceDrawer(
   groups: IssueGroup[],
   options: { endpoint?: ExplorerEndpointRow; familyName?: string; open?: boolean }
@@ -414,25 +419,45 @@ function renderEndpointDiagnosticsWorkflowSummary(detail: ExplorerEndpointDetail
   var signalSummary = summarizeWorkflowHeaderSignals(detail);
   var guidance = collectTrapGuidance(endpoint, findings, { prereq: [], establish: [], nextNeeds: [], hidden: [] }, [], [], null, "", false);
   var guidanceHtml = renderTrapGuidanceList(guidance, {
-    title: "Workflow trap guidance",
+    title: "Exact evidence",
     className: "inspector-trap-guidance",
-    limit: 3
+    limit: 2
   });
   var chainContextHtml = renderWorkflowChainContextForEndpoint(detail);
+  var whyCopy = signalSummary.replace(/^main workflow clues:\s*/i, "");
+  var whyList = [
+    "Developers have to infer what state or identifier must be carried forward between calls.",
+    "The next valid call is not obvious from the response, so sequencing is learned at runtime."
+  ];
+  if (whyCopy && whyCopy !== signalSummary) {
+    whyList.unshift("Primary workflow problems: " + whyCopy + ".");
+  }
+  var whyHtml = whyList.map(function (line: string) {
+    return "<li>" + escapeHtml(line) + "</li>";
+  }).join("");
+  var nextBlock = renderWhatToDoNextBlock(endpoint, findings, {
+    maxItems: 2,
+    leadCopy: "Choose the smallest contract change that makes the next step obvious and the handoff explicit.",
+    showEndpointLabel: false
+  });
 
   return '<div class="endpoint-diag-pane">'
-    + chainContextHtml
     + '<div class="family-insight-card">'
-    + '<p class="insight-kicker">Workflow continuity evidence</p>'
-    + '<p class="subtle"><strong>' + escapeHtml(endpoint.method + " " + endpoint.path) + "</strong> "
-    + (chainCount ? ("appears in " + chainCount + " workflow chain" + (chainCount === 1 ? "" : "s")) : "is not currently linked to an inferred chain")
-    + " and is prioritized here for continuity burden signals.</p>"
+    + '<p class="insight-kicker">Why developers get stuck here</p>'
+    + '<p class="subtle"><strong>' + escapeHtml(endpoint.method + " " + endpoint.path) + '</strong> '
+    + (chainCount ? ("sits inside " + chainCount + " likely workflow path" + (chainCount === 1 ? "" : "s")) : "shows workflow friction even without a full inferred path")
+    + '.</p>'
     + '<ul class="family-top-evidence">'
-    + '<li><strong>Primary continuity signals:</strong> ' + escapeHtml(signalSummary.replace(/^primary continuity signals:\s*/i, "")) + ".</li>"
-    + "<li><strong>Why this matters to a client:</strong> When the contract does not expose next-step IDs/context, clients must guess, store hidden state, or add extra reads between calls.</li>"
+    + whyHtml
     + "</ul>"
-    + guidanceHtml
     + "</div>"
+    + chainContextHtml
+    + nextBlock
+    + '<div class="family-insight-card">'
+    + '<p class="insight-kicker">Exact evidence</p>'
+    + '<p class="subtle">These findings show where the contract leaves sequencing, handoff state, or next-step guidance too implicit.</p>'
+    + guidanceHtml
+    + '</div>'
     + renderFullExactEvidenceDrawer(groups, { endpoint: endpoint, familyName: endpoint.family || "", open: false })
     + "</div>";
 }

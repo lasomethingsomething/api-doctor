@@ -1683,6 +1683,34 @@ select:focus {
   width: 8%;
 }
 
+body.lens-workflow .family-table col.family-col-name {
+  width: 16%;
+}
+
+body.lens-workflow .family-table col.family-col-priority {
+  width: 10%;
+}
+
+body.lens-workflow .family-table col.family-col-endpoints {
+  width: 7%;
+}
+
+body.lens-workflow .family-table col.family-col-top-signal {
+  width: 15%;
+}
+
+body.lens-workflow .family-table col.family-col-primary-risk {
+  width: 25%;
+}
+
+body.lens-workflow .family-table col.family-col-client-effect {
+  width: 20%;
+}
+
+body.lens-workflow .family-table col.family-col-actions {
+  width: 7%;
+}
+
 /* Never allow the rightmost columns to collapse into letter-by-letter wrapping. */
 .family-table-head th.family-col-name,
 .family-row td.family-col-name,
@@ -1760,6 +1788,11 @@ select:focus {
 .family-table-clamp-3 {
   -webkit-line-clamp: 3;
   max-height: 3.96em;
+}
+
+.family-table-clamp-2 {
+  -webkit-line-clamp: 2;
+  max-height: 2.64em;
 }
 
 .family-dx-chip {
@@ -2253,6 +2286,12 @@ body.lens-shape .caller-burden-more {
 .nested-endpoint-table col.nested-col-type { width: 11%; }
 .nested-endpoint-table col.nested-col-actionhint { width: 26%; }
 
+body.lens-workflow .nested-endpoint-table col.nested-col-path { width: 23%; }
+body.lens-workflow .nested-endpoint-table col.nested-col-issue { width: 24%; }
+body.lens-workflow .nested-endpoint-table col.nested-col-type { width: 10%; }
+body.lens-workflow .nested-endpoint-table col.nested-col-actionhint { width: 27%; }
+body.lens-workflow .nested-endpoint-table col.nested-col-actions { width: 160px; }
+
 .nested-endpoint-table tbody td {
   padding: 0.18rem 0.36rem;
 }
@@ -2370,6 +2409,12 @@ body.lens-shape .caller-burden-more {
   line-height: 1.3;
 }
 
+body.lens-workflow .nested-endpoint-type-label {
+  font-size: 0.72rem;
+  font-weight: 750;
+  color: #4a3a83;
+}
+
 .nested-endpoint-actionhint {
   display: -webkit-box;
   min-width: 0;
@@ -2382,6 +2427,12 @@ body.lens-shape .caller-burden-more {
   font-size: 0.76rem;
   color: #223a4a;
   font-weight: 600;
+}
+
+body.lens-workflow .nested-endpoint-actionhint {
+  font-size: 0.74rem;
+  line-height: 1.28;
+  color: #24354a;
 }
 
 .nested-endpoint-path-action {
@@ -2452,6 +2503,11 @@ body.lens-shape .caller-burden-more {
   -webkit-line-clamp: 2;
 }
 
+body.lens-workflow .nested-endpoint-primary-issue {
+  font-size: 0.76rem;
+  line-height: 1.22;
+}
+
 .nested-endpoint-table .row-issue-scope-pill {
   font-size: 0.7rem;
 }
@@ -2479,6 +2535,14 @@ body.lens-shape .caller-burden-more {
 .nested-endpoint-table .instance-count-chip {
   padding: 0.18rem 0.42rem;
   font-size: 0.7rem;
+}
+
+body.lens-workflow .nested-endpoint-table .instance-count-chip {
+  padding: 0.16rem 0.38rem;
+  font-size: 0.68rem;
+  background: #faf7ff;
+  border-color: #ddd2f5;
+  color: #5a4892;
 }
 
 .endpoint-method-chip,
@@ -2703,7 +2767,7 @@ body.lens-shape .caller-burden-more {
 
 .nested-endpoint-preview-grid {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: 1.25fr 0.9fr 1fr;
   gap: 0.38rem;
   align-items: start;
 }
@@ -2741,7 +2805,12 @@ body.lens-shape .caller-burden-more {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.3;
+  max-height: 2.6em;
 }
 
 .nested-endpoint-preview-why {
@@ -2754,38 +2823,20 @@ body.lens-shape .caller-burden-more {
 
 .preview-evidence-list {
   margin: 0;
-  padding-left: 1.05rem;
+  padding-left: 1rem;
   display: grid;
-  gap: 0.12rem;
+  gap: 0.16rem;
 }
 
 .preview-evidence-list li {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.38rem;
-  align-items: baseline;
+  display: block;
   min-width: 0;
+  font-size: 0.77rem;
+  line-height: 1.36;
 }
 
 .preview-change-list li {
   display: block;
-}
-
-.preview-evidence-title {
-  font-size: 0.76rem;
-  color: #203948;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.preview-evidence-count {
-  font-size: 0.72rem;
-  color: var(--muted);
-  font-weight: 700;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
 }
 
 .nested-endpoint-preview-actions {
@@ -6972,6 +7023,11 @@ body.lens-shape {
   color: var(--signal-chip-text);
   font-weight: 900;
   box-shadow: 0 1px 0 rgba(23, 33, 47, 0.06);
+}
+
+body.lens-workflow .family-table .family-signal-chip {
+  padding: 0.16rem 0.4rem;
+  font-size: 0.72rem;
 }
 
 .family-table .chip-secondary.family-signal-chip {
