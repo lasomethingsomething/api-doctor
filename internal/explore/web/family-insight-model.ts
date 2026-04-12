@@ -272,12 +272,6 @@ function familyInsightRenderPanel(family: ExplorerFamilySummary, preferredEndpoi
     var primaryChain = (model.detail && model.detail.relatedChains && model.detail.relatedChains.length)
       ? model.detail.relatedChains[0]
       : null;
-    var blockerChips = (rankedFamily && rankedFamily.dominantSignals ? rankedFamily.dominantSignals.slice(0, 3) : []).map(function (signal: string, idx: number) {
-      var label = humanizeSignalLabel(signal || "");
-      var cls = idx === 0 ? "chip chip-primary family-signal-chip" : "chip chip-secondary family-signal-chip";
-      return '<span class="' + cls + '">' + escapeHtml(label) + '</span>';
-    }).join("");
-
     var workflowChangeList = (improvementItems || []).slice(0, 1).map(function (item: ContractImprovementItem) {
       return '<li>' + escapeHtml(item.change || "Clarify the next step and required handoff state.") + '</li>';
     }).join("");
@@ -302,7 +296,6 @@ function familyInsightRenderPanel(family: ExplorerFamilySummary, preferredEndpoi
       + '<div class="expansion-sections expansion-sections-ordered">'
       + '<div class="expansion-section expansion-problem">'
       + '<p class="expansion-section-title">Why developers get stuck here</p>'
-      + (blockerChips ? ('<div class="chips workflow-summary-chips">' + blockerChips + '</div>') : '')
       + '<p class="expansion-text">' + escapeHtml(whyMattersText) + '</p>'
       + (workflowTrapGuidance.length
           ? ('<p class="expansion-text"><strong>Main trap:</strong> ' + escapeHtml(workflowTrapGuidance[0].title || workflowTrapGuidance[0].happened || "Hidden prerequisites or handoffs are likely.") + '</p>')
@@ -492,12 +485,11 @@ function familyInsightRenderMostLikelyPath(chain: ExplorerWorkflowChain | null):
     var carryForward = ((clues.nextNeeds || [])[0] || (clues.hidden || [])[0] || "No clear carry-forward state is exposed.");
     var nextAction = narrative.nextAction || (nextEndpoint ? (nextEndpoint.method + " " + nextEndpoint.path) : "No next step is clearly exposed.");
     var purpose = narrative.callDoes || (roleLabel ? humanizeStepRole(roleLabel) : "call endpoint");
+    var summary = purpose + '. Carry forward: ' + carryForward + '. Next: ' + nextAction + '.';
 
     return '<li class="workflow-family-path-step">'
-      + '<p><strong>Step ' + String(idx + 1) + ':</strong> ' + escapeHtml(endpoint.method + " " + endpoint.path) + '</p>'
-      + '<p><strong>Purpose:</strong> ' + escapeHtml(purpose) + '</p>'
-      + '<p><strong>Carry forward:</strong> ' + escapeHtml(carryForward) + '</p>'
-      + '<p><strong>Likely next action:</strong> ' + escapeHtml(nextAction) + '</p>'
+      + '<strong class="workflow-family-path-step-title">Step ' + String(idx + 1) + ': ' + escapeHtml(endpoint.method + " " + endpoint.path) + '</strong>'
+      + '<p class="workflow-family-path-step-copy">' + escapeHtml(summary) + '</p>'
       + '</li>';
   }).join("");
 

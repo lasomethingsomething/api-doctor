@@ -135,6 +135,9 @@ function familyRecommendedAction(driverKey: string, dominantSignals: string[]): 
   var blob = (signal0 + " | " + signal1).trim();
 
   if (driverKey === "workflow") {
+    if (/handoff/.test(blob) && /next step|next action/.test(blob)) return "Return the handoff ID and next valid call together";
+    if (/sequencing|brittle|prerequisite/.test(blob) && /next step|next action/.test(blob)) return "Expose prerequisites and name the next valid call";
+    if (/auth\/header|auth|header/.test(blob) && /handoff/.test(blob)) return "Make auth inputs and carry-forward context explicit";
     if (/auth\/header|auth|header/.test(blob)) return "Make auth and required headers explicit";
     if (/sequencing|brittle|prerequisite/.test(blob)) return "Expose prerequisites and required ordering cues";
     if (/next step|next action/.test(blob)) return "Expose the next valid call in the response";
@@ -168,6 +171,15 @@ function familyWorkflowWhyThisMatters(dominantSignals: string[]): string {
   var signal1 = (signals[1] || "").toLowerCase();
   var blob = (signal0 + " | " + signal1).trim();
 
+  if (/handoff/.test(blob) && /next step|next action/.test(blob)) {
+    return "Developers must guess which ID or context to carry forward and what call comes next.";
+  }
+  if (/sequencing|brittle|prerequisite/.test(blob) && /next step|next action/.test(blob)) {
+    return "Developers learn ordering and follow-up calls from runtime behavior instead of the contract.";
+  }
+  if (/auth\/header|auth|header/.test(blob) && /handoff/.test(blob)) {
+    return "Developers must discover auth requirements and carry-forward context across steps.";
+  }
   if (/handoff context|token\/context|handoff/.test(blob)) {
     return "Developers must infer required handoff IDs or context between calls.";
   }
