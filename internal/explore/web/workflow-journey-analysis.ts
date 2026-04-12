@@ -124,7 +124,7 @@ function workflowJourneyRenderProblems(
 ): string {
   if (!problems || !problems.length) return "";
   return '<div class="journey-problems">'
-    + '<p class="journey-section-kicker">DX problems in this journey</p>'
+    + '<p class="journey-section-kicker">Why developers get stuck in this workflow</p>'
     + '<ul class="journey-problem-list">'
     + problems.map(function (problem: string) {
       return "<li><strong>" + escape(problem) + "</strong></li>";
@@ -150,7 +150,7 @@ function workflowJourneyRenderContractGaps(
   }
   if (!items.length) return "";
   return '<div class="journey-gaps">'
-    + '<p class="journey-section-kicker">Contract gaps</p>'
+    + '<p class="journey-section-kicker">What the contract does not say clearly</p>'
     + '<ul class="journey-gap-list">'
     + items.join("")
     + "</ul>"
@@ -195,7 +195,7 @@ function workflowJourneyRenderProposal(
   if (!proposals.length) return "";
 
   return '<div class="journey-proposal">'
-    + '<p class="journey-section-kicker">Workflow-first contract edits</p>'
+    + '<p class="journey-section-kicker">What should change next</p>'
     + '<ul class="journey-proposal-list">'
     + proposals.slice(0, 4).map(function (proposal: string) {
       return "<li>" + escape(proposal) + "</li>";
@@ -213,13 +213,13 @@ function workflowJourneyRenderGuidance(
   escape: (value: unknown) => string
 ): string {
   var chainCount = chains.length;
-  var burdenLabel = totalBurden === 1 ? "issue" : "issues";
+  var signalLabel = totalBurden === 1 ? "signal" : "signals";
   var chainLabel = chainCount === 1 ? "chain" : "chains";
 
   return '<details class="workflow-journey-card">'
     + '<summary class="workflow-journey-summary">'
     + '<span class="journey-label">' + escape(kindLabel) + "</span>"
-    + '<span class="journey-meta">' + chainCount + " " + chainLabel + " · " + totalBurden + " burden " + burdenLabel + "</span>"
+    + '<span class="journey-meta">' + chainCount + " " + chainLabel + " · " + totalBurden + " workflow " + signalLabel + "</span>"
     + "</summary>"
     + '<div class="workflow-journey-body">'
     + workflowJourneyRenderProblems(analysis.problems, escape)

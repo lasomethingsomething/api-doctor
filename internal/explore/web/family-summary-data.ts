@@ -34,7 +34,7 @@ function familySummaryBuildSurfaceContext(summaries: ExplorerFamilySummary[]): s
 
   var summaryLine = "";
   if (!totalInLens) {
-    summaryLine = "No families match the current scope.";
+    summaryLine = "No families match the current table view.";
   } else if (showingTruncated) {
     summaryLine = "Showing " + visibleFamilies + " of " + familiesInPressureTier + " matching families (" + specTotal + " total in spec).";
   } else {
@@ -55,10 +55,10 @@ function familySummaryBuildSurfaceContext(summaries: ExplorerFamilySummary[]): s
 
   var actionButtons: string[] = [];
   if (showingTruncated && !state.familyTableShowAll) {
-    actionButtons.push('<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all families in current scope</button>');
+    actionButtons.push('<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all matching families</button>');
   }
   if (hasNarrowing) {
-    actionButtons.push('<button type="button" class="secondary-action" data-recovery-action="clear-table-filters">Clear table filters</button>');
+    actionButtons.push('<button type="button" class="secondary-action" data-recovery-action="clear-table-filters">Reset table view</button>');
   }
   var actionsHtml = actionButtons.length
     ? ('<div class="context-actions">' + actionButtons.join("") + "</div>")
@@ -66,7 +66,7 @@ function familySummaryBuildSurfaceContext(summaries: ExplorerFamilySummary[]): s
 
   var copy = '<div class="context-block family-context-block">';
   if (state.activeTopTab === "shape") {
-    var scopeLine = "Scope: Ranks families by response-shape burden and highlights top shape signals for endpoints matching the current filters.";
+    var scopeLine = "Table view: ranks families by response-shape problems and highlights the strongest shape signals for matching endpoints.";
     var resultsLine = "Results: " + summaryLine;
     copy += '<p class="context-summary context-summary-shape">' + escapeHtml(scopeLine) + "</p>";
     copy += '<p class="context-summary context-summary-shape">' + escapeHtml(resultsLine) + "</p>";

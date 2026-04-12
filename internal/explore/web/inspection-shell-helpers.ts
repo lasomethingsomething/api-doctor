@@ -76,13 +76,13 @@ function inspectionShellFamilySurfaceHelpCopy(): string {
     return '';
   }
   if (state.activeTopTab === 'workflow') {
-    return 'Families ranked by workflow burden in the current slice: hidden dependencies, brittle sequencing, missing handoff IDs, and weak next-step cues.';
+    return 'Families ranked by workflow problems in this slice: hidden dependencies, brittle sequencing, missing handoff IDs, and weak next-step cues.';
   }
   return state.activeTopTab === 'shape'
-    ? 'Response Shape: families ranked by shape friction for the current slice.'
+    ? 'Response Shape Problems: families ranked by shape friction in this slice.'
     : state.activeTopTab === 'workflow'
-    ? 'Workflow Guidance: families ranked by visible workflow pressure for the current slice.'
-    : 'Contract Issues: families ranked by visible contract evidence for the current slice.';
+    ? 'Workflow Problems: families ranked by visible workflow friction in this slice.'
+    : 'Contract Problems: families ranked by visible contract evidence in this slice.';
 }
 
 function inspectionShellBuildListContext(matches: number, total: number): string {
@@ -108,8 +108,8 @@ function inspectionShellBuildListContext(matches: number, total: number): string
       + '</div>';
   } else if (state.activeTopTab === 'workflow') {
     burdenExplanation = '<div class="burden-explanation">'
-      + '<span class="evidence-track-label evidence-track-heuristic">Guidance view</span>'
-      + '<strong>Workflow Guidance</strong> — family cards highlight cross-step continuity pressure that makes real call paths harder to complete safely.'
+      + '<span class="evidence-track-label evidence-track-heuristic">Workflow-problem view</span>'
+      + '<strong>Workflow Problems</strong> — family rows highlight cross-step friction that makes real call paths harder to complete safely.'
       + '<ul>'
       + '<li>Hidden token/context/header dependencies appear across steps.</li>'
       + '<li>Sequencing suggests brittle handoffs where the next required step is not clearly exposed.</li>'
@@ -120,12 +120,12 @@ function inspectionShellBuildListContext(matches: number, total: number): string
       + '</div>';
   } else if (state.activeTopTab === 'shape') {
     burdenExplanation = '<div class="burden-explanation">'
-      + '<span class="evidence-track-label evidence-track-heuristic">Guidance view</span>'
+      + '<span class="evidence-track-label evidence-track-heuristic">Response-shape view</span>'
       + '<strong>Response Shape</strong> — diagnoses real DX cost from storage-shaped payloads, not backend graph completeness.'
       + '<ul>'
-      + '<li>Diagnose deep nesting, duplicated state, snapshot-heavy payloads, internal-field exposure, and unclear source-of-truth fields.</li>'
-      + '<li>Diagnose missing outcome framing and missing next-action cues in shape-heavy responses.</li>'
-      + '<li>Grouped deviations include OpenAPI location cues and show concrete schema locations for each finding.</li>'
+        + '<li>Diagnose deep nesting, duplicated state, snapshot-heavy payloads, internal-field exposure, and unclear source-of-truth fields.</li>'
+        + '<li>Diagnose missing outcome framing and missing next-action cues in shape-heavy responses.</li>'
+        + '<li>Grouped deviations include OpenAPI location cues and show concrete schema locations for each finding.</li>'
       + '</ul>'
       + renderDynamicBurdenSignals(visibleRows, 'contract-shape')
       + '</div>';
@@ -135,16 +135,16 @@ function inspectionShellBuildListContext(matches: number, total: number): string
   var shapeTabActive = state.activeTopTab === 'shape';
   var guide = matches > 0
     ? (workflowTabActive
-        ? 'Family cards summarize continuity pressure; selecting an endpoint opens inline diagnostics and grouped deviations.'
+        ? 'Family rows summarize where developers can get stuck between calls; selecting an endpoint opens inline diagnostics and grouped deviations.'
       : shapeTabActive
-      ? 'Family cards rank response-shape burden; selecting an endpoint opens inline diagnostics and grouped deviations.'
-        : 'Family cards group contract issues by family; selecting an endpoint opens grouped deviations with OpenAPI location cues.')
+      ? 'Family rows rank response-shape problems; selecting an endpoint opens inline diagnostics and grouped deviations.'
+        : 'Family rows group contract problems by family; selecting an endpoint opens grouped deviations with OpenAPI location cues.')
     : 'No rows match. Use the family no-match recovery above to widen the view.';
 
   var actionsHtml = (matches > 0 && !workflowTabActive && !shapeTabActive)
     ? '<div class="context-actions">'
-      + '<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all families in current scope</button>'
-      + '<button type="button" class="secondary-action" data-recovery-action="clear-table-filters">Clear table filters</button>'
+      + '<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all matching families</button>'
+      + '<button type="button" class="secondary-action" data-recovery-action="clear-table-filters">Reset table view</button>'
       + '</div>'
     : '';
 

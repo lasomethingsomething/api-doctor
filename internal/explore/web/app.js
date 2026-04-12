@@ -78,15 +78,15 @@ function createExplorerElements(doc) {
 var TOP_TABS = [
     {
         id: "spec-rule",
-        label: "Contract Issues",
-        copy: "OpenAPI rule violations (REQUIRED vs SHOULD) and consistency drift",
+        label: "Contract Problems",
+        copy: "Schema/runtime mismatch, undocumented rules, weak typing, and inconsistent HTTP semantics",
         color: "spec-rule",
         bodyClass: "lens-spec-rule",
         defaultCategory: "all",
         defaultSubTab: "exact",
         familyEyebrow: "Contract surface",
-        familyHeading: "Family investigation clusters",
-        familyHelp: "Families cluster contract-rule and consistency problems so you can expand evidence inline without leaving the main table.",
+        familyHeading: "Contract-problem families",
+        familyHelp: "Families group contract problems so you can expand evidence inline without leaving the main table.",
         emptyHelp: "",
         signalHeader: "Top signal",
         riskHeader: "Primary risk",
@@ -94,32 +94,32 @@ var TOP_TABS = [
     },
     {
         id: "workflow",
-        label: "Workflow Guidance",
-        copy: "Inferred call chains, continuity burden, hidden dependencies, and sequencing traps",
+        label: "Workflow Problems",
+        copy: "Hidden prerequisites, brittle sequences, missing next steps, and hard-to-carry context",
         color: "workflow",
         bodyClass: "lens-workflow",
         defaultCategory: "all",
         defaultSubTab: "summary",
-        familyEyebrow: "Workflow surface",
-        familyHeading: "Workflow continuity clusters",
-        familyHelp: "Families stay in one shared table, but this tab ranks them by continuity burden, traps, and hidden handoff costs.",
+        familyEyebrow: "Workflow problems",
+        familyHeading: "Workflow-problem families",
+        familyHelp: "Families stay in one shared table, but this tab ranks where developers can get stuck between calls, handoffs, and hidden prerequisites.",
         emptyHelp: "",
-        signalHeader: "Continuity signals",
-        riskHeader: "Main continuity risk",
-        clientEffectHeader: "Client impact in flow"
+        signalHeader: "Lead workflow signal",
+        riskHeader: "Why this is hard",
+        clientEffectHeader: "Recommended fix direction"
     },
     {
         id: "shape",
-        label: "Response Shape",
-        copy: "Storage-shaped responses, duplicated state, internal fields, and workflow-first redesign guidance",
+        label: "Response Shape Problems",
+        copy: "Storage-shaped payloads, duplicated state, incidental fields, and weak outcome framing",
         color: "shape",
         bodyClass: "lens-shape",
         defaultCategory: "all",
         defaultSubTab: "summary",
-        familyEyebrow: "Response Shape surface",
-        familyHeading: "Response-shape investigation clusters",
-        familyHelp: "Families stay in the same shared table pattern while this tab swaps in shape-specific burden, caller cost, and redesign guidance.",
-        emptyHelp: "Response Shape: no families currently expose shape-heavy evidence in this slice.",
+        familyEyebrow: "Response-shape problems",
+        familyHeading: "Response-shape families",
+        familyHelp: "Families stay in the same shared table pattern while this tab highlights storage-shaped payloads, duplicated state, and weak outcome framing.",
+        emptyHelp: "Response Shape Problems: no families currently expose shape-heavy evidence in this slice.",
         signalHeader: "Shape signals",
         riskHeader: "Main response-shape risk",
         clientEffectHeader: "Client effect"
@@ -2126,7 +2126,7 @@ function renderEndpointDiagnosticsEmptyState() {
     if (!families.length) {
         return '<div class="empty">'
             + "<strong>Nothing to inspect yet</strong>"
-            + '<p class="subtle">No families match the current filters, so no endpoint can be selected. Widen the filters above to continue.</p>'
+            + '<p class="subtle">No families match the current table view, so no endpoint can be selected. Reset the table view above to continue.</p>'
             + "</div>";
     }
     return '<div class="empty"><p class="subtle">Endpoint diagnostics appear inline under the endpoint you select within a family’s expanded list.</p></div>';
@@ -2135,8 +2135,8 @@ function evidenceSectionTitleForActiveLens() {
     if (state.activeTopTab === "workflow")
         return "Evidence of workflow continuity risk";
     if (state.activeTopTab === "shape")
-        return "Evidence of response-shape burden";
-    return "Evidence of contract violations";
+        return "Evidence of response-shape problems";
+    return "Evidence of contract problems";
 }
 function evidenceGroupsSummaryLabel(groupCount) {
     var count = (typeof groupCount === "number" && isFinite(groupCount)) ? groupCount : 0;
@@ -2565,18 +2565,18 @@ function viewScopeFormatFilterSummaryHtml() {
     var total = families.length || 0;
     var shown = state.familyTableShowAll ? total : Math.min(24, total);
     if (total === 0) {
-        return '<strong>No families match the current filters.</strong>';
+        return '<strong>No families match the current table view.</strong>';
     }
     var lens = state.activeTopTab === 'workflow'
-        ? 'workflow guidance burden'
+        ? 'workflow problems'
         : state.activeTopTab === 'shape'
-            ? 'response-shape burden'
-            : 'contract issues';
+            ? 'response-shape problems'
+            : 'contract problems';
     var prefix = state.activeTopTab === 'workflow'
-        ? '<strong>Workflow Guidance:</strong> '
+        ? '<strong>Workflow Problems:</strong> '
         : state.activeTopTab === 'shape'
-            ? '<strong>Response Shape:</strong> '
-            : '<strong>Contract Issues:</strong> ';
+            ? '<strong>Response Shape Problems:</strong> '
+            : '<strong>Contract Problems:</strong> ';
     if (state.activeTopTab === 'workflow'
         && state.workflowChainFocusEndpointIds
         && state.workflowChainFocusEndpointIds.length) {
@@ -3008,7 +3008,7 @@ function familySummaryBuildSurfaceContext(summaries) {
         || state.familyTableBackState);
     var summaryLine = "";
     if (!totalInLens) {
-        summaryLine = "No families match the current scope.";
+        summaryLine = "No families match the current table view.";
     }
     else if (showingTruncated) {
         summaryLine = "Showing " + visibleFamilies + " of " + familiesInPressureTier + " matching families (" + specTotal + " total in spec).";
@@ -3031,17 +3031,17 @@ function familySummaryBuildSurfaceContext(summaries) {
     }
     var actionButtons = [];
     if (showingTruncated && !state.familyTableShowAll) {
-        actionButtons.push('<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all families in current scope</button>');
+        actionButtons.push('<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all matching families</button>');
     }
     if (hasNarrowing) {
-        actionButtons.push('<button type="button" class="secondary-action" data-recovery-action="clear-table-filters">Clear table filters</button>');
+        actionButtons.push('<button type="button" class="secondary-action" data-recovery-action="clear-table-filters">Reset table view</button>');
     }
     var actionsHtml = actionButtons.length
         ? ('<div class="context-actions">' + actionButtons.join("") + "</div>")
         : "";
     var copy = '<div class="context-block family-context-block">';
     if (state.activeTopTab === "shape") {
-        var scopeLine = "Scope: Ranks families by response-shape burden and highlights top shape signals for endpoints matching the current filters.";
+        var scopeLine = "Table view: ranks families by response-shape problems and highlights the strongest shape signals for matching endpoints.";
         var resultsLine = "Results: " + summaryLine;
         copy += '<p class="context-summary context-summary-shape">' + escapeHtml(scopeLine) + "</p>";
         copy += '<p class="context-summary context-summary-shape">' + escapeHtml(resultsLine) + "</p>";
@@ -4014,7 +4014,7 @@ function uiRecoveryLabel(action) {
     if (action === 'show-all-matching-families')
         return 'Show all matching families';
     if (action === 'show-all-families')
-        return 'Show all families';
+        return 'Show all matching families';
     if (action === 'clear-table-filters')
         return 'Reset table view';
     if (action === 'show-all-workflows')
@@ -4243,13 +4243,13 @@ function inspectionShellFamilySurfaceHelpCopy() {
         return '';
     }
     if (state.activeTopTab === 'workflow') {
-        return 'Families ranked by workflow burden in the current slice: hidden dependencies, brittle sequencing, missing handoff IDs, and weak next-step cues.';
+        return 'Families ranked by workflow problems in this slice: hidden dependencies, brittle sequencing, missing handoff IDs, and weak next-step cues.';
     }
     return state.activeTopTab === 'shape'
-        ? 'Response Shape: families ranked by shape friction for the current slice.'
+        ? 'Response Shape Problems: families ranked by shape friction in this slice.'
         : state.activeTopTab === 'workflow'
-            ? 'Workflow Guidance: families ranked by visible workflow pressure for the current slice.'
-            : 'Contract Issues: families ranked by visible contract evidence for the current slice.';
+            ? 'Workflow Problems: families ranked by visible workflow friction in this slice.'
+            : 'Contract Problems: families ranked by visible contract evidence in this slice.';
 }
 function inspectionShellBuildListContext(matches, total) {
     var lens = [];
@@ -4278,8 +4278,8 @@ function inspectionShellBuildListContext(matches, total) {
     }
     else if (state.activeTopTab === 'workflow') {
         burdenExplanation = '<div class="burden-explanation">'
-            + '<span class="evidence-track-label evidence-track-heuristic">Guidance view</span>'
-            + '<strong>Workflow Guidance</strong> — family cards highlight cross-step continuity pressure that makes real call paths harder to complete safely.'
+            + '<span class="evidence-track-label evidence-track-heuristic">Workflow-problem view</span>'
+            + '<strong>Workflow Problems</strong> — family rows highlight cross-step friction that makes real call paths harder to complete safely.'
             + '<ul>'
             + '<li>Hidden token/context/header dependencies appear across steps.</li>'
             + '<li>Sequencing suggests brittle handoffs where the next required step is not clearly exposed.</li>'
@@ -4291,7 +4291,7 @@ function inspectionShellBuildListContext(matches, total) {
     }
     else if (state.activeTopTab === 'shape') {
         burdenExplanation = '<div class="burden-explanation">'
-            + '<span class="evidence-track-label evidence-track-heuristic">Guidance view</span>'
+            + '<span class="evidence-track-label evidence-track-heuristic">Response-shape view</span>'
             + '<strong>Response Shape</strong> — diagnoses real DX cost from storage-shaped payloads, not backend graph completeness.'
             + '<ul>'
             + '<li>Diagnose deep nesting, duplicated state, snapshot-heavy payloads, internal-field exposure, and unclear source-of-truth fields.</li>'
@@ -4305,15 +4305,15 @@ function inspectionShellBuildListContext(matches, total) {
     var shapeTabActive = state.activeTopTab === 'shape';
     var guide = matches > 0
         ? (workflowTabActive
-            ? 'Family cards summarize continuity pressure; selecting an endpoint opens inline diagnostics and grouped deviations.'
+            ? 'Family rows summarize where developers can get stuck between calls; selecting an endpoint opens inline diagnostics and grouped deviations.'
             : shapeTabActive
-                ? 'Family cards rank response-shape burden; selecting an endpoint opens inline diagnostics and grouped deviations.'
-                : 'Family cards group contract issues by family; selecting an endpoint opens grouped deviations with OpenAPI location cues.')
+                ? 'Family rows rank response-shape problems; selecting an endpoint opens inline diagnostics and grouped deviations.'
+                : 'Family rows group contract problems by family; selecting an endpoint opens grouped deviations with OpenAPI location cues.')
         : 'No rows match. Use the family no-match recovery above to widen the view.';
     var actionsHtml = (matches > 0 && !workflowTabActive && !shapeTabActive)
         ? '<div class="context-actions">'
-            + '<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all families in current scope</button>'
-            + '<button type="button" class="secondary-action" data-recovery-action="clear-table-filters">Clear table filters</button>'
+            + '<button type="button" class="secondary-action" data-recovery-action="show-all-families">Show all matching families</button>'
+            + '<button type="button" class="secondary-action" data-recovery-action="clear-table-filters">Reset table view</button>'
             + '</div>'
         : '';
     return '<div class="context-block compact-context-block">'
@@ -5454,10 +5454,10 @@ function renderEndpointRows() {
     var evidenceHeader = listSection ? listSection.querySelector('thead th:nth-child(3)') : null;
     if (listHeading) {
         listHeading.textContent = state.activeTopTab === 'workflow'
-            ? 'Workflow Guidance — endpoint evidence'
+            ? 'Workflow Problems — endpoint evidence'
             : state.activeTopTab === 'shape'
-                ? 'Response Shape — endpoint evidence'
-                : 'Contract Issues — endpoint evidence';
+                ? 'Response Shape Problems — endpoint evidence'
+                : 'Contract Problems — endpoint evidence';
     }
     if (listEyebrow) {
         listEyebrow.textContent = evidenceListTitle;
@@ -5898,7 +5898,7 @@ function workflowSurfaceRenderChains() {
     var allChains = state.payload.workflows.chains || [];
     if (!allChains.length) {
         el.workflowSection.style.display = "block";
-        el.workflowHelp.textContent = "Optional inferred call paths for this slice. Open only when you need chaining context or hidden traps.";
+        el.workflowHelp.textContent = "Optional workflow-path guidance for this slice. Open only when developers are getting stuck between calls.";
         el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(workflowSurfaceRenderEmptyState("absent"), 0);
         workflowSurfaceBindChainsDrawerToggle();
         return;
@@ -5926,40 +5926,39 @@ function workflowSurfaceRenderChains() {
     var chainSource = filteredChains.length ? filteredChains : scopedChains;
     var workflowGuideHtml = workflowSurfaceRenderGuideSection(chainSource);
     var journeyGuidanceHtml = renderCommonWorkflowJourneys(chainSource);
+    var supportingContextHtml = workflowSurfaceRenderSupportingContext(workflowGuideHtml, journeyGuidanceHtml);
     if (filteredChains.length) {
-        el.workflowHelp.textContent = "Optional inferred call paths for the current slice. Open this when you need chaining context, hidden prerequisites, or likely next actions.";
+        el.workflowHelp.textContent = "Optional workflow-path guidance for the current slice. Open this when you need hidden prerequisites, carry-forward state, or the likely next call.";
         var groups = workflowSurfaceGroupChainsByKind(filteredChains, { focusChainId: state.workflowChainFocusChainId || "" });
         el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer('<section class="workflow-chain-surface-primary">'
             + '<div class="workflow-chain-surface-header">'
-            + '<h3 class="workflow-guide-title">Step-by-step workflow chains and hidden traps</h3>'
-            + '<p class="workflow-guide-copy">Use this only when the chain itself is the problem. Click a step to scope the family table above to the matching API surface.</p>'
+            + '<h3 class="workflow-guide-title">Workflow steps and hidden traps</h3>'
+            + '<p class="workflow-guide-copy">Use this only when the sequence itself is the problem. Click a step to scope the family table above to the matching API surface.</p>'
             + '</div>'
             + groups.map(workflowSurfaceRenderKindGroup).join("")
             + "</section>"
-            + workflowGuideHtml
-            + journeyGuidanceHtml, filteredChains.length);
+            + supportingContextHtml, filteredChains.length);
         workflowSurfaceBindStepInteractions();
         workflowSurfaceSyncStepSelectionHighlight();
         workflowSurfaceBindChainsDrawerToggle();
         return;
     }
     if (scopedChains.length) {
-        el.workflowHelp.textContent = "No path matches the current evidence-only slice, but inferred chains from the scoped endpoints are still available if you need sequence context.";
+        el.workflowHelp.textContent = "No workflow path lines up with the current evidence-only table view, but related call sequences are still available if you need sequence context.";
         var scopedGroups = workflowSurfaceGroupChainsByKind(scopedChains, { focusChainId: state.workflowChainFocusChainId || "" });
         el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer('<section class="workflow-chain-surface-primary">'
             + '<div class="workflow-chain-surface-header">'
-            + '<h3 class="workflow-guide-title">Step-by-step workflow chains and hidden traps</h3>'
+            + '<h3 class="workflow-guide-title">Workflow steps and hidden traps</h3>'
             + '<p class="workflow-guide-copy">These paths stay available from the scoped endpoint set so you can still inspect sequence and weak handoffs when needed.</p>'
             + '</div>'
             + '<div class="workflow-no-match">'
-            + '<p class="workflow-empty-title"><strong>Call chain surface restored for this lens</strong></p>'
-            + '<p class="workflow-empty-copy">Visible issue rows are currently too narrow for direct chain overlap, so this section keeps the inferred sequence visible from the scoped endpoint set.</p>'
+            + '<p class="workflow-empty-title"><strong>Related workflow paths are still available</strong></p>'
+            + '<p class="workflow-empty-copy">The current table view is narrower than the available chain evidence, so this section keeps the related sequence visible from the endpoints still in view.</p>'
             + renderRecoveryActions(["show-all-workflows"])
             + "</div>"
             + scopedGroups.map(workflowSurfaceRenderKindGroup).join("")
             + "</section>"
-            + workflowGuideHtml
-            + journeyGuidanceHtml, scopedChains.length);
+            + supportingContextHtml, scopedChains.length);
         bindRecoveryButtons(el.workflowChains);
         workflowSurfaceBindStepInteractions();
         workflowSurfaceSyncStepSelectionHighlight();
@@ -5967,7 +5966,7 @@ function workflowSurfaceRenderChains() {
         return;
     }
     el.workflowHelp.textContent = "";
-    el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(workflowGuideHtml + journeyGuidanceHtml + workflowSurfaceRenderEmptyState("filtered"), 0);
+    el.workflowChains.innerHTML = workflowSurfaceRenderChainsDrawer(supportingContextHtml + workflowSurfaceRenderEmptyState("filtered"), 0);
     bindRecoveryButtons(el.workflowChains);
     workflowSurfaceBindChainsDrawerToggle();
 }
@@ -5995,6 +5994,20 @@ function workflowSurfaceBindChainsDrawerToggle() {
         state.workflowChainsOpen = !!drawer.open;
     });
 }
+function workflowSurfaceRenderSupportingContext(workflowGuideHtml, journeyGuidanceHtml) {
+    var contentHtml = (workflowGuideHtml || "") + (journeyGuidanceHtml || "");
+    if (!contentHtml)
+        return "";
+    return '<details class="workflow-supporting-drawer">'
+        + '<summary class="workflow-supporting-summary">'
+        + "<strong>Supporting workflow notes</strong>"
+        + '<span class="workflow-supporting-copy">Compact path summaries and redesign guidance</span>'
+        + "</summary>"
+        + '<div class="workflow-supporting-body">'
+        + contentHtml
+        + "</div>"
+        + "</details>";
+}
 function workflowSurfaceRenderGuideSection(chains) {
     var sourceChains = (chains || []).slice();
     if (!sourceChains.length)
@@ -6009,8 +6022,8 @@ function workflowSurfaceRenderGuideSection(chains) {
         return "";
     return '<section class="workflow-guide-section">'
         + '<div class="workflow-guide-header">'
-        + '<h3 class="workflow-guide-title">High-signal workflow paths</h3>'
-        + '<p class="workflow-guide-copy">Use these when you need a compact read on the heaviest inferred paths. The family table above remains the main investigation surface.</p>'
+        + '<h3 class="workflow-guide-title">Path summaries</h3>'
+        + '<p class="workflow-guide-copy">Compact reads on the heaviest workflow paths. Use these as supporting context, not the main investigation surface.</p>'
         + "</div>"
         + '<div class="workflow-guide-cards">'
         + featured.map(function (chain, index) {
@@ -6024,7 +6037,7 @@ function workflowSurfaceRenderGuideCard(chain, isLead) {
     var burdenSummary = workflowSurfaceRenderBurdenSummary(chain, roles);
     var leadClass = isLead ? " workflow-guide-card-lead" : "";
     var reasonHtml = chain.reason
-        ? '<p class="workflow-guide-reason"><strong>Why this path exists:</strong> ' + escapeHtml(chain.reason) + "</p>"
+        ? '<p class="workflow-guide-reason"><strong>Why developers get stuck here:</strong> ' + escapeHtml(chain.reason) + "</p>"
         : "";
     return '<article class="workflow-guide-card' + leadClass + '">'
         + '<div class="workflow-guide-card-head">'
@@ -6032,7 +6045,7 @@ function workflowSurfaceRenderGuideCard(chain, isLead) {
         + '<div class="workflow-guide-card-meta">'
         + "<strong>" + escapeHtml(workflowSurfaceChainTaskLabel(chain)) + "</strong>"
         + "<span>" + escapeHtml((chain.endpointIds || []).length + " steps") + "</span>"
-        + "<span>" + escapeHtml(workflowSurfaceChainBurdenScore(chain) + " burden signals") + "</span>"
+        + "<span>" + escapeHtml(workflowSurfaceChainBurdenScore(chain) + " workflow signals") + "</span>"
         + "</div>"
         + "</div>"
         + reasonHtml
@@ -6119,21 +6132,21 @@ function workflowSurfaceSyncStepSelectionHighlight() {
 function workflowSurfaceRenderEmptyState(mode) {
     if (mode === "absent") {
         return '<div class="workflow-no-match workflow-no-match-final">'
-            + '<p class="workflow-empty-title"><strong>No inferred workflow chains</strong></p>'
+            + '<p class="workflow-empty-title"><strong>No workflow paths detected</strong></p>'
             + '<p class="workflow-empty-copy">This spec currently reads as isolated endpoints rather than a linked call sequence, so there is nothing to expand in this section.</p>'
             + '<p class="workflow-empty-note">That is a final state for this spec, not a filter mismatch.</p>'
             + "</div>";
     }
     if (!filteredRows().length) {
         return '<div class="workflow-no-match">'
-            + '<p class="workflow-empty-title"><strong>No workflows match the current scope</strong></p>'
-            + '<p class="workflow-empty-copy">Clear filters or show all workflow patterns to widen the view.</p>'
+            + '<p class="workflow-empty-title"><strong>No workflow paths match the current table view</strong></p>'
+            + '<p class="workflow-empty-copy">Reset the table view or show all workflow paths to widen this section.</p>'
             + renderRecoveryActions(["show-all-workflows"])
             + "</div>";
     }
     return '<div class="workflow-no-match">'
-        + '<p class="workflow-empty-title"><strong>No workflows match the current scope</strong></p>'
-        + '<p class="workflow-empty-copy">Show all workflow patterns to widen this section without changing tabs.</p>'
+        + '<p class="workflow-empty-title"><strong>No workflow paths match the current table view</strong></p>'
+        + '<p class="workflow-empty-copy">Show all workflow paths to widen this section without changing tabs.</p>'
         + renderRecoveryActions(["show-all-workflows"])
         + "</div>";
 }
@@ -6256,10 +6269,10 @@ function workflowSurfaceCollectBurdenSummary(chain, roles) {
     var steps = chain.endpointIds || [];
     var endpointDetails = payloadEndpointDetails();
     var burdens = {
-        hidden: { key: "hidden", label: "hidden token/context handoff", why: "does not clearly expose what the next call needs", steps: [] },
-        outcome: { key: "outcome", label: "weak outcome guidance", why: "outcome is weakly signaled for later calls", steps: [] },
-        sequence: { key: "sequence", label: "sequencing appears brittle", why: "later calls likely depend on implicit prior state", steps: [] },
-        auth: { key: "auth", label: "auth/context/header burden", why: "auth or context requirements appear spread across steps", steps: [] }
+        hidden: { key: "hidden", label: "hidden handoff", why: "the next call is not told clearly what state or ID to carry forward", steps: [] },
+        outcome: { key: "outcome", label: "next step is unclear", why: "the response does not make the result and next move obvious", steps: [] },
+        sequence: { key: "sequence", label: "sequencing is brittle", why: "later calls appear to depend on undocumented prior state", steps: [] },
+        auth: { key: "auth", label: "auth or context is spread across steps", why: "headers, tokens, or context requirements are learned step by step", steps: [] }
     };
     steps.forEach(function (endpointId, idx) {
         var detail = endpointDetails[endpointId];
@@ -6345,7 +6358,7 @@ function workflowSurfaceRenderChain(chain, isPrimary) {
     var roles = workflowSurfaceParseChainRoles(chain.summary, steps.length);
     var burdenScore = workflowSurfaceChainBurdenScore(chain);
     var burdenBadge = burdenScore > 0
-        ? '<span class="chain-burden-count">' + burdenScore + " burden issue" + (burdenScore === 1 ? "" : "s") + "</span>"
+        ? '<span class="chain-burden-count">' + burdenScore + " workflow issue" + (burdenScore === 1 ? "" : "s") + "</span>"
         : "";
     var stepElements = steps.map(function (endpointId, idx) {
         var nextEndpointId = idx < (steps.length - 1) ? steps[idx + 1] : "";
@@ -6646,7 +6659,7 @@ function renderWorkflowStepWorkspace(detail) {
         ? "The contract does not make the next-step dependency explicit. It should return the next-step ID/context in an obvious field and document what the next call needs."
         : (prerequisiteFindings.length
             ? "The contract implies prerequisites without modeling them explicitly (clients must learn ordering at runtime)."
-            : "The contract burden here is primarily about sequence clarity and context transfer, not a single missing field.");
+            : "The contract problem here is mainly about sequence clarity and context transfer, not a single missing field.");
     var stepLabel = (stepIndex >= 0 && steps.length) ? ("Step " + (stepIndex + 1) + " of " + steps.length) : "Current step";
     var kind = chain && chain.kind ? String(chain.kind).replace(/-/g, " to ") : "workflow";
     var stepPrefix = (chain && steps.length) ? (stepLabel + " — " + kind + " — ") : "";
@@ -6654,7 +6667,7 @@ function renderWorkflowStepWorkspace(detail) {
         ? (nextEndpoint.method + " " + nextEndpoint.path)
         : (chain && steps.length ? "No next step was inferred for this chain." : "Expand endpoints in this family and inspect the next likely call.");
     return '<div class="family-insight-card workflow-step-workspace">'
-        + '<p class="insight-kicker">Workflow step workspace</p>'
+        + '<p class="insight-kicker">Workflow step guidance</p>'
         + '<ul class="family-top-evidence">'
         + '<li><strong>Current step:</strong> ' + escapeHtml(stepPrefix + endpoint.method + " " + endpoint.path) + "</li>"
         + '<li><strong>What this step needs:</strong> ' + escapeHtml(narrative.requiredState || "No explicit prerequisites are visible in the contract; treat prior context as required.") + "</li>"
@@ -6680,15 +6693,15 @@ function summarizeWorkflowHeaderSignals(detail) {
         labels.push("hidden handoff");
     }
     if (/auth|authorization|bearer|token|header|context|access\s*key|api[-\s]?key/.test(messages)) {
-        labels.push("auth/context burden");
+        labels.push("auth/context spread");
     }
     if (hasCode(["prerequisite-task-burden"])
         || /prior state|earlier|sequence|prerequisite|brittle/.test(messages)) {
-        labels.push("sequencing burden");
+        labels.push("sequencing risk");
     }
     if (!labels.length)
-        return "workflow continuity signals are limited for this endpoint";
-    return "primary continuity signals: " + labels.join(", ");
+        return "workflow clues are limited for this endpoint";
+    return "main workflow clues: " + labels.join(", ");
 }
 function renderWorkflowDiagnosticsFrame(detail) {
     var findings = detail.findings || [];
@@ -6703,21 +6716,21 @@ function renderWorkflowDiagnosticsFrame(detail) {
     }
     if (hasCode(["weak-follow-up-linkage", "weak-action-follow-up-linkage", "weak-accepted-tracking-linkage"])
         || /handoff|identifier|tracking|hidden/.test(messages)) {
-        activeSignals.push("Hidden handoff burden is signaled: identifier/context transfer appears implicit.");
+        activeSignals.push("Hidden handoff is signaled: identifier/context transfer appears implicit.");
     }
     if (/auth|authorization|bearer|token|header|context|access\s*key|api[-\s]?key/.test(messages)) {
-        activeSignals.push("Auth/header/context burden is signaled across messages for this endpoint.");
+        activeSignals.push("Auth/header/context requirements appear spread across messages for this endpoint.");
     }
     if (hasCode(["prerequisite-task-burden"])
         || /prior state|earlier|sequence|prerequisite|brittle/.test(messages)) {
-        activeSignals.push("Sequencing burden is signaled: this step appears to depend on prior state setup.");
+        activeSignals.push("Sequencing risk is signaled: this step appears to depend on prior state setup.");
     }
     var signalList = activeSignals.length
         ? activeSignals.map(function (text) { return "<li>" + escapeHtml(text) + "</li>"; }).join("")
-        : "<li>No explicit workflow continuity burden signal is attached to this endpoint in the current workflow slice.</li>";
+        : "<li>No explicit workflow continuity clue is attached to this endpoint in the current workflow view.</li>";
     return '<div class="family-insight-card">'
-        + '<p class="insight-kicker">Workflow-first diagnostics framing</p>'
-        + '<p class="subtle">This panel is focused on continuity burden for this endpoint inside call chains: what the next step needs, what state is hidden, and where sequencing may be brittle.</p>'
+        + '<p class="insight-kicker">Workflow diagnostics framing</p>'
+        + '<p class="subtle">This panel focuses on where a developer can get stuck in the call sequence: what the next step needs, what state is hidden, and where sequencing may be brittle.</p>'
         + '<ul class="family-top-evidence">'
         + signalList
         + "</ul>"
@@ -7192,7 +7205,7 @@ function workflowJourneyRenderProblems(problems, escape) {
     if (!problems || !problems.length)
         return "";
     return '<div class="journey-problems">'
-        + '<p class="journey-section-kicker">DX problems in this journey</p>'
+        + '<p class="journey-section-kicker">Why developers get stuck in this workflow</p>'
         + '<ul class="journey-problem-list">'
         + problems.map(function (problem) {
             return "<li><strong>" + escape(problem) + "</strong></li>";
@@ -7216,7 +7229,7 @@ function workflowJourneyRenderContractGaps(gaps, escape) {
     if (!items.length)
         return "";
     return '<div class="journey-gaps">'
-        + '<p class="journey-section-kicker">Contract gaps</p>'
+        + '<p class="journey-section-kicker">What the contract does not say clearly</p>'
         + '<ul class="journey-gap-list">'
         + items.join("")
         + "</ul>"
@@ -7253,7 +7266,7 @@ function workflowJourneyRenderProposal(kind, analysis, escape) {
     if (!proposals.length)
         return "";
     return '<div class="journey-proposal">'
-        + '<p class="journey-section-kicker">Workflow-first contract edits</p>'
+        + '<p class="journey-section-kicker">What should change next</p>'
         + '<ul class="journey-proposal-list">'
         + proposals.slice(0, 4).map(function (proposal) {
             return "<li>" + escape(proposal) + "</li>";
@@ -7263,12 +7276,12 @@ function workflowJourneyRenderProposal(kind, analysis, escape) {
 }
 function workflowJourneyRenderGuidance(kind, chains, analysis, kindLabel, totalBurden, escape) {
     var chainCount = chains.length;
-    var burdenLabel = totalBurden === 1 ? "issue" : "issues";
+    var signalLabel = totalBurden === 1 ? "signal" : "signals";
     var chainLabel = chainCount === 1 ? "chain" : "chains";
     return '<details class="workflow-journey-card">'
         + '<summary class="workflow-journey-summary">'
         + '<span class="journey-label">' + escape(kindLabel) + "</span>"
-        + '<span class="journey-meta">' + chainCount + " " + chainLabel + " · " + totalBurden + " burden " + burdenLabel + "</span>"
+        + '<span class="journey-meta">' + chainCount + " " + chainLabel + " · " + totalBurden + " workflow " + signalLabel + "</span>"
         + "</summary>"
         + '<div class="workflow-journey-body">'
         + workflowJourneyRenderProblems(analysis.problems, escape)

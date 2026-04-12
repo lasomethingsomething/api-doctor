@@ -197,20 +197,20 @@ function viewScopeFormatFilterSummaryHtml(): string {
   var shown = state.familyTableShowAll ? total : Math.min(24, total);
 
   if (total === 0) {
-    return '<strong>No families match the current filters.</strong>';
+    return '<strong>No families match the current table view.</strong>';
   }
 
   var lens = state.activeTopTab === 'workflow'
-    ? 'workflow guidance burden'
+    ? 'workflow problems'
     : state.activeTopTab === 'shape'
-    ? 'response-shape burden'
-    : 'contract issues';
+    ? 'response-shape problems'
+    : 'contract problems';
 
   var prefix = state.activeTopTab === 'workflow'
-    ? '<strong>Workflow Guidance:</strong> '
+    ? '<strong>Workflow Problems:</strong> '
     : state.activeTopTab === 'shape'
-    ? '<strong>Response Shape:</strong> '
-    : '<strong>Contract Issues:</strong> ';
+    ? '<strong>Response Shape Problems:</strong> '
+    : '<strong>Contract Problems:</strong> ';
 
   if (state.activeTopTab === 'workflow'
       && state.workflowChainFocusEndpointIds

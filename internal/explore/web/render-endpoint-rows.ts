@@ -64,10 +64,10 @@ function renderEndpointRows(): void {
   var evidenceHeader = listSection ? listSection.querySelector<HTMLElement>('thead th:nth-child(3)') : null;
   if (listHeading) {
     listHeading.textContent = state.activeTopTab === 'workflow'
-      ? 'Workflow Guidance — endpoint evidence'
+      ? 'Workflow Problems — endpoint evidence'
       : state.activeTopTab === 'shape'
-      ? 'Response Shape — endpoint evidence'
-      : 'Contract Issues — endpoint evidence';
+      ? 'Response Shape Problems — endpoint evidence'
+      : 'Contract Problems — endpoint evidence';
   }
   if (listEyebrow) {
     listEyebrow.textContent = evidenceListTitle;

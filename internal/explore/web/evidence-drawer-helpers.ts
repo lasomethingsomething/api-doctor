@@ -18,7 +18,7 @@ function renderEndpointDiagnosticsEmptyState(): string {
   if (!families.length) {
     return '<div class="empty">'
       + "<strong>Nothing to inspect yet</strong>"
-      + '<p class="subtle">No families match the current filters, so no endpoint can be selected. Widen the filters above to continue.</p>'
+      + '<p class="subtle">No families match the current table view, so no endpoint can be selected. Reset the table view above to continue.</p>'
       + "</div>";
   }
   return '<div class="empty"><p class="subtle">Endpoint diagnostics appear inline under the endpoint you select within a family’s expanded list.</p></div>';
@@ -26,8 +26,8 @@ function renderEndpointDiagnosticsEmptyState(): string {
 
 function evidenceSectionTitleForActiveLens(): string {
   if (state.activeTopTab === "workflow") return "Evidence of workflow continuity risk";
-  if (state.activeTopTab === "shape") return "Evidence of response-shape burden";
-  return "Evidence of contract violations";
+  if (state.activeTopTab === "shape") return "Evidence of response-shape problems";
+  return "Evidence of contract problems";
 }
 
 function evidenceGroupsSummaryLabel(groupCount: number): string {

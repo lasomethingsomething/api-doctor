@@ -2245,13 +2245,13 @@ body.lens-shape .caller-burden-more {
   table-layout: fixed;
 }
 
-.nested-endpoint-table col.nested-col-severity { width: 96px; }
-.nested-endpoint-table col.nested-col-instance { width: 140px; }
-.nested-endpoint-table col.nested-col-actions { width: 220px; }
-.nested-endpoint-table col.nested-col-path { width: 23%; }
-.nested-endpoint-table col.nested-col-issue { width: 22%; }
-.nested-endpoint-table col.nested-col-type { width: 12%; }
-.nested-endpoint-table col.nested-col-actionhint { width: 23%; }
+.nested-endpoint-table col.nested-col-severity { width: 92px; }
+.nested-endpoint-table col.nested-col-instance { width: 126px; }
+.nested-endpoint-table col.nested-col-actions { width: 184px; }
+.nested-endpoint-table col.nested-col-path { width: 24%; }
+.nested-endpoint-table col.nested-col-issue { width: 21%; }
+.nested-endpoint-table col.nested-col-type { width: 11%; }
+.nested-endpoint-table col.nested-col-actionhint { width: 26%; }
 
 .nested-endpoint-table tbody td {
   padding: 0.18rem 0.36rem;
@@ -2320,8 +2320,8 @@ body.lens-shape .caller-burden-more {
 
 .nested-endpoint-actions-col,
 .nested-endpoint-actions-cell {
-  min-width: 220px;
-  width: 240px;
+  min-width: 184px;
+  width: 184px;
 }
 
 .nested-endpoint-type-cell,
@@ -2376,9 +2376,9 @@ body.lens-shape .caller-burden-more {
   overflow: hidden;
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   line-height: 1.32;
-  max-height: 3.96em;
+  max-height: 2.64em;
   font-size: 0.76rem;
   color: #223a4a;
   font-weight: 600;
@@ -2407,15 +2407,17 @@ body.lens-shape .caller-burden-more {
 }
 
 .nested-endpoint-path-cell strong {
-  display: block;
+  display: -webkit-box;
   min-width: 0;
   max-width: 100%;
   font-size: 0.86rem;
   font-weight: 850;
   color: var(--text);
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+  text-overflow: clip;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   line-height: 1.26;
 }
 
@@ -2437,15 +2439,17 @@ body.lens-shape .caller-burden-more {
 
 .nested-endpoint-primary-issue {
   font-size: 0.79rem;
-  line-height: 1.18;
+  line-height: 1.24;
   color: #213847;
-  display: block;
+  display: -webkit-box;
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+  text-overflow: clip;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .nested-endpoint-table .row-issue-scope-pill {
@@ -3948,6 +3952,57 @@ body.lens-shape .severity-warning .severity-icon {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.workflow-supporting-drawer {
+  border: 1px solid #dde5ee;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f7fbff 100%);
+  overflow: hidden;
+}
+
+.workflow-supporting-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.8rem;
+  cursor: pointer;
+  list-style: none;
+  padding: 0.72rem 0.86rem;
+}
+
+.workflow-supporting-summary::-webkit-details-marker {
+  display: none;
+}
+
+.workflow-supporting-summary strong {
+  font-size: 0.92rem;
+  color: #17212f;
+}
+
+.workflow-supporting-copy {
+  font-size: 0.78rem;
+  color: #587187;
+}
+
+.workflow-supporting-drawer[open] > .workflow-supporting-summary {
+  border-bottom: 1px solid #dde5ee;
+}
+
+.workflow-supporting-summary:hover {
+  background: rgba(42, 111, 180, 0.04);
+}
+
+.workflow-supporting-summary:focus-visible {
+  outline: 2px solid rgba(42, 111, 180, 0.28);
+  outline-offset: 2px;
+}
+
+.workflow-supporting-body {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.86rem;
 }
 
 .workflow-guide-section {

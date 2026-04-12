@@ -134,7 +134,7 @@ function uiRecoveryLabel(action: string): string {
   if (action === 'back-to-family-table') return 'Back to family table';
   if (action === 'clear-search') return 'Clear search';
   if (action === 'show-all-matching-families') return 'Show all matching families';
-  if (action === 'show-all-families') return 'Show all families';
+  if (action === 'show-all-families') return 'Show all matching families';
   if (action === 'clear-table-filters') return 'Reset table view';
   if (action === 'show-all-workflows') return 'Show all workflow paths';
   return 'Reset current view';

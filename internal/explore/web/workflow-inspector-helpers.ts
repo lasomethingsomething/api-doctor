@@ -257,7 +257,7 @@ function renderWorkflowStepWorkspace(detail: ExplorerEndpointDetail): string {
     ? "The contract does not make the next-step dependency explicit. It should return the next-step ID/context in an obvious field and document what the next call needs."
     : (prerequisiteFindings.length
       ? "The contract implies prerequisites without modeling them explicitly (clients must learn ordering at runtime)."
-      : "The contract burden here is primarily about sequence clarity and context transfer, not a single missing field.");
+      : "The contract problem here is mainly about sequence clarity and context transfer, not a single missing field.");
 
   var stepLabel = (stepIndex >= 0 && steps.length) ? ("Step " + (stepIndex + 1) + " of " + steps.length) : "Current step";
   var kind = chain && chain.kind ? String(chain.kind).replace(/-/g, " to ") : "workflow";
@@ -267,7 +267,7 @@ function renderWorkflowStepWorkspace(detail: ExplorerEndpointDetail): string {
     : (chain && steps.length ? "No next step was inferred for this chain." : "Expand endpoints in this family and inspect the next likely call.");
 
   return '<div class="family-insight-card workflow-step-workspace">'
-    + '<p class="insight-kicker">Workflow step workspace</p>'
+    + '<p class="insight-kicker">Workflow step guidance</p>'
     + '<ul class="family-top-evidence">'
     + '<li><strong>Current step:</strong> ' + escapeHtml(stepPrefix + endpoint.method + " " + endpoint.path) + "</li>"
     + '<li><strong>What this step needs:</strong> ' + escapeHtml(narrative.requiredState || "No explicit prerequisites are visible in the contract; treat prior context as required.") + "</li>"
@@ -296,15 +296,15 @@ function summarizeWorkflowHeaderSignals(detail: ExplorerEndpointDetail): string 
     labels.push("hidden handoff");
   }
   if (/auth|authorization|bearer|token|header|context|access\s*key|api[-\s]?key/.test(messages)) {
-    labels.push("auth/context burden");
+    labels.push("auth/context spread");
   }
   if (hasCode(["prerequisite-task-burden"])
     || /prior state|earlier|sequence|prerequisite|brittle/.test(messages)) {
-    labels.push("sequencing burden");
+    labels.push("sequencing risk");
   }
 
-  if (!labels.length) return "workflow continuity signals are limited for this endpoint";
-  return "primary continuity signals: " + labels.join(", ");
+  if (!labels.length) return "workflow clues are limited for this endpoint";
+  return "main workflow clues: " + labels.join(", ");
 }
 
 function renderWorkflowDiagnosticsFrame(detail: ExplorerEndpointDetail): string {
@@ -322,23 +322,23 @@ function renderWorkflowDiagnosticsFrame(detail: ExplorerEndpointDetail): string 
   }
   if (hasCode(["weak-follow-up-linkage", "weak-action-follow-up-linkage", "weak-accepted-tracking-linkage"])
     || /handoff|identifier|tracking|hidden/.test(messages)) {
-    activeSignals.push("Hidden handoff burden is signaled: identifier/context transfer appears implicit.");
+    activeSignals.push("Hidden handoff is signaled: identifier/context transfer appears implicit.");
   }
   if (/auth|authorization|bearer|token|header|context|access\s*key|api[-\s]?key/.test(messages)) {
-    activeSignals.push("Auth/header/context burden is signaled across messages for this endpoint.");
+    activeSignals.push("Auth/header/context requirements appear spread across messages for this endpoint.");
   }
   if (hasCode(["prerequisite-task-burden"])
     || /prior state|earlier|sequence|prerequisite|brittle/.test(messages)) {
-    activeSignals.push("Sequencing burden is signaled: this step appears to depend on prior state setup.");
+    activeSignals.push("Sequencing risk is signaled: this step appears to depend on prior state setup.");
   }
 
   var signalList = activeSignals.length
     ? activeSignals.map(function (text: string) { return "<li>" + escapeHtml(text) + "</li>"; }).join("")
-    : "<li>No explicit workflow continuity burden signal is attached to this endpoint in the current workflow slice.</li>";
+    : "<li>No explicit workflow continuity clue is attached to this endpoint in the current workflow view.</li>";
 
   return '<div class="family-insight-card">'
-    + '<p class="insight-kicker">Workflow-first diagnostics framing</p>'
-    + '<p class="subtle">This panel is focused on continuity burden for this endpoint inside call chains: what the next step needs, what state is hidden, and where sequencing may be brittle.</p>'
+    + '<p class="insight-kicker">Workflow diagnostics framing</p>'
+    + '<p class="subtle">This panel focuses on where a developer can get stuck in the call sequence: what the next step needs, what state is hidden, and where sequencing may be brittle.</p>'
     + '<ul class="family-top-evidence">'
     + signalList
     + "</ul>"
