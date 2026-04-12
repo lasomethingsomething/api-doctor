@@ -1,7 +1,5 @@
 declare var state: ExplorerState;
 declare var el: ExplorerElements;
-declare var focusMap: StringMap<boolean> | null;
-
 declare function aggregateSpecRuleFindings(rows: ExplorerEndpointRow[]): SpecRuleAggregateGroup[];
 declare function buildChainContext(
   chains: ExplorerWorkflowChain[],

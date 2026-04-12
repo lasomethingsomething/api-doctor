@@ -1,7 +1,6 @@
-(function () {
-  var state = createInitialExplorerState();
+var state = createInitialExplorerState();
 
-  var el = createExplorerElements(document);
+var el = createExplorerElements(document);
 
   el.familySurfaceSection = el.familySurface ? el.familySurface.closest('.section') : null;
   el.endpointListSection = el.endpointRows ? el.endpointRows.closest('.section') : null;
@@ -829,4 +828,3 @@
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#39;');
   }
-})();

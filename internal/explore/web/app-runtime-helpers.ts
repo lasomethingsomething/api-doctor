@@ -1,7 +1,5 @@
 declare var state: ExplorerState;
 declare var el: ExplorerElements;
-declare var focusMap: StringMap<boolean> | null;
-
 declare function captureFamilyTableBackStateIfNeeded(
   state: ExplorerState,
   override?: { search?: string }
@@ -118,6 +116,14 @@ function appRuntimeScopedRows(rows: ExplorerEndpointRow[]): ExplorerEndpointRow[
 
 function appRuntimeRowsInScopeAll(): ExplorerEndpointRow[] {
   var counts: StringMap<number> = {};
+  var focusMap: StringMap<boolean> | null = null;
+  if (state.workflowChainFocusEndpointIds && state.workflowChainFocusEndpointIds.length) {
+    focusMap = {};
+    state.workflowChainFocusEndpointIds.forEach(function (endpointId) {
+      if (!endpointId) return;
+      focusMap![endpointId] = true;
+    });
+  }
   function lensCount(row: ExplorerEndpointRow): number {
     if (!row || !row.id) return 0;
     if (counts[row.id] !== undefined) return counts[row.id];

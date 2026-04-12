@@ -40,11 +40,11 @@ declare function collectTrapGuidance(
   endpoint: ExplorerEndpointRow,
   findings: ExplorerFinding[],
   clues: WorkflowDependencyClues,
-  roles: string[],
-  hiddenTransitions: string[],
-  chain: ExplorerWorkflowChain | null,
+  linkageFindings: ExplorerFinding[],
+  prerequisiteFindings: ExplorerFinding[],
+  nextEndpoint: ExplorerEndpointRow | null,
   roleLabel: string,
-  isFinalStep: boolean
+  isLast: boolean
 ): WorkflowTrapGuidance[];
 declare function escapeHtml(value: unknown): string;
 

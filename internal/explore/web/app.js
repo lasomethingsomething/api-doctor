@@ -1972,6 +1972,15 @@ function appRuntimeScopedRows(rows) {
 }
 function appRuntimeRowsInScopeAll() {
     var counts = {};
+    var focusMap = null;
+    if (state.workflowChainFocusEndpointIds && state.workflowChainFocusEndpointIds.length) {
+        focusMap = {};
+        state.workflowChainFocusEndpointIds.forEach(function (endpointId) {
+            if (!endpointId)
+                return;
+            focusMap[endpointId] = true;
+        });
+    }
     function lensCount(row) {
         if (!row || !row.id)
             return 0;
@@ -7332,649 +7341,647 @@ function workflowJourneyRenderGuidance(kind, chains, analysis, kindLabel, totalB
         + "</div>"
         + "</details>";
 }
-(function () {
-    var state = createInitialExplorerState();
-    var el = createExplorerElements(document);
-    el.familySurfaceSection = el.familySurface ? el.familySurface.closest('.section') : null;
-    el.endpointListSection = el.endpointRows ? el.endpointRows.closest('.section') : null;
-    fetch("/api/payload")
-        .then(function (res) { return res.json(); })
-        .then(function (payload) {
-        state.payload = payload;
-        // Default to no selected endpoint. Selection should be user-driven via "Inspect endpoint"
-        // so row highlighting never sticks to an arbitrary auto-picked row.
-        state.selectedEndpointId = "";
-        state.userSelectedEndpoint = false;
-        bindControls();
-        renderFilterOptions();
-        render();
+var state = createInitialExplorerState();
+var el = createExplorerElements(document);
+el.familySurfaceSection = el.familySurface ? el.familySurface.closest('.section') : null;
+el.endpointListSection = el.endpointRows ? el.endpointRows.closest('.section') : null;
+fetch("/api/payload")
+    .then(function (res) { return res.json(); })
+    .then(function (payload) {
+    state.payload = payload;
+    // Default to no selected endpoint. Selection should be user-driven via "Inspect endpoint"
+    // so row highlighting never sticks to an arbitrary auto-picked row.
+    state.selectedEndpointId = "";
+    state.userSelectedEndpoint = false;
+    bindControls();
+    renderFilterOptions();
+    render();
+});
+function enforceSpecRuleTabFilterModel() {
+    viewScopeEnforceSpecRuleTabFilterModel();
+}
+function enforceWorkflowTabFilterModel() {
+    viewScopeEnforceWorkflowTabFilterModel();
+}
+function enforceShapeTabFilterModel() {
+    viewScopeEnforceShapeTabFilterModel();
+}
+function normalizeSelectedEndpointForCurrentView() {
+    viewScopeNormalizeSelectedEndpointForCurrentView();
+}
+function payloadEndpointDetails() {
+    return viewScopePayloadEndpointDetails();
+}
+function payloadWorkflowChains() {
+    return viewScopePayloadWorkflowChains();
+}
+function lensFindingCountForRow(row) {
+    return viewScopeLensFindingCountForRow(row);
+}
+function hasValidSelectedEndpointInCurrentView() {
+    return viewScopeHasValidSelectedEndpointInCurrentView();
+}
+function selectionRowsForActiveView() {
+    return viewScopeSelectionRowsForActiveView();
+}
+function issueScopeIndexCacheKey() {
+    return viewScopeIssueScopeIndexCacheKey();
+}
+function findingGroupKey(finding) {
+    return viewScopeFindingGroupKey(finding);
+}
+function buildIssueScopeIndexForCurrentView() {
+    return viewScopeBuildIssueScopeIndexForCurrentView();
+}
+function getIssueScopeIndex() {
+    return viewScopeGetIssueScopeIndex();
+}
+function issueScopeLabelForKey(groupKey, familyName) {
+    return viewScopeIssueScopeLabelForKey(groupKey, familyName);
+}
+function renderEndpointDiagnosticsSummary(detail) {
+    return inspectorRenderEndpointDiagnosticsSummary(detail);
+}
+function renderCommonWorkflowJourneys(chains) {
+    return inspectionShellRenderCommonWorkflowJourneys(chains);
+}
+function renderWorkflowJourneyGuidance(kind, chains) {
+    return inspectionShellRenderWorkflowJourneyGuidance(kind, chains);
+}
+function analyzeWorkflowPattern(kind, chains) {
+    return inspectionShellAnalyzeWorkflowPattern(kind, chains);
+}
+function renderWorkflowJourneyProblems(problems) {
+    return inspectionShellRenderWorkflowJourneyProblems(problems);
+}
+function renderWorkflowJourneyContractGaps(gaps) {
+    return inspectionShellRenderWorkflowJourneyContractGaps(gaps);
+}
+function renderWorkflowJourneyProposal(kind, analysis) {
+    return inspectionShellRenderWorkflowJourneyProposal(kind, analysis);
+}
+function renderEndpointDiagnosticsShapeSummary(detail) {
+    return inspectorRenderEndpointDiagnosticsShapeSummary(detail);
+}
+function renderEndpointDiagnosticsExact(detail) {
+    return inspectorRenderEndpointDiagnosticsExact(detail);
+}
+function renderInspectorGroundingAndFlowContext(detail) {
+    return inspectorRenderGroundingAndFlowContext(detail);
+}
+function renderInspectorContentMap() {
+    return inspectorRenderContentMap();
+}
+function renderEndpointDiagnosticsCleaner(detail) {
+    return diagnosticsRenderCleaner(detail, {
+        findingsForActiveLens: findingsForActiveLens,
+        buildContractImprovementItems: buildContractImprovementItems,
+        collectShapePainSignals: collectShapePainSignals,
+        escapeHtml: escapeHtml
     });
-    function enforceSpecRuleTabFilterModel() {
-        viewScopeEnforceSpecRuleTabFilterModel();
-    }
-    function enforceWorkflowTabFilterModel() {
-        viewScopeEnforceWorkflowTabFilterModel();
-    }
-    function enforceShapeTabFilterModel() {
-        viewScopeEnforceShapeTabFilterModel();
-    }
-    function normalizeSelectedEndpointForCurrentView() {
-        viewScopeNormalizeSelectedEndpointForCurrentView();
-    }
-    function payloadEndpointDetails() {
-        return viewScopePayloadEndpointDetails();
-    }
-    function payloadWorkflowChains() {
-        return viewScopePayloadWorkflowChains();
-    }
-    function lensFindingCountForRow(row) {
-        return viewScopeLensFindingCountForRow(row);
-    }
-    function hasValidSelectedEndpointInCurrentView() {
-        return viewScopeHasValidSelectedEndpointInCurrentView();
-    }
-    function selectionRowsForActiveView() {
-        return viewScopeSelectionRowsForActiveView();
-    }
-    function issueScopeIndexCacheKey() {
-        return viewScopeIssueScopeIndexCacheKey();
-    }
-    function findingGroupKey(finding) {
-        return viewScopeFindingGroupKey(finding);
-    }
-    function buildIssueScopeIndexForCurrentView() {
-        return viewScopeBuildIssueScopeIndexForCurrentView();
-    }
-    function getIssueScopeIndex() {
-        return viewScopeGetIssueScopeIndex();
-    }
-    function issueScopeLabelForKey(groupKey, familyName) {
-        return viewScopeIssueScopeLabelForKey(groupKey, familyName);
-    }
-    function renderEndpointDiagnosticsSummary(detail) {
-        return inspectorRenderEndpointDiagnosticsSummary(detail);
-    }
-    function renderCommonWorkflowJourneys(chains) {
-        return inspectionShellRenderCommonWorkflowJourneys(chains);
-    }
-    function renderWorkflowJourneyGuidance(kind, chains) {
-        return inspectionShellRenderWorkflowJourneyGuidance(kind, chains);
-    }
-    function analyzeWorkflowPattern(kind, chains) {
-        return inspectionShellAnalyzeWorkflowPattern(kind, chains);
-    }
-    function renderWorkflowJourneyProblems(problems) {
-        return inspectionShellRenderWorkflowJourneyProblems(problems);
-    }
-    function renderWorkflowJourneyContractGaps(gaps) {
-        return inspectionShellRenderWorkflowJourneyContractGaps(gaps);
-    }
-    function renderWorkflowJourneyProposal(kind, analysis) {
-        return inspectionShellRenderWorkflowJourneyProposal(kind, analysis);
-    }
-    function renderEndpointDiagnosticsShapeSummary(detail) {
-        return inspectorRenderEndpointDiagnosticsShapeSummary(detail);
-    }
-    function renderEndpointDiagnosticsExact(detail) {
-        return inspectorRenderEndpointDiagnosticsExact(detail);
-    }
-    function renderInspectorGroundingAndFlowContext(detail) {
-        return inspectorRenderGroundingAndFlowContext(detail);
-    }
-    function renderInspectorContentMap() {
-        return inspectorRenderContentMap();
-    }
-    function renderEndpointDiagnosticsCleaner(detail) {
-        return diagnosticsRenderCleaner(detail, {
-            findingsForActiveLens: findingsForActiveLens,
-            buildContractImprovementItems: buildContractImprovementItems,
-            collectShapePainSignals: collectShapePainSignals,
-            escapeHtml: escapeHtml
-        });
-    }
-    function buildContractImprovementItems(detail, findings) {
-        return contractImprovementBuildItems(detail, findings, contractImprovementItemForFinding);
-    }
-    function describeImprovementWhere(context, fallback) {
-        return contractImprovementDescribeWhere(context, fallback);
-    }
-    function openApiOperationPointer(endpoint) {
-        return openApiTargetOperationPointer(endpoint);
-    }
-    function openApiResponseObjectPointer(endpoint, statusCode) {
-        return openApiTargetResponseObjectPointer(endpoint, statusCode);
-    }
-    function openApiResponseSchemaPointer(endpoint, context) {
-        return openApiTargetResponseSchemaPointer(endpoint, context);
-    }
-    function openApiRequestSchemaPointer(endpoint, context) {
-        return openApiTargetRequestSchemaPointer(endpoint, context);
-    }
-    function formatWhereWithOpenAPITarget(endpoint, context, opts) {
-        return openApiTargetFormatWhere(endpoint, context, opts);
-    }
-    function contractImprovementItemForFinding(finding, endpoint) {
-        return contractImprovementBuildItemForFinding(finding, endpoint, {
-            extractOpenAPIContext: extractOpenAPIContext,
-            formatWhereWithOpenAPITarget: formatWhereWithOpenAPITarget,
-            openApiOperationPointer: openApiOperationPointer,
-            openApiResponseObjectPointer: openApiResponseObjectPointer,
-            specRuleWhy: SPEC_RULE_WHY
-        });
-    }
-    function renderEndpointDiagnosticsConsistency(detail) {
-        return diagnosticsRenderConsistency(detail, {
-            consistencyFindingsForDetail: consistencyFindingsForDetail,
-            selectedEndpointId: state.selectedEndpointId,
-            payload: state.payload,
-            escapeHtml: escapeHtml,
-            humanFamilyLabel: humanFamilyLabel
-        });
-    }
-    function renderConsistencySupportCard(detail, options) {
-        return diagnosticsRenderConsistencySupportCard(detail, options, {
-            consistencyFindingsForDetail: consistencyFindingsForDetail,
-            escapeHtml: escapeHtml
-        });
-    }
-    function syncControls() {
-        appRuntimeSyncControls();
-    }
-    function selectEndpointForInspector(endpointId, subTab) {
-        appRuntimeSelectEndpointForInspector(endpointId, subTab);
-    }
-    function endpointRowForId(endpointId) {
-        return appRuntimeEndpointRowForId(endpointId);
-    }
-    function endpointDetailForId(endpointId) {
-        return appRuntimeEndpointDetailForId(endpointId);
-    }
-    function activeTopTabLabel() {
-        return inspectionShellActiveTopTabLabel();
-    }
-    function formatScopeValue(value, fallback) {
-        return viewScopeFormatScopeValue(value, fallback);
-    }
-    function formatFilterSummaryHtml() {
-        return viewScopeFormatFilterSummaryHtml();
-    }
-    function renderFilterEmptyState() {
-        viewScopeRenderFilterEmptyState();
-    }
-    function renderWhatToDoNextBlock(endpoint, findings, options) {
-        return diagnosticsRenderWhatToDoNextBlock(endpoint, findings, options, {
-            escapeHtml: escapeHtml,
-            collectConcreteNextActions: collectConcreteNextActions
-        });
-    }
-    function renderInspectorWorkspaceHeader(detail, findings, options) {
-        return inspectionShellRenderInspectorWorkspaceHeader(detail, findings, options);
-    }
-    function collectConcreteNextActions(endpoint, findings) {
-        return diagnosticsCollectConcreteNextActions(endpoint, findings, {
-            findingsForActiveLens: findingsForActiveLens,
-            extractOpenAPIContext: extractOpenAPIContext,
-            buildContractImprovementItems: buildContractImprovementItems
-        });
-    }
-    function familySurfaceHelpCopy() {
-        return inspectionShellFamilySurfaceHelpCopy();
-    }
-    function renderWorkflowChains() {
-        workflowSurfaceRenderChains();
-    }
-    function renderWorkflowChainsDrawer(innerHtml, chainCount) {
-        return workflowSurfaceRenderChainsDrawer(innerHtml, chainCount);
-    }
-    function bindWorkflowChainsDrawerToggle() {
-        workflowSurfaceBindChainsDrawerToggle();
-    }
-    function renderWorkflowGuideSection(chains) {
-        return workflowSurfaceRenderGuideSection(chains);
-    }
-    function renderWorkflowGuideCard(chain, isLead) {
-        return workflowSurfaceRenderGuideCard(chain, isLead);
-    }
-    function bindWorkflowStepInteractions() {
-        workflowSurfaceBindStepInteractions();
-    }
-    function syncWorkflowStepSelectionHighlight() {
-        workflowSurfaceSyncStepSelectionHighlight();
-    }
-    function renderWorkflowEmptyState(mode) {
-        return workflowSurfaceRenderEmptyState(mode);
-    }
-    function groupChainsByKind(chains, options) {
-        return workflowSurfaceGroupChainsByKind(chains, options);
-    }
-    function chainBurdenScore(chain) {
-        return workflowSurfaceChainBurdenScore(chain);
-    }
-    function parseChainRoles(summary, count) {
-        return workflowSurfaceParseChainRoles(summary, count);
-    }
-    function humanizeStepRole(roleSlug) {
-        return workflowSurfaceHumanizeStepRole(roleSlug);
-    }
-    var KIND_GROUP_LABEL = {
-        'list-detail': 'Browse then inspect',
-        'list-detail-update': 'Browse, inspect, and update',
-        'list-detail-action': 'Browse, inspect, and act',
-        'list-detail-create': 'Browse, inspect, and create',
-        'create-detail': 'Create then inspect',
-        'create-detail-update': 'Create then refine',
-        'create-detail-action': 'Create then act',
-        'action-follow-up': 'Act and follow up',
-        'media-detail-follow-up': 'Upload then follow up',
-        'order-detail-action': 'Submit then confirm'
-    };
-    function kindGroupLabel(kind) {
-        return workflowSurfaceKindGroupLabel(kind);
-    }
-    function chainTaskLabel(chain) {
-        return workflowSurfaceChainTaskLabel(chain);
-    }
-    function chainResourceLabel(chain) {
-        return workflowSurfaceChainResourceLabel(chain);
-    }
-    function formatWorkflowStepRefs(indices) {
-        return workflowSurfaceFormatStepRefs(indices);
-    }
-    function collectWorkflowBurdenSummary(chain, roles) {
-        return workflowSurfaceCollectBurdenSummary(chain, roles);
-    }
-    function renderWorkflowBurdenSummary(chain, roles) {
-        return workflowSurfaceRenderBurdenSummary(chain, roles);
-    }
-    function renderWorkflowKindGroup(group) {
-        return workflowSurfaceRenderKindGroup(group);
-    }
-    function renderWorkflowChain(chain, isPrimary) {
-        return workflowSurfaceRenderChain(chain, isPrimary);
-    }
-    function addUniqueClue(list, text) {
-        workflowSurfaceAddUniqueClue(list, text);
-    }
-    function firstClues(list, limit) {
-        return workflowSurfaceFirstClues(list, limit);
-    }
-    function renderWorkflowDependencyClues(clues) {
-        return workflowSurfaceRenderDependencyClues(clues);
-    }
-    function inferWorkflowCueSubject(text) {
-        return workflowSurfaceInferCueSubject(text);
-    }
-    function inferWorkflowTransitionCue(clues, roleLabel) {
-        return workflowSurfaceInferTransitionCue(clues, roleLabel);
-    }
-    function buildWorkflowDependencyClues(endpoint, findings, stepIndex, totalSteps, roleLabel, nextEndpoint, nextRoleLabel, linkageFindings, prerequisiteFindings) {
-        return workflowStepBuildDependencyClues(endpoint, findings, stepIndex, totalSteps, roleLabel, nextEndpoint, nextRoleLabel, linkageFindings, prerequisiteFindings);
-    }
-    function collectTrapGuidance(endpoint, findings, clues, linkageFindings, prerequisiteFindings, nextEndpoint, roleLabel, isLast) {
-        return workflowStepCollectTrapGuidance(endpoint, findings, clues, linkageFindings, prerequisiteFindings, nextEndpoint, roleLabel, isLast);
-    }
-    function renderTrapGuidanceList(traps, options) {
-        return workflowStepRenderTrapGuidanceList(traps, options);
-    }
-    function summarizeWorkflowStepNarrative(endpoint, roleLabel, nextEndpoint, clues, findings, linkageFindings, prerequisiteFindings, isLast) {
-        return workflowStepSummarizeNarrative(endpoint, roleLabel, nextEndpoint, clues, findings, linkageFindings, prerequisiteFindings, isLast);
-    }
-    function renderWorkflowStep(endpointId, stepIndex, totalSteps, roleLabel, nextEndpointId, nextRoleLabel) {
-        return workflowStepRender(endpointId, stepIndex, totalSteps, roleLabel, nextEndpointId, nextRoleLabel);
-    }
-    var BURDEN_DIM_CHIP = {
-        'workflow outcome weakness': 'missing next action',
-        'hidden dependency / linkage burden': 'hidden dependency',
-        'shape / storage-style response weakness': 'storage-shaped response',
-        'shape / nesting complexity': 'deep nesting',
-        'internal/incidental fields': 'incidental fields',
-        'typing/enum weakness': 'weak typing',
-        'consistency drift': 'path/param drift',
-        'change-risk clues': 'change risk'
-    };
-    function bestEndpointIdForFamily(familyName) {
-        return familyInsightBestEndpointIdForFamily(familyName);
-    }
-    function buildFamilyRankedSummary(family) {
-        return familyInsightBuildRankedSummary(family);
-    }
-    function bumpFamilySignal(map, label) {
-        map[label] = (map[label] || 0) + 1;
-    }
-    function familyRowsInView(familyName) {
-        return familyInsightRowsInView(familyName);
-    }
-    function pickFamilyLeadRow(rows) {
-        return familyInsightPickLeadRow(rows);
-    }
-    function collectCompactWorkflowContext(relatedChains, endpointId, endpointDetails) {
-        return familyInsightCollectCompactWorkflowContext(relatedChains, endpointId, endpointDetails);
-    }
-    function familyInsightModel(familyName, preferredEndpointId) {
-        return familyInsightBuildModel(familyName, preferredEndpointId);
-    }
-    function renderFamilyInsightPanel(family, preferredEndpointId) {
-        return familyInsightRenderPanel(family, preferredEndpointId || '');
-    }
-    function buildFamilySurfaceContext(summaries) {
-        return familySummaryBuildSurfaceContext(summaries);
-    }
-    function familySummariesRaw() {
-        return familySummaryRawList();
-    }
-    function familySummaries() {
-        return familySummaryList();
-    }
-    function buildListContext(matches, total) {
-        return inspectionShellBuildListContext(matches, total);
-    }
-    function renderEndpointInspectionContent(detail, options) {
-        return inspectionShellRenderEndpointInspectionContent(detail, options);
-    }
-    function syncSelectedEndpointHighlight() {
-        inspectionShellSyncSelectedEndpointHighlight();
-    }
-    function endpointHasWorkflowBurden(detail) {
-        return inspectionShellEndpointHasWorkflowBurden(detail);
-    }
-    function renderInspectorWorkflowContextSupport(detail, options) {
-        return inspectionShellRenderInspectorWorkflowContextSupport(detail, options);
-    }
-    // ---------------------------------------------------------------------------
-    // SHAPE BURDEN: pain-signal analysis
-    // Maps real finding codes → developer pain, concrete examples, caller-needed
-    // ---------------------------------------------------------------------------
-    function collectShapePainSignals(endpoint, findings) {
-        return diagnosticsCollectShapePainSignals(endpoint, findings || []);
-    }
-    function renderShapePainSignals(signals) {
-        if (!signals || !signals.length)
+}
+function buildContractImprovementItems(detail, findings) {
+    return contractImprovementBuildItems(detail, findings, contractImprovementItemForFinding);
+}
+function describeImprovementWhere(context, fallback) {
+    return contractImprovementDescribeWhere(context, fallback);
+}
+function openApiOperationPointer(endpoint) {
+    return openApiTargetOperationPointer(endpoint);
+}
+function openApiResponseObjectPointer(endpoint, statusCode) {
+    return openApiTargetResponseObjectPointer(endpoint, statusCode);
+}
+function openApiResponseSchemaPointer(endpoint, context) {
+    return openApiTargetResponseSchemaPointer(endpoint, context);
+}
+function openApiRequestSchemaPointer(endpoint, context) {
+    return openApiTargetRequestSchemaPointer(endpoint, context);
+}
+function formatWhereWithOpenAPITarget(endpoint, context, opts) {
+    return openApiTargetFormatWhere(endpoint, context, opts);
+}
+function contractImprovementItemForFinding(finding, endpoint) {
+    return contractImprovementBuildItemForFinding(finding, endpoint, {
+        extractOpenAPIContext: extractOpenAPIContext,
+        formatWhereWithOpenAPITarget: formatWhereWithOpenAPITarget,
+        openApiOperationPointer: openApiOperationPointer,
+        openApiResponseObjectPointer: openApiResponseObjectPointer,
+        specRuleWhy: SPEC_RULE_WHY
+    });
+}
+function renderEndpointDiagnosticsConsistency(detail) {
+    return diagnosticsRenderConsistency(detail, {
+        consistencyFindingsForDetail: consistencyFindingsForDetail,
+        selectedEndpointId: state.selectedEndpointId,
+        payload: state.payload,
+        escapeHtml: escapeHtml,
+        humanFamilyLabel: humanFamilyLabel
+    });
+}
+function renderConsistencySupportCard(detail, options) {
+    return diagnosticsRenderConsistencySupportCard(detail, options, {
+        consistencyFindingsForDetail: consistencyFindingsForDetail,
+        escapeHtml: escapeHtml
+    });
+}
+function syncControls() {
+    appRuntimeSyncControls();
+}
+function selectEndpointForInspector(endpointId, subTab) {
+    appRuntimeSelectEndpointForInspector(endpointId, subTab);
+}
+function endpointRowForId(endpointId) {
+    return appRuntimeEndpointRowForId(endpointId);
+}
+function endpointDetailForId(endpointId) {
+    return appRuntimeEndpointDetailForId(endpointId);
+}
+function activeTopTabLabel() {
+    return inspectionShellActiveTopTabLabel();
+}
+function formatScopeValue(value, fallback) {
+    return viewScopeFormatScopeValue(value, fallback);
+}
+function formatFilterSummaryHtml() {
+    return viewScopeFormatFilterSummaryHtml();
+}
+function renderFilterEmptyState() {
+    viewScopeRenderFilterEmptyState();
+}
+function renderWhatToDoNextBlock(endpoint, findings, options) {
+    return diagnosticsRenderWhatToDoNextBlock(endpoint, findings, options, {
+        escapeHtml: escapeHtml,
+        collectConcreteNextActions: collectConcreteNextActions
+    });
+}
+function renderInspectorWorkspaceHeader(detail, findings, options) {
+    return inspectionShellRenderInspectorWorkspaceHeader(detail, findings, options);
+}
+function collectConcreteNextActions(endpoint, findings) {
+    return diagnosticsCollectConcreteNextActions(endpoint, findings, {
+        findingsForActiveLens: findingsForActiveLens,
+        extractOpenAPIContext: extractOpenAPIContext,
+        buildContractImprovementItems: buildContractImprovementItems
+    });
+}
+function familySurfaceHelpCopy() {
+    return inspectionShellFamilySurfaceHelpCopy();
+}
+function renderWorkflowChains() {
+    workflowSurfaceRenderChains();
+}
+function renderWorkflowChainsDrawer(innerHtml, chainCount) {
+    return workflowSurfaceRenderChainsDrawer(innerHtml, chainCount);
+}
+function bindWorkflowChainsDrawerToggle() {
+    workflowSurfaceBindChainsDrawerToggle();
+}
+function renderWorkflowGuideSection(chains) {
+    return workflowSurfaceRenderGuideSection(chains);
+}
+function renderWorkflowGuideCard(chain, isLead) {
+    return workflowSurfaceRenderGuideCard(chain, isLead);
+}
+function bindWorkflowStepInteractions() {
+    workflowSurfaceBindStepInteractions();
+}
+function syncWorkflowStepSelectionHighlight() {
+    workflowSurfaceSyncStepSelectionHighlight();
+}
+function renderWorkflowEmptyState(mode) {
+    return workflowSurfaceRenderEmptyState(mode);
+}
+function groupChainsByKind(chains, options) {
+    return workflowSurfaceGroupChainsByKind(chains, options);
+}
+function chainBurdenScore(chain) {
+    return workflowSurfaceChainBurdenScore(chain);
+}
+function parseChainRoles(summary, count) {
+    return workflowSurfaceParseChainRoles(summary, count);
+}
+function humanizeStepRole(roleSlug) {
+    return workflowSurfaceHumanizeStepRole(roleSlug);
+}
+var KIND_GROUP_LABEL = {
+    'list-detail': 'Browse then inspect',
+    'list-detail-update': 'Browse, inspect, and update',
+    'list-detail-action': 'Browse, inspect, and act',
+    'list-detail-create': 'Browse, inspect, and create',
+    'create-detail': 'Create then inspect',
+    'create-detail-update': 'Create then refine',
+    'create-detail-action': 'Create then act',
+    'action-follow-up': 'Act and follow up',
+    'media-detail-follow-up': 'Upload then follow up',
+    'order-detail-action': 'Submit then confirm'
+};
+function kindGroupLabel(kind) {
+    return workflowSurfaceKindGroupLabel(kind);
+}
+function chainTaskLabel(chain) {
+    return workflowSurfaceChainTaskLabel(chain);
+}
+function chainResourceLabel(chain) {
+    return workflowSurfaceChainResourceLabel(chain);
+}
+function formatWorkflowStepRefs(indices) {
+    return workflowSurfaceFormatStepRefs(indices);
+}
+function collectWorkflowBurdenSummary(chain, roles) {
+    return workflowSurfaceCollectBurdenSummary(chain, roles);
+}
+function renderWorkflowBurdenSummary(chain, roles) {
+    return workflowSurfaceRenderBurdenSummary(chain, roles);
+}
+function renderWorkflowKindGroup(group) {
+    return workflowSurfaceRenderKindGroup(group);
+}
+function renderWorkflowChain(chain, isPrimary) {
+    return workflowSurfaceRenderChain(chain, isPrimary);
+}
+function addUniqueClue(list, text) {
+    workflowSurfaceAddUniqueClue(list, text);
+}
+function firstClues(list, limit) {
+    return workflowSurfaceFirstClues(list, limit);
+}
+function renderWorkflowDependencyClues(clues) {
+    return workflowSurfaceRenderDependencyClues(clues);
+}
+function inferWorkflowCueSubject(text) {
+    return workflowSurfaceInferCueSubject(text);
+}
+function inferWorkflowTransitionCue(clues, roleLabel) {
+    return workflowSurfaceInferTransitionCue(clues, roleLabel);
+}
+function buildWorkflowDependencyClues(endpoint, findings, stepIndex, totalSteps, roleLabel, nextEndpoint, nextRoleLabel, linkageFindings, prerequisiteFindings) {
+    return workflowStepBuildDependencyClues(endpoint, findings, stepIndex, totalSteps, roleLabel, nextEndpoint, nextRoleLabel, linkageFindings, prerequisiteFindings);
+}
+function collectTrapGuidance(endpoint, findings, clues, linkageFindings, prerequisiteFindings, nextEndpoint, roleLabel, isLast) {
+    return workflowStepCollectTrapGuidance(endpoint, findings, clues, linkageFindings, prerequisiteFindings, nextEndpoint, roleLabel, isLast);
+}
+function renderTrapGuidanceList(traps, options) {
+    return workflowStepRenderTrapGuidanceList(traps, options);
+}
+function summarizeWorkflowStepNarrative(endpoint, roleLabel, nextEndpoint, clues, findings, linkageFindings, prerequisiteFindings, isLast) {
+    return workflowStepSummarizeNarrative(endpoint, roleLabel, nextEndpoint, clues, findings, linkageFindings, prerequisiteFindings, isLast);
+}
+function renderWorkflowStep(endpointId, stepIndex, totalSteps, roleLabel, nextEndpointId, nextRoleLabel) {
+    return workflowStepRender(endpointId, stepIndex, totalSteps, roleLabel, nextEndpointId, nextRoleLabel);
+}
+var BURDEN_DIM_CHIP = {
+    'workflow outcome weakness': 'missing next action',
+    'hidden dependency / linkage burden': 'hidden dependency',
+    'shape / storage-style response weakness': 'storage-shaped response',
+    'shape / nesting complexity': 'deep nesting',
+    'internal/incidental fields': 'incidental fields',
+    'typing/enum weakness': 'weak typing',
+    'consistency drift': 'path/param drift',
+    'change-risk clues': 'change risk'
+};
+function bestEndpointIdForFamily(familyName) {
+    return familyInsightBestEndpointIdForFamily(familyName);
+}
+function buildFamilyRankedSummary(family) {
+    return familyInsightBuildRankedSummary(family);
+}
+function bumpFamilySignal(map, label) {
+    map[label] = (map[label] || 0) + 1;
+}
+function familyRowsInView(familyName) {
+    return familyInsightRowsInView(familyName);
+}
+function pickFamilyLeadRow(rows) {
+    return familyInsightPickLeadRow(rows);
+}
+function collectCompactWorkflowContext(relatedChains, endpointId, endpointDetails) {
+    return familyInsightCollectCompactWorkflowContext(relatedChains, endpointId, endpointDetails);
+}
+function familyInsightModel(familyName, preferredEndpointId) {
+    return familyInsightBuildModel(familyName, preferredEndpointId);
+}
+function renderFamilyInsightPanel(family, preferredEndpointId) {
+    return familyInsightRenderPanel(family, preferredEndpointId || '');
+}
+function buildFamilySurfaceContext(summaries) {
+    return familySummaryBuildSurfaceContext(summaries);
+}
+function familySummariesRaw() {
+    return familySummaryRawList();
+}
+function familySummaries() {
+    return familySummaryList();
+}
+function buildListContext(matches, total) {
+    return inspectionShellBuildListContext(matches, total);
+}
+function renderEndpointInspectionContent(detail, options) {
+    return inspectionShellRenderEndpointInspectionContent(detail, options);
+}
+function syncSelectedEndpointHighlight() {
+    inspectionShellSyncSelectedEndpointHighlight();
+}
+function endpointHasWorkflowBurden(detail) {
+    return inspectionShellEndpointHasWorkflowBurden(detail);
+}
+function renderInspectorWorkflowContextSupport(detail, options) {
+    return inspectionShellRenderInspectorWorkflowContextSupport(detail, options);
+}
+// ---------------------------------------------------------------------------
+// SHAPE BURDEN: pain-signal analysis
+// Maps real finding codes → developer pain, concrete examples, caller-needed
+// ---------------------------------------------------------------------------
+function collectShapePainSignals(endpoint, findings) {
+    return diagnosticsCollectShapePainSignals(endpoint, findings || []);
+}
+function renderShapePainSignals(signals) {
+    if (!signals || !signals.length)
+        return '';
+    function sentenceCount(text) {
+        if (!text)
+            return 0;
+        var t = String(text).trim();
+        if (!t)
+            return 0;
+        var parts = t.split(/[.!?]+/).map(function (p) { return p.trim(); }).filter(Boolean);
+        return parts.length || 1;
+    }
+    function firstSentence(text) {
+        if (!text)
             return '';
-        function sentenceCount(text) {
-            if (!text)
-                return 0;
-            var t = String(text).trim();
-            if (!t)
-                return 0;
-            var parts = t.split(/[.!?]+/).map(function (p) { return p.trim(); }).filter(Boolean);
-            return parts.length || 1;
+        var t = String(text).trim();
+        if (!t)
+            return '';
+        var m = t.match(/^(.+?[.!?])(\s|$)/);
+        return m ? m[1].trim() : t;
+    }
+    function renderConcreteExample(signal) {
+        // Every expandable example must include three explicit parts:
+        // 1) What is shown in the current payload (pattern)
+        // 2) Why this is burdensome for the caller
+        // 3) What an improved task-shaped contract would surface instead
+        var current = (signal.example || '').trim();
+        var burden = (signal.notice || '').trim() || firstSentence(signal.pain || '');
+        var improved = (signal.callerNeeded || '').trim();
+        var change = (signal.recommendedChange || '').trim();
+        // Build the 3-part content (always explicit, even when not expandable).
+        var blocks = [];
+        blocks.push('<div class="shape-example-item">'
+            + '<span class="shape-example-label">Current payload shows</span>'
+            + '<p class="shape-example-text">' + escapeHtml(current || 'A storage-shaped response pattern where the outcome is not foregrounded.') + '</p>'
+            + '</div>');
+        blocks.push('<div class="shape-example-item">'
+            + '<span class="shape-example-label">Why this burdens the caller</span>'
+            + '<p class="shape-example-text">' + escapeHtml(burden || 'The caller must infer outcome meaning, traverse deep state, or carry hidden context into the next step.') + '</p>'
+            + '</div>');
+        var improvedBody = '';
+        if (improved) {
+            improvedBody += '<pre class="shape-example-code"><code>' + escapeHtml(improved) + '</code></pre>';
         }
-        function firstSentence(text) {
-            if (!text)
-                return '';
-            var t = String(text).trim();
-            if (!t)
-                return '';
-            var m = t.match(/^(.+?[.!?])(\s|$)/);
-            return m ? m[1].trim() : t;
+        else {
+            improvedBody += '<p class="shape-example-text">Return an outcome-first payload with explicit nextAction/context fields.</p>';
         }
-        function renderConcreteExample(signal) {
-            // Every expandable example must include three explicit parts:
-            // 1) What is shown in the current payload (pattern)
-            // 2) Why this is burdensome for the caller
-            // 3) What an improved task-shaped contract would surface instead
-            var current = (signal.example || '').trim();
-            var burden = (signal.notice || '').trim() || firstSentence(signal.pain || '');
-            var improved = (signal.callerNeeded || '').trim();
-            var change = (signal.recommendedChange || '').trim();
-            // Build the 3-part content (always explicit, even when not expandable).
-            var blocks = [];
-            blocks.push('<div class="shape-example-item">'
-                + '<span class="shape-example-label">Current payload shows</span>'
-                + '<p class="shape-example-text">' + escapeHtml(current || 'A storage-shaped response pattern where the outcome is not foregrounded.') + '</p>'
-                + '</div>');
-            blocks.push('<div class="shape-example-item">'
-                + '<span class="shape-example-label">Why this burdens the caller</span>'
-                + '<p class="shape-example-text">' + escapeHtml(burden || 'The caller must infer outcome meaning, traverse deep state, or carry hidden context into the next step.') + '</p>'
-                + '</div>');
-            var improvedBody = '';
-            if (improved) {
-                improvedBody += '<pre class="shape-example-code"><code>' + escapeHtml(improved) + '</code></pre>';
-            }
-            else {
-                improvedBody += '<p class="shape-example-text">Return an outcome-first payload with explicit nextAction/context fields.</p>';
-            }
-            if (change) {
-                improvedBody += '<p class="shape-example-text"><strong>Contract change:</strong> ' + escapeHtml(change) + '</p>';
-            }
-            blocks.push('<div class="shape-example-item">'
-                + '<span class="shape-example-label">Improved task-shaped contract would surface</span>'
-                + improvedBody
-                + '</div>');
-            // Keep accordions only when they reveal materially more than one-line filler
-            // (payload fragments, before/after examples, multi-part guidance).
-            var material = false;
-            if (improved)
-                material = true; // code fragment is always material
-            if (!material && current && sentenceCount(current) > 1)
-                material = true;
-            if (!material && change && change.length > 90)
-                material = true;
-            if (!material && (String(current).length + String(burden).length + String(improved).length + String(change).length) > 260)
-                material = true;
-            if (!material) {
-                return '<div class="shape-example-inline-block">'
-                    + '<p class="subtle"><strong>Concrete example:</strong></p>'
-                    + '<div class="shape-example-grid">' + blocks.join('') + '</div>'
-                    + '</div>';
-            }
-            return '<details class="shape-pain-detail">'
-                + '<summary>Concrete example</summary>'
+        if (change) {
+            improvedBody += '<p class="shape-example-text"><strong>Contract change:</strong> ' + escapeHtml(change) + '</p>';
+        }
+        blocks.push('<div class="shape-example-item">'
+            + '<span class="shape-example-label">Improved task-shaped contract would surface</span>'
+            + improvedBody
+            + '</div>');
+        // Keep accordions only when they reveal materially more than one-line filler
+        // (payload fragments, before/after examples, multi-part guidance).
+        var material = false;
+        if (improved)
+            material = true; // code fragment is always material
+        if (!material && current && sentenceCount(current) > 1)
+            material = true;
+        if (!material && change && change.length > 90)
+            material = true;
+        if (!material && (String(current).length + String(burden).length + String(improved).length + String(change).length) > 260)
+            material = true;
+        if (!material) {
+            return '<div class="shape-example-inline-block">'
+                + '<p class="subtle"><strong>Concrete example:</strong></p>'
                 + '<div class="shape-example-grid">' + blocks.join('') + '</div>'
-                + '</details>';
+                + '</div>';
         }
-        return '<div class="shape-pain-signals">'
-            + signals.map(function (signal) {
-                return '<div class="shape-pain-signal">'
-                    + '<div class="shape-pain-signal-header">'
-                    + '<span class="shape-pain-icon">' + signal.icon + '</span>'
-                    + '<strong class="shape-pain-label">' + escapeHtml(signal.label) + '</strong>'
-                    + '</div>'
-                    + '<p class="shape-pain-why">' + escapeHtml(signal.pain) + '</p>'
-                    + renderConcreteExample(signal)
-                    + '</div>';
-            }).join('')
-            + '</div>';
+        return '<details class="shape-pain-detail">'
+            + '<summary>Concrete example</summary>'
+            + '<div class="shape-example-grid">' + blocks.join('') + '</div>'
+            + '</details>';
     }
-    // Render normative grounding block from a group object (aggregated by specRuleId).
-    // Shows "N occurrences" instead of a specific location when the group has many messages.
-    function renderSpecRuleGroundingForGroup(group) {
-        return openApiRenderSpecRuleGroundingForGroup(group, escapeHtml);
-    }
-    function severityWord(severity) {
-        var s = (severity || '').toLowerCase();
-        if (s === 'error')
-            return 'Error';
-        if (s === 'warning' || s === 'warn')
-            return 'Warning';
-        if (s === 'info')
-            return 'Info';
+    return '<div class="shape-pain-signals">'
+        + signals.map(function (signal) {
+            return '<div class="shape-pain-signal">'
+                + '<div class="shape-pain-signal-header">'
+                + '<span class="shape-pain-icon">' + signal.icon + '</span>'
+                + '<strong class="shape-pain-label">' + escapeHtml(signal.label) + '</strong>'
+                + '</div>'
+                + '<p class="shape-pain-why">' + escapeHtml(signal.pain) + '</p>'
+                + renderConcreteExample(signal)
+                + '</div>';
+        }).join('')
+        + '</div>';
+}
+// Render normative grounding block from a group object (aggregated by specRuleId).
+// Shows "N occurrences" instead of a specific location when the group has many messages.
+function renderSpecRuleGroundingForGroup(group) {
+    return openApiRenderSpecRuleGroundingForGroup(group, escapeHtml);
+}
+function severityWord(severity) {
+    var s = (severity || '').toLowerCase();
+    if (s === 'error')
+        return 'Error';
+    if (s === 'warning' || s === 'warn')
+        return 'Warning';
+    if (s === 'info')
         return 'Info';
+    return 'Info';
+}
+function evidenceGroupTitleLine(group) {
+    // Tooltip-friendly full title for a group. The on-screen header is rendered
+    // as structured "kind + human title + metadata row" to avoid duplicate chips.
+    if (!group)
+        return 'Issue group';
+    if (group.isSpecRule) {
+        return group.title || group.specRuleId || 'Spec rule';
     }
-    function evidenceGroupTitleLine(group) {
-        // Tooltip-friendly full title for a group. The on-screen header is rendered
-        // as structured "kind + human title + metadata row" to avoid duplicate chips.
-        if (!group)
-            return 'Issue group';
-        if (group.isSpecRule) {
-            return group.title || group.specRuleId || 'Spec rule';
-        }
-        return group.title || group.preview || group.code || 'Issue';
-    }
-    function inspectTargetForGroup(group, endpoint) {
-        return openApiInspectTargetForGroup(group, endpoint);
-    }
-    function renderIssueGroup(group, index, options) {
-        return issueGroupRenderGroup(group, index, options, {
-            escapeHtml: escapeHtml,
-            severityBadge: severityBadge,
-            renderSpecRuleGroundingForGroup: renderSpecRuleGroundingForGroup,
-            inspectTargetForGroup: inspectTargetForGroup,
-            issueScopeLabelForKey: issueScopeLabelForKey
-        });
-    }
-    function groupFindings(findings) {
-        return groupFindingsByContext(findings, {
-            dimensionForFinding: issueDimensionForFinding,
-            dimensionImpact: dimensionImpact,
-            findingExamineHint: findingExamineHint,
-            formatIssueGroupTitle: formatIssueGroupTitle,
-            severityPriority: severityPriority,
-            specRuleSummary: SPEC_RULE_SUMMARY
-        });
-    }
-    function renderOpenAPIContextPills(context, compact) {
-        return issueGroupRenderOpenAPIContextPills(context, compact, escapeHtml);
-    }
-    function renderOpenAPILocationCuesBlock(context, compact) {
-        return issueGroupRenderOpenAPILocationCuesBlock(context, compact, escapeHtml);
-    }
-    function formatIssueGroupTitle(finding, context) {
-        return issueGroupFormatTitle(finding, context, issueDimensionForFinding);
-    }
-    function formatIssueGroupCountLabel(group) {
-        return issueGroupFormatCountLabel(group);
-    }
-    function topFieldPaths(groups) {
-        return issueGroupTopFieldPaths(groups, uniq);
-    }
-    function topOpenAPIHighlights(groups) {
-        return issueGroupTopOpenAPIHighlights(groups, uniq);
-    }
-    function scopedRows(rows) {
-        return appRuntimeScopedRows(rows);
-    }
-    function rowsInScopeAll() {
-        return appRuntimeRowsInScopeAll();
-    }
-    function filteredRows() {
-        return appRuntimeFilteredRows();
-    }
-    function firstEvidenceEndpointId(rows) {
-        return appRuntimeFirstEvidenceEndpointId(rows);
-    }
-    function firstVisibleEndpointId(rows) {
-        return appRuntimeFirstVisibleEndpointId(rows);
-    }
-    function rowDominantIssue(row) {
-        return appRuntimeRowDominantIssue(row);
-    }
-    function dominantSeverity(findings) {
-        return uiDominantSeverity(findings);
-    }
-    function severityPriority(severity) {
-        return uiSeverityPriority(severity);
-    }
-    function severityBadge(severity) {
-        // Static severity label (non-interactive). Use severityBadgeInteractive when the pill
-        // is intended to act as a control.
-        return '<span class="severity-badge severity-' + escapeHtml(severity) + '" title="' + escapeHtml('Severity: ' + String(severity || '').toUpperCase()) + '">'
-            + '<span class="severity-icon">' + escapeHtml(severityIcon(severity)) + '</span>'
-            + '<span>' + escapeHtml(severity.toUpperCase()) + '</span>'
-            + '</span>';
-    }
-    function severityBadgeInteractive(severity) {
-        return '<span class="severity-badge severity-' + escapeHtml(severity) + ' is-interactive" role="button" tabindex="0" title="Open grouped deviations for this endpoint">'
-            + '<span class="severity-icon">' + escapeHtml(severityIcon(severity)) + '</span>'
-            + '<span>' + escapeHtml(severity.toUpperCase()) + '</span>'
-            + '</span>';
-    }
-    function severityBadgeEvidenceCTA(severity, endpointId) {
-        if (!severity)
-            return '';
-        if (!endpointId)
-            return severityBadge(severity);
-        return '<button type="button" class="severity-badge severity-' + escapeHtml(severity) + ' is-interactive" data-open-evidence-id="' + escapeHtml(endpointId) + '" aria-label="Open grouped deviations" title="Open grouped deviations">'
-            + '<span class="severity-icon" aria-hidden="true">' + escapeHtml(severityIcon(severity)) + '</span>'
-            + '<span>' + escapeHtml(severity.toUpperCase()) + '</span>'
-            + '</button>';
-    }
-    function severityIcon(severity) {
-        return uiSeverityIcon(severity);
-    }
-    function pressureBadge(priority, kind) {
-        return uiPressureBadge(priority, kind);
-    }
-    function endpointIntentCue(method, path) {
-        return uiEndpointIntentCue(method, path);
-    }
-    function humanizeObjectName(value) {
-        return uiHumanizeObjectName(value);
-    }
-    function singularize(value) {
-        return uiSingularize(value);
-    }
-    function humanizeSignalLabel(signal) {
-        return uiHumanizeSignalLabel(signal);
-    }
-    function renderRecoveryActions(actions) {
-        return uiRenderRecoveryActions(actions);
-    }
-    function bindRecoveryButtons(container) {
-        uiBindRecoveryButtons(container, applyRecoveryAction);
-    }
-    function applyRecoveryAction(action) {
-        appRuntimeApplyRecoveryAction(action);
-    }
-    function pulseLensUpdate() {
-        uiPulseLensUpdate();
-    }
-    function recoveryLabel(action) {
-        return uiRecoveryLabel(action);
-    }
-    function issueDimensionForFinding(code, category, burdenFocus) {
-        return uiIssueDimensionForFinding(code, category, burdenFocus);
-    }
-    function dimensionImpact(dimension) {
-        return uiDimensionImpact(dimension);
-    }
-    function findingExamineHint(code, message) {
-        return uiFindingExamineHint(code, message);
-    }
-    function buildContextTypeBadge(context) {
-        return uiBuildContextTypeBadge(context);
-    }
-    function dimensionCleanerHint(dimension) {
-        return appRuntimeDimensionCleanerHint(dimension);
-    }
-    function familyPressureLabel(priorityCounts) {
-        return uiFamilyPressureLabel(priorityCounts);
-    }
-    function summarizeIssueDimensions(findings) {
-        return uiSummarizeIssueDimensions(findings);
-    }
-    function topFamilyByFindings(rows) {
-        return uiTopFamilyByFindings(rows);
-    }
-    function humanFamilyLabel(name) {
-        return appRuntimeHumanFamilyLabel(name);
-    }
-    function renderChipList(items, emptyText) {
-        return uiRenderChipList(items, emptyText);
-    }
-    function renderBulletList(items, emptyText) {
-        return uiRenderBulletList(items, emptyText);
-    }
-    function renderOpenAPISummary(items) {
-        return uiRenderOpenAPISummary(items);
-    }
-    function priorityRank(priority) {
-        return uiPriorityRank(priority);
-    }
-    function uniq(items) {
-        return uiUniq(items);
-    }
-    function flatMap(items, fn) {
-        return uiFlatMap(items, fn);
-    }
-    function escapeHtml(value) {
-        if (value === undefined || value === null)
-            return '';
-        return String(value)
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;')
-            .replaceAll('"', '&quot;')
-            .replaceAll("'", '&#39;');
-    }
-})();
+    return group.title || group.preview || group.code || 'Issue';
+}
+function inspectTargetForGroup(group, endpoint) {
+    return openApiInspectTargetForGroup(group, endpoint);
+}
+function renderIssueGroup(group, index, options) {
+    return issueGroupRenderGroup(group, index, options, {
+        escapeHtml: escapeHtml,
+        severityBadge: severityBadge,
+        renderSpecRuleGroundingForGroup: renderSpecRuleGroundingForGroup,
+        inspectTargetForGroup: inspectTargetForGroup,
+        issueScopeLabelForKey: issueScopeLabelForKey
+    });
+}
+function groupFindings(findings) {
+    return groupFindingsByContext(findings, {
+        dimensionForFinding: issueDimensionForFinding,
+        dimensionImpact: dimensionImpact,
+        findingExamineHint: findingExamineHint,
+        formatIssueGroupTitle: formatIssueGroupTitle,
+        severityPriority: severityPriority,
+        specRuleSummary: SPEC_RULE_SUMMARY
+    });
+}
+function renderOpenAPIContextPills(context, compact) {
+    return issueGroupRenderOpenAPIContextPills(context, compact, escapeHtml);
+}
+function renderOpenAPILocationCuesBlock(context, compact) {
+    return issueGroupRenderOpenAPILocationCuesBlock(context, compact, escapeHtml);
+}
+function formatIssueGroupTitle(finding, context) {
+    return issueGroupFormatTitle(finding, context, issueDimensionForFinding);
+}
+function formatIssueGroupCountLabel(group) {
+    return issueGroupFormatCountLabel(group);
+}
+function topFieldPaths(groups) {
+    return issueGroupTopFieldPaths(groups, uniq);
+}
+function topOpenAPIHighlights(groups) {
+    return issueGroupTopOpenAPIHighlights(groups, uniq);
+}
+function scopedRows(rows) {
+    return appRuntimeScopedRows(rows);
+}
+function rowsInScopeAll() {
+    return appRuntimeRowsInScopeAll();
+}
+function filteredRows() {
+    return appRuntimeFilteredRows();
+}
+function firstEvidenceEndpointId(rows) {
+    return appRuntimeFirstEvidenceEndpointId(rows);
+}
+function firstVisibleEndpointId(rows) {
+    return appRuntimeFirstVisibleEndpointId(rows);
+}
+function rowDominantIssue(row) {
+    return appRuntimeRowDominantIssue(row);
+}
+function dominantSeverity(findings) {
+    return uiDominantSeverity(findings);
+}
+function severityPriority(severity) {
+    return uiSeverityPriority(severity);
+}
+function severityBadge(severity) {
+    // Static severity label (non-interactive). Use severityBadgeInteractive when the pill
+    // is intended to act as a control.
+    return '<span class="severity-badge severity-' + escapeHtml(severity) + '" title="' + escapeHtml('Severity: ' + String(severity || '').toUpperCase()) + '">'
+        + '<span class="severity-icon">' + escapeHtml(severityIcon(severity)) + '</span>'
+        + '<span>' + escapeHtml(severity.toUpperCase()) + '</span>'
+        + '</span>';
+}
+function severityBadgeInteractive(severity) {
+    return '<span class="severity-badge severity-' + escapeHtml(severity) + ' is-interactive" role="button" tabindex="0" title="Open grouped deviations for this endpoint">'
+        + '<span class="severity-icon">' + escapeHtml(severityIcon(severity)) + '</span>'
+        + '<span>' + escapeHtml(severity.toUpperCase()) + '</span>'
+        + '</span>';
+}
+function severityBadgeEvidenceCTA(severity, endpointId) {
+    if (!severity)
+        return '';
+    if (!endpointId)
+        return severityBadge(severity);
+    return '<button type="button" class="severity-badge severity-' + escapeHtml(severity) + ' is-interactive" data-open-evidence-id="' + escapeHtml(endpointId) + '" aria-label="Open grouped deviations" title="Open grouped deviations">'
+        + '<span class="severity-icon" aria-hidden="true">' + escapeHtml(severityIcon(severity)) + '</span>'
+        + '<span>' + escapeHtml(severity.toUpperCase()) + '</span>'
+        + '</button>';
+}
+function severityIcon(severity) {
+    return uiSeverityIcon(severity);
+}
+function pressureBadge(priority, kind) {
+    return uiPressureBadge(priority, kind);
+}
+function endpointIntentCue(method, path) {
+    return uiEndpointIntentCue(method, path);
+}
+function humanizeObjectName(value) {
+    return uiHumanizeObjectName(value);
+}
+function singularize(value) {
+    return uiSingularize(value);
+}
+function humanizeSignalLabel(signal) {
+    return uiHumanizeSignalLabel(signal);
+}
+function renderRecoveryActions(actions) {
+    return uiRenderRecoveryActions(actions);
+}
+function bindRecoveryButtons(container) {
+    uiBindRecoveryButtons(container, applyRecoveryAction);
+}
+function applyRecoveryAction(action) {
+    appRuntimeApplyRecoveryAction(action);
+}
+function pulseLensUpdate() {
+    uiPulseLensUpdate();
+}
+function recoveryLabel(action) {
+    return uiRecoveryLabel(action);
+}
+function issueDimensionForFinding(code, category, burdenFocus) {
+    return uiIssueDimensionForFinding(code, category, burdenFocus);
+}
+function dimensionImpact(dimension) {
+    return uiDimensionImpact(dimension);
+}
+function findingExamineHint(code, message) {
+    return uiFindingExamineHint(code, message);
+}
+function buildContextTypeBadge(context) {
+    return uiBuildContextTypeBadge(context);
+}
+function dimensionCleanerHint(dimension) {
+    return appRuntimeDimensionCleanerHint(dimension);
+}
+function familyPressureLabel(priorityCounts) {
+    return uiFamilyPressureLabel(priorityCounts);
+}
+function summarizeIssueDimensions(findings) {
+    return uiSummarizeIssueDimensions(findings);
+}
+function topFamilyByFindings(rows) {
+    return uiTopFamilyByFindings(rows);
+}
+function humanFamilyLabel(name) {
+    return appRuntimeHumanFamilyLabel(name);
+}
+function renderChipList(items, emptyText) {
+    return uiRenderChipList(items, emptyText);
+}
+function renderBulletList(items, emptyText) {
+    return uiRenderBulletList(items, emptyText);
+}
+function renderOpenAPISummary(items) {
+    return uiRenderOpenAPISummary(items);
+}
+function priorityRank(priority) {
+    return uiPriorityRank(priority);
+}
+function uniq(items) {
+    return uiUniq(items);
+}
+function flatMap(items, fn) {
+    return uiFlatMap(items, fn);
+}
+function escapeHtml(value) {
+    if (value === undefined || value === null)
+        return '';
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}

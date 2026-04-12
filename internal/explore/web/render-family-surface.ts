@@ -10,7 +10,7 @@ declare function familySurfaceHelpCopy(): string;
 declare function renderFamilyTableView(summaries: ExplorerFamilySummary[]): string;
 declare function familyTableColumnCountForActiveTab(): number;
 declare function escapeHtml(value: unknown): string;
-declare function renderFamilyInsightPanel(family: ExplorerFamilySummary): string;
+declare function renderFamilyInsightPanel(family: ExplorerFamilySummary, preferredEndpointId?: string): string;
 declare function syncFamilyInsightToggleButtons(
   familySurface: HTMLElement | null,
   state: ExplorerState,
